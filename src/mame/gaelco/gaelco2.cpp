@@ -21,7 +21,7 @@
     Snow Board             | 1996 | CG-1V 366   | 960419/1 | Lattice IspLSI 1016-80LJ
     Cardioline Cycle       | 1997 | GAE1 501    | 970410   | I/O board ST62T15C6 MCU (not really protection)
     Cardioline Stepper     | 1997 | CG-1V 288   | 970410   | I/O board ST62T15B6 MCU (not really protection)
-    Jungle's Animals       | 1997 | CG-1V-366   |          | DS5002FP (by New Impeuropex Corp., developer by Nova Desitec)
+    Jungle's Animals       | 1997 | CG-1V-366   |          | DS5002FP (by New Impeuropex Corp., developed by Nova Desitec)
     Bang!                  | 1998 | CG-1V 388   | 980921/1 | No
     Super Roller           | 1998 | CG-1V-218   |          | DS5002FP (by Nova Desitec)
     Champion Pool          | 1999 | CG-1V-138   | 0005487  | DS5002FP (by Nova Desitec)
