@@ -10196,7 +10196,10 @@ ROM_START( jjsquawkb )
 	ROM_LOAD( "1", 0x000000, 0x100000, CRC(181a55b8) SHA1(6fa404f85bad93cc15e80feb61d19bed84602b82) ) // fe2001005.u69 + fe2001006.u70 from jjsquawk
 ROM_END
 
-ROM_START( jjsquawkb2 ) // PCB was P0-078A, which was a Blandia board converted to JJ Squawkers. No labels on any of the ROMs.  Apparently based on jjsquawko set.
+/* PCB was P0-078A, which was a Blandia board converted to JJ Squawkers. No labels on any of the ROMs.
+   This set contains a bugfix over jjsquawk: On the game beginning, when the monkey shakes the tree, nothing happens on "jjsquawk", but
+   on "jjsquawkb2", spiky fruit falls from the tree, which seems to be the right behavior. */
+ROM_START( jjsquawkb2 )
 	ROM_REGION( 0x200000, "maincpu", 0 )        // 68000 Code
 	ROM_LOAD16_BYTE( "u3.3a", 0x000000, 0x040000, CRC(f94c913b) SHA1(de6e422c514c787897f8f41d7cd98acb0135c763) ) // 99.999619%
 	ROM_CONTINUE   (                0x100000, 0x040000  )
