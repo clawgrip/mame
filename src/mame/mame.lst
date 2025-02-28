@@ -15152,6 +15152,7 @@ koftball
 magkengo
 magkengou
 popobear
+qiwang
 
 @source:bondwell/bw12.cpp
 bw12
@@ -15292,6 +15293,7 @@ sinvasnb
 1941u
 3wonders
 3wondersb
+3wondersbi
 3wondersh
 3wondersr1
 3wondersu
@@ -16217,6 +16219,10 @@ sk10
 
 @source:casio/sx1000.cpp
 sx1010
+
+@source:casio/wk1800.cpp
+wk1600                          // 2000 Casio
+wk1800                          // 2000 Casio
 
 @source:casio/zoomer.cpp
 zoomer
@@ -17631,6 +17637,7 @@ mjdialq2
 mjdialq2a
 mjelct3
 mjelct3a
+mjelct3bl
 mjelctrb
 mjelctrn
 mjembase
@@ -20693,6 +20700,7 @@ kovlsqh2
 kovplus
 kovplusa
 kovqhsgs
+kovqhsgs302
 kovsgqyz
 kovsgqyza
 kovsgqyzb
@@ -20784,12 +20792,15 @@ kov3hd101
 jbell
 jinhulu2
 spk100
+spk102u
 spk102ua
 spk114it
 spk115it
 spk116it
 spk116itmx
 spk120in
+spk130
+spk200
 spk200ua
 spk201ua
 spk203us
@@ -20797,8 +20808,8 @@ spk205us
 spk306us
 
 @source:igt/drw80pkr.cpp
-drw80pk2
 drw80pkr
+drw80wld
 
 @source:igt/fortune1.cpp
 babydad
@@ -22219,6 +22230,7 @@ vjslap
 crisscrs
 guab
 tenup
+ttrail
 
 @source:jpm/jpmimpct.cpp
 buzzundr
@@ -29671,7 +29683,9 @@ fredmesp
 lottof2
 
 @source:misc/ddz.cpp
+baibians
 btlfront
+cjmx
 crzclass
 ddz
 
@@ -30265,6 +30279,7 @@ mchampdx
 mchampdxa
 mchampdxb
 multchmp
+multchmp25
 multchmpa
 multchmpk
 swatpolc
@@ -30714,8 +30729,10 @@ nfsug
 gluck2
 
 @source:misc/gms.cpp
+baile
 ballch
 cots
+jinpaish
 magslot
 rbmk
 rbspm
@@ -30724,6 +30741,7 @@ sc2in1
 ssanguoj
 sscs
 super555
+yyhm
 
 @source:misc/goldngam.cpp
 moviecrd
@@ -35026,6 +35044,7 @@ dgun2573a
 dgunl3201
 dgunl3202
 fcpocket
+matet300
 rminitv
 
 @source:nintendo/nes_vt369_vtunknown.cpp
@@ -35051,6 +35070,7 @@ lxccminn
 lxccplan
 lxcmc250
 lxcmcy
+lxcmcyba
 lxcmcycr
 lxcmcydp
 lxcmcyfz
@@ -35059,6 +35079,7 @@ lxcmcypp
 lxcmcysp
 lxcmcysw
 lxcyber
+matet10
 mc_cb280
 mc_hh210
 mog_m320
@@ -35928,6 +35949,7 @@ porky
 puckman
 puckmana
 puckmanb
+puckmanb3
 puckmanf
 puckmanh
 puckmod
@@ -39776,6 +39798,7 @@ twinktmb
 atgame40
 dgunl3227
 dgunl3227a
+matet
 mdtvp1j
 mdtvp2j
 mdtvp3j
@@ -43179,6 +43202,7 @@ venteta
 
 @source:skeleton/vgame.cpp
 hilice
+mjxy2
 
 @source:skeleton/vp415.cpp
 vp415
@@ -43403,6 +43427,9 @@ nws3860
 @source:sony/news_68k.cpp
 nws1580
 
+@source:sony/news_68k_iop.cpp
+nws831
+
 @source:sony/news_r3k.cpp
 nws3260
 nws3410
@@ -43600,6 +43627,7 @@ m5p_brno
 
 @source:stern/astinvad.cpp
 astinvad
+astinvadb
 betafrce
 kamikaze
 kosmokil
@@ -46117,6 +46145,7 @@ fundr200
 lx_aven
 lx_frozen
 lx_jg7425
+ubox30
 zone3d
 
 @source:tvgames/spg2xx.cpp
@@ -46393,6 +46422,7 @@ epo_esht
 epo_fish
 epo_guru
 epo_hamd
+epo_mail
 epo_mj
 epo_mms
 epo_mmsp
@@ -46410,12 +46440,14 @@ gungunad
 gungunrv
 has_wamg
 hikara
+isinger
 jarajal
 jpopira
 ltv_tam
 namcons1
 namcons2
 popira
+popirak
 popira2
 rad_bass
 rad_bassp
@@ -46465,6 +46497,7 @@ tomthr
 tomplc
 tvpc_dor
 tvpc_ham
+tvpc_hk
 tvpc_tom
 
 @source:tvgames/xavix2.cpp
@@ -46501,6 +46534,7 @@ apmj2009
 ban_bkgj
 ban_dn1j
 ban_kksj
+ban_ult
 ban_utmj
 epo_ntpj
 epo_rgfj
@@ -46514,6 +46548,7 @@ epo_doka
 epo_tfit
 maxheart
 mrangbat
+ndpbj
 suprtvpc
 suprtvpcdo
 suprtvpchk
@@ -47103,6 +47138,9 @@ wizzard
 gamemach
 v4in1eg
 
+@source:vtech/geniuscolor.cpp
+geniuscps
+
 @source:vtech/geniusiq.cpp
 iq128
 iq128_fr
@@ -47164,7 +47202,7 @@ learnwinf
 spielmast
 
 @source:vtech/magibook.cpp
-magibooksp                      // (c) 2016 VTech / LeapFrog
+magibooksp
 
 @source:vtech/pc1000.cpp
 misterx

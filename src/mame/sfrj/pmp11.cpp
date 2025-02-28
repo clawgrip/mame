@@ -30,18 +30,25 @@ private:
 	required_device<t11_device> m_maincpu;
 	required_device<i8251_device> m_uart1;
 	required_device<i8251_device> m_uart2;
-	required_device<wd2797_device> m_fdc;	
+	required_device<wd2797_device> m_fdc;
 };
 
 void pmp11_state::pdp11_mem(address_map &map)
 {
 	map.unmap_value_high();
-	map(0x0000, 0xefff).ram();
-	map(0xf000, 0xf7ff).rom();
-	map(0xf800, 0xfbff).ram();
-	// TODO: Not sure if these are mirrored, but no control_w on alternate address
-	map(0xff70, 0xff71).mirror(0x4).umask16(0x00ff).rw(m_uart1, FUNC(i8251_device::status_r), FUNC(i8251_device::control_w));
-	map(0xff72, 0xff73).mirror(0x4).umask16(0x00ff).rw(m_uart1, FUNC(i8251_device::data_r), FUNC(i8251_device::data_w));
+	map(0000000, 0167777).ram();
+	map(0170000, 0173777).rom().region("maincpu", 0);
+	map(0174000, 0175777).ram();
+	map(0176500, 0176500).r(m_uart2, FUNC(i8251_device::status_r));
+	map(0176502, 0176502).r(m_uart2, FUNC(i8251_device::data_r));
+	map(0176504, 0176507).nopr();
+	map(0176504, 0176504).w(m_uart2, FUNC(i8251_device::control_w));
+	map(0176506, 0176506).w(m_uart2, FUNC(i8251_device::data_w));
+	map(0177560, 0177560).r(m_uart1, FUNC(i8251_device::status_r));
+	map(0177562, 0177562).r(m_uart1, FUNC(i8251_device::data_r));
+	map(0177564, 0177567).nopr();
+	map(0177564, 0177564).w(m_uart1, FUNC(i8251_device::control_w));
+	map(0177566, 0177566).w(m_uart1, FUNC(i8251_device::data_w));
 }
 
 /* Input ports */
@@ -88,13 +95,16 @@ void pmp11_state::pmp11(machine_config &config)
 	rs232b.rxd_handler().set("uart2", FUNC(i8251_device::write_rxd));
 	rs232b.dsr_handler().set("uart2", FUNC(i8251_device::write_dsr));
 	rs232b.cts_handler().set("uart2", FUNC(i8251_device::write_cts));
-	
-	WD2797(config, m_fdc, 8_MHz_XTAL / 4); 
+
+	WD2797(config, m_fdc, 8_MHz_XTAL / 4);
 }
 
 ROM_START( pmp11 )
-	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
-	ROM_LOAD( "rom.bin", 0xf000, 0x0800, CRC(2cfdc3a3) SHA1(50ffa2a3bd0b75c1ecb4ab6c691796ab0d85dd4e))
+	ROM_REGION( 0x0800, "maincpu", ROMREGION_ERASEFF )
+	ROM_SYSTEM_BIOS( 0, "v20", "v 2.0 - 1867" ) // ODT 2.0 - from museum item #1867, no markings on EPROM
+	ROMX_LOAD( "rom.bin", 0x0000, 0x0800, CRC(2cfdc3a3) SHA1(50ffa2a3bd0b75c1ecb4ab6c691796ab0d85dd4e), ROM_BIOS(0))
+	ROM_SYSTEM_BIOS( 1, "alt", "v 2.0 - 1113" ) // ODT 2.0 - from museum item #1113
+	ROMX_LOAD( "odt_2.0.bin", 0x0000, 0x0800, CRC(0e970130) SHA1(811b40eb6ca78d7a1b0701c5d62738bd31026db8), ROM_BIOS(1))
 ROM_END
 
 } // Anonymous namespace
