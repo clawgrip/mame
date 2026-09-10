@@ -41,7 +41,6 @@
  |        |__|  |__|      |__|                |
  |____________________________________________|
 
- There is another type of PCB  with a Z80 (exact model unknown) and a external ROM.
 
  
 Notes on the roulette program, which lotoplay, lotoplaya and lotoplayb all
@@ -62,6 +61,10 @@ share:
 
 - A spin is 48 steps through a deceleration ramp.  48 is a multiple of 8, so it
   always ends on the LED it started on, and the starting LED is what decides
+  the prize.  Starting on the green one is only allowed once a 16 bit
+  accumulator has carried into its high byte, and the per play increment is 5,
+  10, 18 or 25 out of 256 depending on SW7 and SW8.
+
 The Loto-Play 90 manual on recreativas.org documents SW1-SW4 as the coin rate
 table, SW5-SW6 as unused and SW7-SW8 as the lottery percentage.  That is the
 same split the program makes and it pins down the wiring: SW7 is PA0 and SW8 is
