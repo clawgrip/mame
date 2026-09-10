@@ -42,9 +42,7 @@
  |____________________________________________|
 
 
-
-Notes on the roulette program, which lotoplay, lotoplaya and lotoplayb all
-share:
+Notes on the roulette program (lotoplay, lotoplaya and lotoplayb):
 
 - The LEDs are not wired in numerical order.  The rotation table in the ROM
   (DF BF 7F FE FD FB F7 EF) walks the ring as PB5, PB6, PB7, PB0, PB1, PB2,
@@ -65,39 +63,24 @@ share:
   accumulator has carried into its high byte, and the per play increment is 5,
   10, 18 or 25 out of 256 depending on SW7 and SW8.
 
-The Loto-Play 90 manual on recreativas.org documents SW1-SW4 as the coin rate
-table, SW5-SW6 as unused and SW7-SW8 as the lottery percentage.  That is the
-same split the program makes and it pins down the wiring: SW7 is PA0 and SW8 is
-PA1, since the manual's percentages climb in the same order as the ROM's table;
-SW1 to SW4 are PA4 to PA7 with SW1 least significant, since the manual
-enumerates its rows as a binary count of SW4/SW3/SW2/SW1; and the two it calls
-unused are PA2 and PA3, though which of them is SW5 and which SW6 is a guess.
-All switches on selects entry 0 in both tables, which confirms that a closed
-switch reads back as 0.
 
-The percentages nearly match: the manual gives 2%, 5%, 7% and 10% against the
-1.95%, 3.91%, 7.03% and 9.77% the program uses, so the settings below are
-labelled with what this program pays rather than with the manual's figures.
-The coin rate table does not
-match at all, so the manual describes a later revision.  SW5 and SW6 do have an
-effect here despite the manual calling them unused, which fits with them being
-dropped later.
+Notes on the 7-segment display program (lotoplayc):
 
-lotoplayc runs an unrelated program and is wired differently.  There is no
-roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font
-(the entries for 0 to 8 are the canonical codes, the one for 9 is 0xe0 where
-0x10 would be expected) and what gets displayed is a credit counter clamped to
-ten.  Four DIP switches are read one at a time by driving a mux address on
-PA0-PA2 and sampling PA3, and the whole of PORTC is inputs.  Its two coin rate
-tables give one coin per four, three, two or one pulses on the first input, and
-three, two, five or four credits per pulse on the second.
+- lotoplayc runs an unrelated program and is wired differently.  There is no
+  roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font
+  (the entries for 0 to 8 are the canonical codes, the one for 9 is 0xe0 where
+  0x10 would be expected) and what gets displayed is a credit counter clamped to
+  ten.  Four DIP switches are read one at a time by driving a mux address on
+  PA0-PA2 and sampling PA3, and the whole of PORTC is inputs.  Its two coin rate
+  tables give one coin per four, three, two or one pulses on the first input, and
+  three, two, five or four credits per pulse on the second.
 
-Every pin is accounted for and none of them carries sound.  PA0-PA1 and PA4-PA5
-hold a four bit value strobed out on PA2, PA6 and PA7 emit single pulses ten to
-twenty timer ticks wide, PB7 is turned around to be sampled, and the timer
-interrupt only keeps time, dividing by a hundred and then by sixty.  There is
-nothing anywhere that toggles a pin at an audio rate, unlike the roulette
-program, which swings PC1 in its interrupt handler.
+- Every pin is accounted for and none of them carries sound.  PA0-PA1 and PA4-PA5
+  hold a four bit value strobed out on PA2, PA6 and PA7 emit single pulses ten to
+  twenty timer ticks wide, PB7 is turned around to be sampled, and the timer
+  interrupt only keeps time, dividing by a hundred and then by sixty.  There is
+  nothing anywhere that toggles a pin at an audio rate, unlike the roulette
+  program, which swings PC1 in its interrupt handler.
 
 *******************************************************************************/
 
@@ -105,6 +88,7 @@ program, which swings PC1 in its interrupt handler.
 
 #include "cpu/m6805/m68705.h"
 #include "cpu/pic16c5x/pic16c5x.h"
+
 #include "sound/spkrdev.h"
 
 #include "speaker.h"
@@ -240,12 +224,9 @@ void lotoplay_ro_pic_state::lotoplay_ro_pic(machine_config &config)
 
 
 /*
-    The switches short their pin to ground and PORTA has internal pull-ups, so
-    a switch that is on reads back as 0.
-
-    One switch bank sets both coin slots from a coupled table, so the settings
-    below are combined strings.  SW5 and SW6 modify whatever the table produces
-    rather than standing on their own.
+    The switches short their pin to ground and PORTA has internal pull-ups, so a
+    switch that is on reads back as 0.
+    SW5 and SW6 modify whatever the table produces rather than standing on their own.
 */
 INPUT_PORTS_START(lotoplay_ro)
 	PORT_START("DSW")
@@ -254,10 +235,10 @@ INPUT_PORTS_START(lotoplay_ro)
 	PORT_DIPSETTING(    0x01, "4%" )
 	PORT_DIPSETTING(    0x02, "7%" )
 	PORT_DIPSETTING(    0x03, "10%" )
-	PORT_DIPNAME( 0x04, 0x00, "Double Credit Values" )   PORT_DIPLOCATION("SW1:5") // listed as unused in the manual
+	PORT_DIPNAME( 0x04, 0x00, "Double Credit Values" )   PORT_DIPLOCATION("SW1:5")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x08, 0x00, "Extra Credit On Coin A" ) PORT_DIPLOCATION("SW1:6") // listed as unused in the manual
+	PORT_DIPNAME( 0x08, 0x00, "Extra Credit On Coin A" ) PORT_DIPLOCATION("SW1:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Yes ) )
 	PORT_DIPNAME( 0xf0, 0x00, DEF_STR( Coinage ) )       PORT_DIPLOCATION("SW1:1,2,3,4")
@@ -325,7 +306,7 @@ ROM_START(lotoplayb)
 	ROM_LOAD("lp_vii_sch_mostra_11302_68705p3s.bin", 0x0000, 0x0800, CRC(61b426d3) SHA1(b66dc6c382a04d8cdbaee342f179ce80abfd3c71))
 ROM_END
 
-// Different PCB than the previous sets
+// Different PCB than the previous sets, with MC68705 and a seven segment display instead of a roulette.
 ROM_START(lotoplayc)
 	ROM_REGION(0x0800, "maincpu", 0)
 	ROM_LOAD("multn.bin", 0x0000, 0x0800, CRC(20a0e0d0) SHA1(832ed64dfa5f5f150f0e9918b40e9fb4e8e4260d))
