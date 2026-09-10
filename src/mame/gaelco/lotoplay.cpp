@@ -2,7 +2,7 @@
 // copyright-holders:
 /*******************************************************************************
 
- Skeleton driver for "Loto-Play", a small PCB with a LED roulette installed on
+ Driver for "Loto-Play", a small PCB with a LED roulette installed on
  "First Games" arcade cabs from Covielsa that gives player the option to win a
  free play.
 
@@ -42,7 +42,7 @@
  |____________________________________________|
 
 
- 
+
 Notes on the roulette program, which lotoplay, lotoplaya and lotoplayb all
 share:
 
@@ -88,10 +88,16 @@ roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font
 (the entries for 0 to 8 are the canonical codes, the one for 9 is 0xe0 where
 0x10 would be expected) and what gets displayed is a credit counter clamped to
 ten.  Four DIP switches are read one at a time by driving a mux address on
-PA0-PA2 and sampling PA3, the whole of PORTC is inputs, and PA4-PA7 and PB7
-are pulsed outputs whose purpose has not been worked out.  Its two coin rate
+PA0-PA2 and sampling PA3, and the whole of PORTC is inputs.  Its two coin rate
 tables give one coin per four, three, two or one pulses on the first input, and
 three, two, five or four credits per pulse on the second.
+
+Every pin is accounted for and none of them carries sound.  PA0-PA1 and PA4-PA5
+hold a four bit value strobed out on PA2, PA6 and PA7 emit single pulses ten to
+twenty timer ticks wide, PB7 is turned around to be sampled, and the timer
+interrupt only keeps time, dividing by a hundred and then by sixty.  There is
+nothing anywhere that toggles a pin at an audio rate, unlike the roulette
+program, which swings PC1 in its interrupt handler.
 
 *******************************************************************************/
 
@@ -114,7 +120,7 @@ class lotoplay_ro_state : public driver_device
 public:
 	lotoplay_ro_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag)
-		, m_mcu(*this, "maincpu")
+		, m_maincpu(*this, "maincpu")
 		, m_speaker(*this, "speaker")
 		, m_leds(*this, "led%u", 0U)
 	{
@@ -142,7 +148,7 @@ private:
 		m_speaker->level_w(BIT(data, 1));
 	}
 
-	required_device<m68705p3_device> m_mcu;
+	required_device<m68705p3_device> m_maincpu;
 	required_device<speaker_sound_device> m_speaker;
 	output_finder<8> m_leds;
 
@@ -158,11 +164,11 @@ void lotoplay_ro_state::machine_start()
 
 void lotoplay_ro_state::lotoplay_ro(machine_config &config)
 {
-	M68705P3(config, m_mcu, 3'579'545); // MC68705P3S, unknown clock
-	m_mcu->porta_r().set_ioport("DSW");
-	m_mcu->portb_w().set(FUNC(lotoplay_ro_state::portb_w));
-	m_mcu->portc_r().set_ioport("IN");
-	m_mcu->portc_w().set(FUNC(lotoplay_ro_state::portc_w));
+	M68705P3(config, m_maincpu, 3'579'545); // MC68705P3S, unknown clock
+	m_maincpu->porta_r().set_ioport("DSW");
+	m_maincpu->portb_w().set(FUNC(lotoplay_ro_state::portb_w));
+	m_maincpu->portc_r().set_ioport("IN");
+	m_maincpu->portc_w().set(FUNC(lotoplay_ro_state::portc_w));
 
 	SPEAKER(config, "mono").front_center();
 	SPEAKER_SOUND(config, m_speaker).add_route(ALL_OUTPUTS, "mono", 0.35);
@@ -174,7 +180,7 @@ class lotoplay_7s_state : public driver_device
 public:
 	lotoplay_7s_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag)
-		, m_mcu(*this, "maincpu")
+		, m_maincpu(*this, "maincpu")
 		, m_dsw(*this, "DSW")
 		, m_digit(*this, "digit0")
 	{
@@ -190,7 +196,7 @@ private:
 	void porta_w(u8 data) { m_mux = data & 0x07; }
 	void portb_w(u8 data) { m_digit = ~data & 0x7f; }
 
-	required_device<m68705p3_device> m_mcu;
+	required_device<m68705p3_device> m_maincpu;
 	required_ioport m_dsw;
 	output_finder<> m_digit;
 
@@ -204,11 +210,11 @@ void lotoplay_7s_state::machine_start()
 
 void lotoplay_7s_state::lotoplay_7s(machine_config &config)
 {
-	M68705P3(config, m_mcu, 3'579'545); // unknown clock
-	m_mcu->porta_r().set(FUNC(lotoplay_7s_state::porta_r));
-	m_mcu->porta_w().set(FUNC(lotoplay_7s_state::porta_w));
-	m_mcu->portb_w().set(FUNC(lotoplay_7s_state::portb_w));
-	m_mcu->portc_r().set_ioport("IN");
+	M68705P3(config, m_maincpu, 3'579'545); // unknown clock
+	m_maincpu->porta_r().set(FUNC(lotoplay_7s_state::porta_r));
+	m_maincpu->porta_w().set(FUNC(lotoplay_7s_state::porta_w));
+	m_maincpu->portb_w().set(FUNC(lotoplay_7s_state::portb_w));
+	m_maincpu->portc_r().set_ioport("IN");
 }
 
 
@@ -335,9 +341,9 @@ ROM_END
 } // anonymous namespace
 
 
-//     YEAR   NAME       PARENT    MACHINE          INPUT        CLASS                  INIT        ROT   COMPANY              FULLNAME                      FLAGS                                   LAYOUT
-GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1)", MACHINE_SUPPORTS_SAVE,                  layout_lotoplay_ro )
-GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2)", MACHINE_SUPPORTS_SAVE,                  layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3)", MACHINE_SUPPORTS_SAVE,                  layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,     lotoplay_7s, lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING, layout_lotoplay_7s )
-GAMEL( 1990?, lotoplayp, lotoplay, lotoplay_ro_pic, lotoplay_ro, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54)",       MACHINE_NO_SOUND | MACHINE_NOT_WORKING, layout_lotoplay_ro )
+//     YEAR   NAME       PARENT    MACHINE          INPUT        CLASS                  INIT        ROT   COMPANY              FULLNAME                      FLAGS                                      LAYOUT
+GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,     lotoplay_7s, lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_lotoplay_7s )
+GAMEL( 1990?, lotoplayp, lotoplay, lotoplay_ro_pic, lotoplay_ro, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54)",       MACHINE_NO_SOUND | MACHINE_NOT_WORKING,    layout_lotoplay_ro )
