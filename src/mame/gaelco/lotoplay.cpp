@@ -67,14 +67,49 @@ Notes on the MC68705P3S roulette program:
   accumulator has carried into its high byte, and the per play increment is 5,
   10, 18 or 25 out of 256 depending on SW7 and SW8.
 
+- The Loto-Play 90 manual on recreativas.org documents SW1-SW4 as the coin rate
+  table, SW5-SW6 as unused and SW7-SW8 as the lottery percentage.  It describes
+  lotoplayp rather than these boards, but the program here splits the switches
+  the same way, so the numbering is taken to carry over: SW7 is PA0 and SW8 is
+  PA1, since the percentages climb in the same order as the ROM's table, and
+  SW1 to SW4 are PA4 to PA7 with SW1 least significant, since the manual
+  enumerates its rows as a binary count of SW4/SW3/SW2/SW1.  That leaves PA2
+  and PA3 for the two the manual calls unused.  Which of them is SW5 and which
+  SW6 cannot be settled from what survives: it is a silkscreen fact, the ROM
+  only ever sees bit positions, and the manual has nothing to say about
+  switches that do nothing on its own board.  In both groups that are pinned
+  down the lower switch number sits on the lower bit, so PA2 is taken as SW5
+  and PA3 as SW6.  A straight reversed routing would land on the same three
+  groups with each one flipped and swap those two, and nothing here rules it
+  out.  All switches on selects entry 0 in both tables, which confirms that a
+  closed switch reads back as 0.
+
+- The percentages nearly match: the manual gives 2%, 5%, 7% and 10% against the
+  1.95%, 3.91%, 7.03% and 9.77% the program uses, so the settings are labelled
+  with what this program pays rather than with the manual's figures.  The coin
+  rate table does not match at all, and SW5 and SW6 do have an effect here
+  despite the manual calling them unused, because the manual is not for these
+  boards: its table is, row for row, the one in lotoplayp.
+
+- None of these boards has a crystal, and a photograph of the MC68705P3S one
+  shows none fitted.  Bit 7 of the mask option register is set in all four
+  dumps, which picks the RC oscillator, so the frequency comes from an external
+  resistor and is not going to be a round crystal value.  lotoplayc gives a way
+  to put a number on it: its timer interrupt divides by a hundred and then by
+  sixty, which only reads as hundredths, seconds and minutes, and the prescaler
+  its own mask option register asks for puts the oscillator at 3.2 MHz for that
+  to come out right.  The roulette program has no equivalent anchor, so it is
+  given the same figure; at that speed a spin lasts about two seconds, the main
+  loop runs at 196 Hz and the click is around 780 Hz.
+
 - lotoplayb is the odd one of the three.  Its timer vector points at the reset
   entry, it writes 0x4c to the timer control register and leaves it there with
   the interrupt masked, and there is not a single RTI or CLI in the program: it
   times itself by spinning on the timer flag at the bottom of the main loop
-  instead.  The tone on the other two is made in the timer interrupt, so this one
-  cannot make it, and sure enough PC1 carries a second pulse output built from
-  the same state machine as PC0, thirteen loops low and thirty-two high against
-  PC0's seven and thirty-eight.  Two credit lines out, no speaker.
+  instead.  The tone on the other two is made in the timer interrupt, so this
+  one cannot make it, and sure enough PC1 carries a second pulse output built
+  from the same state machine as PC0, thirteen loops low and thirty-two high
+  against PC0's seven and thirty-eight.  Two credit lines out, no speaker.
   Its deceleration ramp is longer as well.  The other two step sixteen times
   every four main loops and work down from there, forty-eight steps in all;
   lotoplayb prepends sixteen steps every two loops, so a spin is sixty-four.
@@ -84,69 +119,66 @@ Notes on the MC68705P3S roulette program:
 
 Notes on the MC68705P3S 7-segments display program:
 
-- It reaches the same eight LEDs through a PIC16C54.  TRISB is zero, so
-  all of PORTB drives them, and this time the animations are symmetrical about
-  RB0, so the green LED is that pin rather than the fifth one.  TRISA leaves only
-  RA2 as an input, and it is the serial output of the SN74LS166: the program
-  strobes SH/LD on RA0 and the clock on RA1 to read the coin lines and the
-  switches through it, and RA3 pulses low once per credit.
+- lotoplayc runs an unrelated program and is wired differently.  There is no
+  roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font and
+  what gets displayed is a credit counter clamped to ten.  Four DIP switches
+  are read one at a time by driving a mux address on PA0-PA2 and sampling PA3,
+  and the whole of PORTC is inputs.  Its two coin rate tables give one coin per
+  four, three, two or one pulses on the first input, and three, two, five or
+  four credits per pulse on the second.
 
-- RA0 is the speaker as well.  The routine that advances the ring rotates PORTB
-  end around and then clears a flag that lets the main loop swing RA0 four times,
-  which is the click on each step, and during a win it flips the green LED on RB0
-  and gates the tone to match so the board beeps in step with the flashing.  The
-  rest of the time RA0 sits high.  That is what the save and restore of PORTA
-  around the coin poll is protecting, and it agrees with the manual, which lists
-  a speaker on this model.
+- The routine that refreshes the digit keeps PB7 with AND #$80 and then uses
+  ADD rather than ORA, so bit 7 of a table entry doubles as an instruction to
+  pull PB7 low, the carry out of the addition being thrown away.  PB7 is high
+  whenever the routine runs, and the entry for nine is the only one with that
+  bit set, so reaching nine credits updates the digit and drops PB7 in a single
+  lookup.  What it leaves on the display is segments a to e rather than a nine,
+  which would make sense if PB7 were part of the display as well, but there is
+  no photograph of this board to check that against.
 
-- Sharing the pin costs a four microsecond dip every time the shift register is
-  loaded, which the poll does every 201 main loops, so about 78 times a second.
-  That dip is on the real speaker wire too, but at a hundredth of a per cent duty
-  its energy is spread flat out to a quarter of a megahertz and no transducer
-  radiates any of it, whereas a level driven square wave generator puts the lot
-  into the audio band and it comes out as a buzz the board does not make.
-  Filtering it out would mean adding a component that is not on the
-  board, so it is left alone and written down here instead.
+- It is marked not working for two reasons.  PA6, PA7 and PB7 pulse but are
+  not wired to anything here, so nothing shows when the board hands something
+  out, and the loop that steps the PA counter releases PB7 and waits for it to
+  read high before moving on, which with nothing driving the pin happens on the
+  first pass, so whatever is on the far end of that handshake is neither
+  emulated nor known.  On top of that no photograph of this board has turned
+  up: the single digit is what the font and the clamp imply rather than
+  something anyone has seen, and the entry for nine hints there is more to the
+  display than seven segments.
 
-- Of the shift register's eight parallel inputs, P7 and P6 are the coin lines,
-  P5 to P2 are four switches, P1 is unused and P0 is a fifth.  The sixth switch
-  does not fit and goes to the serial input, which is the only wiring that
-  accounts for all four documented percentages: with that pin tied either way
-  only two of them could ever be selected.  Photographs of both faces do not
-  settle that one, because the switch tracks cross to the component side on the
-  way to the shift register, but they do show all eight switches commoned on one
-  side and pulled up by RR1 on the other.  The program never clears the watchdog,
-  and the config byte that survived in the dump has WDTE clear, so it is off.
-
-- Its ring is numbered D1 to D8 clockwise with the green one at twelve o'clock,
-  so with the ROM putting the green LED on RB0 the LEDs come out as Dn driven by
-  RB(n - 1).  RR2 is the eight series resistors, XL1 is marked 4000 and the rest
-  is a SN74LS166AP, a TL7702ACP, a CNY74-4 and a BD137.
+- Every pin is accounted for and none of them carries sound.  PA0-PA1 and
+  PA4-PA5 hold a four bit value strobed out on PA2, PA6 and PA7 emit single
+  pulses ten to twenty timer ticks wide, and the timer interrupt only keeps
+  time, dividing by a hundred and then by sixty.  PB7 is turned around and
+  sampled in a loop that keeps stepping those PA counters until it reads high,
+  so whatever they drive answers back on it.  There is nothing anywhere that
+  toggles a pin at an audio rate, unlike the roulette program, which swings PC1
+  in its interrupt handler.
 
 Notes on the PIC16C54 roulette program:
 
-- It reaches the same eight LEDs through a PIC16C54.  TRISB is zero, so
+- lotoplayp reaches the same eight LEDs through a PIC16C54.  TRISB is zero, so
   all of PORTB drives them, and this time the animations are symmetrical about
-  RB0, so the green LED is that pin rather than the fifth one.  TRISA leaves only
-  RA2 as an input, and it is the serial output of the SN74LS166: the program
-  strobes SH/LD on RA0 and the clock on RA1 to read the coin lines and the
-  switches through it, and RA3 pulses low once per credit.
+  RB0, so the green LED is that pin rather than the fifth one.  TRISA leaves
+  only RA2 as an input, and it is the serial output of the SN74LS166: the
+  program strobes SH/LD on RA0 and the clock on RA1 to read the coin lines and
+  the switches through it, and RA3 pulses low once per credit.
 
 - RA0 is the speaker as well.  The routine that advances the ring rotates PORTB
-  end around and then clears a flag that lets the main loop swing RA0 four times,
-  which is the click on each step, and during a win it flips the green LED on RB0
-  and gates the tone to match so the board beeps in step with the flashing.  The
-  rest of the time RA0 sits high.  That is what the save and restore of PORTA
-  around the coin poll is protecting, and it agrees with the manual, which lists
-  a speaker on this model.
+  end around and then clears a flag that lets the main loop swing RA0 four
+  times, which is the click on each step, and during a win it flips the green
+  LED on RB0 and gates the tone to match so the board beeps in step with the
+  flashing.  The rest of the time RA0 sits high.  That is what the save and
+  restore of PORTA around the coin poll is protecting, and it agrees with the
+  manual, which lists a speaker on this model.
 
 - Sharing the pin costs a four microsecond dip every time the shift register is
   loaded, which the poll does every 201 main loops, so about 78 times a second.
-  That dip is on the real speaker wire too, but at a hundredth of a per cent duty
-  its energy is spread flat out to a quarter of a megahertz and no transducer
-  radiates any of it, whereas a level driven square wave generator puts the lot
-  into the audio band and it comes out as a buzz the board does not make.
-  Filtering it out would mean adding a component that is not on the
+  That dip is on the real speaker wire too, but at a hundredth of a per cent
+  duty its energy is spread flat out to a quarter of a megahertz and no
+  transducer radiates any of it, whereas a level driven square wave generator
+  puts the lot into the audio band and it comes out as a buzz the board does
+  not make.  Filtering it out would mean adding a component that is not on the
   board, so it is left alone and written down here instead.
 
 - Of the shift register's eight parallel inputs, P7 and P6 are the coin lines,
@@ -155,14 +187,14 @@ Notes on the PIC16C54 roulette program:
   accounts for all four documented percentages: with that pin tied either way
   only two of them could ever be selected.  Photographs of both faces do not
   settle that one, because the switch tracks cross to the component side on the
-  way to the shift register, but they do show all eight switches commoned on one
-  side and pulled up by RR1 on the other.  The program never clears the watchdog,
-  and the config byte that survived in the dump has WDTE clear, so it is off.
+  way to the shift register, but they do show all eight switches commoned on
+  one side and pulled up by RR1 on the other.  The program never clears the
+  watchdog, and the config byte that survived in the dump has WDTE clear, so it
+  is off.
 
 - Its ring is numbered D1 to D8 clockwise with the green one at twelve o'clock,
-  so with the ROM putting the green LED on RB0 the LEDs come out as Dn driven by
-  RB(n - 1).  RR2 is the eight series resistors, XL1 is marked 4000 and the rest
-  is a SN74LS166AP, a TL7702ACP, a CNY74-4 and a BD137.
+  so with the ROM putting the green LED on RB0 the LEDs come out as Dn driven
+  by RB(n - 1).
 
 *******************************************************************************/
 
@@ -534,9 +566,9 @@ ROM_END
 } // anonymous namespace
 
 
-//     YEAR   NAME       PARENT    MACHINE            INPUT            CLASS                  INIT        ROT   COMPANY              FULLNAME                      FLAGS                                        LAYOUT
-GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,       lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1)", MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
-GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,       lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2)", MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro_2cred, lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3)", MACHINE_NO_SOUND_HW | MACHINE_SUPPORTS_SAVE, layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,       lotoplay_7s,     lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING,   layout_lotoplay_7s )
-GAMEL( 1990,  lotoplayp, lotoplay, lotoplay_ro_pic,   lotoplay_ro_pic, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54)",       MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
+//     YEAR   NAME       PARENT    MACHINE            INPUT            CLASS                  INIT        ROT   COMPANY              FULLNAME                                                  FLAGS                                        LAYOUT
+GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,       lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1, with roulette)",              MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
+GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,       lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2, with roulette)",              MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro_2cred, lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3, with roulette)",              MACHINE_NO_SOUND_HW | MACHINE_SUPPORTS_SAVE, layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,       lotoplay_7s,     lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4, with seven-segment display)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING,   layout_lotoplay_7s )
+GAMEL( 1990,  lotoplayp, lotoplay, lotoplay_ro_pic,   lotoplay_ro_pic, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54, with roulette)",                    MACHINE_SUPPORTS_SAVE,                       layout_lotoplay_ro )
