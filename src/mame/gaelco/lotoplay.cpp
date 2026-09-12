@@ -42,12 +42,16 @@
  |____________________________________________|
 
 
-Notes on the roulette program (lotoplay, lotoplaya and lotoplayb):
+
+Notes on the MC68705P3S roulette program:
 
 - The LEDs are not wired in numerical order.  The rotation table in the ROM
   (DF BF 7F FE FD FB F7 EF) walks the ring as PB5, PB6, PB7, PB0, PB1, PB2,
   PB3, PB4, so the green LED at the top of the bezel is PB5.  The attract mode
-  animations only come out symmetrical about it that way.
+  animations only come out symmetrical about it that way, and a photograph of
+  the board agrees: it silkscreens the ring L1 to L8 clockwise from nine
+  o'clock with the green one at L3 on top, which comes out as Ln driven by
+  PB((n + 2) & 7), a constant offset with nothing shuffled.
 
 - The coin inputs are debounced in software by sampling them once per main
   loop, so a pulse has to stay low for two loops after having been high for
@@ -63,24 +67,73 @@ Notes on the roulette program (lotoplay, lotoplaya and lotoplayb):
   accumulator has carried into its high byte, and the per play increment is 5,
   10, 18 or 25 out of 256 depending on SW7 and SW8.
 
+Notes on the PIC16C54 roulette program:
 
-Notes on the 7-segment display program (lotoplayc):
+- It reaches the same eight LEDs through a PIC16C54.  TRISB is zero, so
+  all of PORTB drives them, and this time the animations are symmetrical about
+  RB0, so the green LED is that pin rather than the fifth one.  TRISA leaves only
+  RA2 as an input, and it is the serial output of the SN74LS166: the program
+  strobes SH/LD on RA0 and the clock on RA1 to read the coin lines and the
+  switches through it, and RA3 pulses low once per credit.
+
+- RA0 is the speaker as well.  The routine that advances the ring rotates PORTB
+  end around and then clears a flag that lets the main loop swing RA0 four times,
+  which is the click on each step, and during a win it flips the green LED on RB0
+  and gates the tone to match so the board beeps in step with the flashing.  The
+  rest of the time RA0 sits high.  That is what the save and restore of PORTA
+  around the coin poll is protecting, and it agrees with the manual, which lists
+  a speaker on this model.
+
+- Sharing the pin costs a four microsecond dip every time the shift register is
+  loaded, which the poll does every 201 main loops, so about 78 times a second.
+  That dip is on the real speaker wire too, but at a hundredth of a per cent duty
+  its energy is spread flat out to a quarter of a megahertz and no transducer
+  radiates any of it, whereas a level driven square wave generator puts the lot
+  into the audio band and it comes out as a buzz the board does not make.
+  Filtering it out would mean adding a component that is not on the
+  board, so it is left alone and written down here instead.
+
+- Of the shift register's eight parallel inputs, P7 and P6 are the coin lines,
+  P5 to P2 are four switches, P1 is unused and P0 is a fifth.  The sixth switch
+  does not fit and goes to the serial input, which is the only wiring that
+  accounts for all four documented percentages: with that pin tied either way
+  only two of them could ever be selected.  Photographs of both faces do not
+  settle that one, because the switch tracks cross to the component side on the
+  way to the shift register, but they do show all eight switches commoned on one
+  side and pulled up by RR1 on the other.  The program never clears the watchdog,
+  and the config byte that survived in the dump has WDTE clear, so it is off.
+
+- Its ring is numbered D1 to D8 clockwise with the green one at twelve o'clock,
+  so with the ROM putting the green LED on RB0 the LEDs come out as Dn driven by
+  RB(n - 1).  RR2 is the eight series resistors, XL1 is marked 4000 and the rest
+  is a SN74LS166AP, a TL7702ACP, a CNY74-4 and a BD137.
+
+Notes on the MC68705P3S 7-segments display program:
 
 - lotoplayc runs an unrelated program and is wired differently.  There is no
-  roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font
-  (the entries for 0 to 8 are the canonical codes, the one for 9 is 0xe0 where
-  0x10 would be expected) and what gets displayed is a credit counter clamped to
-  ten.  Four DIP switches are read one at a time by driving a mux address on
-  PA0-PA2 and sampling PA3, and the whole of PORTC is inputs.  Its two coin rate
-  tables give one coin per four, three, two or one pulses on the first input, and
-  three, two, five or four credits per pulse on the second.
+  roulette on it: PORTB bits 0 to 6 carry a common anode seven segment font and
+  what gets displayed is a credit counter clamped to ten.  Four DIP switches are
+  read one at a time by driving a mux address on PA0-PA2 and sampling PA3, and
+  the whole of PORTC is inputs.  Its two coin rate tables give one coin per four,
+  three, two or one pulses on the first input, and three, two, five or four
+  credits per pulse on the second.
+
+- The routine that refreshes the digit keeps PB7 with AND #$80 and then uses ADD
+  rather than ORA, so bit 7 of a table entry doubles as an instruction to pull
+  PB7 low, the carry out of the addition being thrown away.  PB7 is high whenever
+  the routine runs, and the entry for nine is the only one with that bit set, so
+  reaching nine credits updates the digit and drops PB7 in a single lookup.  What
+  it leaves on the display is segments a to e rather than a nine, which would
+  make sense if PB7 were part of the display as well, but there is no photograph
+  of this board to check that against.
 
 - Every pin is accounted for and none of them carries sound.  PA0-PA1 and PA4-PA5
   hold a four bit value strobed out on PA2, PA6 and PA7 emit single pulses ten to
-  twenty timer ticks wide, PB7 is turned around to be sampled, and the timer
-  interrupt only keeps time, dividing by a hundred and then by sixty.  There is
-  nothing anywhere that toggles a pin at an audio rate, unlike the roulette
-  program, which swings PC1 in its interrupt handler.
+  twenty timer ticks wide, and the timer interrupt only keeps time, dividing by a
+  hundred and then by sixty.  PB7 is turned around and sampled in a loop that
+  keeps stepping those PA counters until it reads high, so whatever they drive
+  answers back on it.  There is nothing anywhere that toggles a pin at an audio
+  rate, unlike the roulette program, which swings PC1 in its interrupt handler.
 
 *******************************************************************************/
 
@@ -88,7 +141,7 @@ Notes on the 7-segment display program (lotoplayc):
 
 #include "cpu/m6805/m68705.h"
 #include "cpu/pic16c5x/pic16c5x.h"
-
+#include "machine/74166.h"
 #include "sound/spkrdev.h"
 
 #include "speaker.h"
@@ -118,13 +171,13 @@ protected:
 private:
 	void portb_w(u8 data)
 	{
+		// PB5 is the LED at the top of the bezel, PB6 the next one clockwise
 		for (unsigned i = 0; i < 8; i++)
-			m_leds[i] = BIT(~data, i);
+			m_leds[(i + 3) & 7] = BIT(~data, i);
 	}
 
 	void portc_w(u8 data)
 	{
-		// there is nothing on the bezel to show the credits going out
 		if (m_credit_line && !BIT(data, 0))
 			popmessage("Credits out: %u", ++m_credit_count);
 		m_credit_line = BIT(data, 0);
@@ -148,7 +201,7 @@ void lotoplay_ro_state::machine_start()
 
 void lotoplay_ro_state::lotoplay_ro(machine_config &config)
 {
-	M68705P3(config, m_maincpu, 3'579'545); // MC68705P3S, unknown clock
+	M68705P3(config, m_maincpu, 3'200'000); // MC68705P3S, RC oscillator
 	m_maincpu->porta_r().set_ioport("DSW");
 	m_maincpu->portb_w().set(FUNC(lotoplay_ro_state::portb_w));
 	m_maincpu->portc_r().set_ioport("IN");
@@ -194,7 +247,7 @@ void lotoplay_7s_state::machine_start()
 
 void lotoplay_7s_state::lotoplay_7s(machine_config &config)
 {
-	M68705P3(config, m_maincpu, 3'579'545); // unknown clock
+	M68705P3(config, m_maincpu, 3'200'000); // RC oscillator
 	m_maincpu->porta_r().set(FUNC(lotoplay_7s_state::porta_r));
 	m_maincpu->porta_w().set(FUNC(lotoplay_7s_state::porta_w));
 	m_maincpu->portb_w().set(FUNC(lotoplay_7s_state::portb_w));
@@ -208,25 +261,86 @@ public:
 	lotoplay_ro_pic_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
+		, m_shifter(*this, "shifter")
+		, m_speaker(*this, "speaker")
+		, m_dsw(*this, "DSW")
+		, m_in(*this, "IN")
+		, m_leds(*this, "led%u", 0U)
 	{
 	}
 
 	void lotoplay_ro_pic(machine_config &config) ATTR_COLD;
 
+protected:
+	virtual void machine_start() override ATTR_COLD;
+
 private:
+	u8 shifter_r() { return (m_in->read() & 0xc0) | (m_dsw->read() & 0x3d) | 0x02; }
+	void qh_w(int state) { m_qh = state; }
+
+	u8 porta_r() { return m_qh << 2; }
+
+	void porta_w(u8 data)
+	{
+		m_shifter->serial_w(BIT(m_dsw->read(), 6));
+		m_shifter->shift_load_w(BIT(data, 0));
+		m_shifter->clock_w(BIT(data, 1));
+
+		if (m_credit_line && !BIT(data, 3))
+			popmessage("Credits out: %u", ++m_credit_count);
+		m_credit_line = BIT(data, 3);
+
+		m_speaker->level_w(BIT(data, 0));
+	}
+
+	void portb_w(u8 data)
+	{
+		for (unsigned i = 0; i < 8; i++)
+			m_leds[i] = BIT(~data, i);
+	}
+
 	required_device<pic16c54_device> m_maincpu;
+	required_device<ttl166_device> m_shifter;
+	required_device<speaker_sound_device> m_speaker;
+	required_ioport m_dsw;
+	required_ioport m_in;
+	output_finder<8> m_leds;
+
+	int m_qh = 0;
+	bool m_credit_line = false;
+	u32 m_credit_count = 0;
 };
+
+void lotoplay_ro_pic_state::machine_start()
+{
+	save_item(NAME(m_qh));
+	save_item(NAME(m_credit_line));
+	save_item(NAME(m_credit_count));
+}
 
 void lotoplay_ro_pic_state::lotoplay_ro_pic(machine_config &config)
 {
 	PIC16C54(config, m_maincpu, 4_MHz_XTAL);
+	m_maincpu->read_a().set(FUNC(lotoplay_ro_pic_state::porta_r));
+	m_maincpu->write_a().set(FUNC(lotoplay_ro_pic_state::porta_w));
+	m_maincpu->write_b().set(FUNC(lotoplay_ro_pic_state::portb_w));
+
+	TTL166(config, m_shifter);
+	m_shifter->data_callback().set(FUNC(lotoplay_ro_pic_state::shifter_r));
+	m_shifter->qh_callback().set(FUNC(lotoplay_ro_pic_state::qh_w));
+
+	SPEAKER(config, "mono").front_center();
+	SPEAKER_SOUND(config, m_speaker).add_route(ALL_OUTPUTS, "mono", 0.35);
 }
 
 
 /*
-    The switches short their pin to ground and PORTA has internal pull-ups, so a
-    switch that is on reads back as 0.
-    SW5 and SW6 modify whatever the table produces rather than standing on their own.
+    The switches short their pin to ground and PORTA has internal pull-ups, so
+    a switch that is on reads back as 0.
+
+    One switch bank sets both coin slots from a coupled table, so the settings
+    below are combined strings.  SW5 and SW6 modify whatever the table produces
+    rather than standing on their own.
 */
 INPUT_PORTS_START(lotoplay_ro)
 	PORT_START("DSW")
@@ -288,6 +402,46 @@ INPUT_PORTS_START(lotoplay_7s)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
+/*
+    The eight parallel inputs of the shift register carry the two coin lines on
+    P7 and P6 and four of the switches on P5 to P2, P1 is not connected, and P0
+    carries SW7.  SW8 is the one that does not fit, and goes to the serial
+    input: with that pin tied either way only two of the four documented
+    percentages would be reachable.
+*/
+INPUT_PORTS_START(lotoplay_ro_pic)
+	PORT_START("DSW")
+	PORT_DIPNAME( 0x41, 0x41, "Lottery Percentage" )    PORT_DIPLOCATION("SW1:7,8")
+	PORT_DIPSETTING(    0x00, "2%" )
+	PORT_DIPSETTING(    0x01, "4%" )
+	PORT_DIPSETTING(    0x40, "7%" )
+	PORT_DIPSETTING(    0x41, "10%" )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPNAME( 0x3c, 0x3c, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:4,3,2,1")
+	PORT_DIPSETTING(    0x00, "Coin A 1C/1C, Coin B 1C/2C" )
+	PORT_DIPSETTING(    0x20, "Coin A 1C/1C, Coin B 1C/3C" )
+	PORT_DIPSETTING(    0x10, "Coin A 1C/1C, Coin B 1C/4C" )
+	PORT_DIPSETTING(    0x30, "Coin A 1C/1C, Coin B 1C/5C" )
+	PORT_DIPSETTING(    0x08, "Coin A 1C/2C, Coin B 1C/2C" )
+	PORT_DIPSETTING(    0x28, "Coin A 1C/2C, Coin B 1C/3C" )
+	PORT_DIPSETTING(    0x18, "Coin A 1C/2C, Coin B 1C/4C" )
+	PORT_DIPSETTING(    0x38, "Coin A 1C/2C, Coin B 1C/5C" )
+	PORT_DIPSETTING(    0x04, "Coin A 2C/1C, Coin B 1C/1C" )
+	PORT_DIPSETTING(    0x24, "Coin A 2C/1C, Coin B 1C/2C" )
+	PORT_DIPSETTING(    0x14, "Coin A 2C/1C, Coin B 1C/3C" )
+	PORT_DIPSETTING(    0x34, "Coin A 2C/1C, Coin B 1C/4C" )
+	PORT_DIPSETTING(    0x0c, "Coin A 3C/1C, Coin B 1C/1C" )
+	PORT_DIPSETTING(    0x2c, "Coin A 3C/1C, Coin B 1C/2C" )
+	PORT_DIPSETTING(    0x1c, "Coin A 4C/1C, Coin B 1C/1C" )
+	PORT_DIPSETTING(    0x3c, "Coin A 4C/1C, Coin B 1C/2C" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("IN")
+	PORT_BIT( 0x3f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin B")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin A")
+INPUT_PORTS_END
+
 
 // Sets with MC68705.
 
@@ -312,6 +466,7 @@ ROM_START(lotoplayc)
 	ROM_LOAD("multn.bin", 0x0000, 0x0800, CRC(20a0e0d0) SHA1(832ed64dfa5f5f150f0e9918b40e9fb4e8e4260d))
 ROM_END
 
+
 // Sets with PIC16C54.
 
 ROM_START(lotoplayp)
@@ -322,9 +477,9 @@ ROM_END
 } // anonymous namespace
 
 
-//     YEAR   NAME       PARENT    MACHINE          INPUT        CLASS                  INIT        ROT   COMPANY              FULLNAME                      FLAGS                                      LAYOUT
-GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
-GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro,     lotoplay_ro, lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
-GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,     lotoplay_7s, lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_lotoplay_7s )
-GAMEL( 1990?, lotoplayp, lotoplay, lotoplay_ro_pic, lotoplay_ro, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54)",       MACHINE_NO_SOUND | MACHINE_NOT_WORKING,    layout_lotoplay_ro )
+//     YEAR   NAME       PARENT    MACHINE          INPUT            CLASS                  INIT        ROT   COMPANY              FULLNAME                      FLAGS                                      LAYOUT
+GAMEL( 1988?, lotoplay,  0,        lotoplay_ro,     lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 1)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplaya, lotoplay, lotoplay_ro,     lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 2)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayb, lotoplay, lotoplay_ro,     lotoplay_ro,     lotoplay_ro_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 3)", MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )
+GAMEL( 1988?, lotoplayc, lotoplay, lotoplay_7s,     lotoplay_7s,     lotoplay_7s_state,     empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (MC68705, set 4)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_lotoplay_7s )
+GAMEL( 1990,  lotoplayp, lotoplay, lotoplay_ro_pic, lotoplay_ro_pic, lotoplay_ro_pic_state, empty_init, ROT0, "Gaelco / Covielsa", "Loto-Play (PIC16C54)",       MACHINE_SUPPORTS_SAVE,                     layout_lotoplay_ro )

@@ -2,7 +2,7 @@
 <!--
 license:CC0-1.0
 
-Loto-Play "multn" board. PORTB bits 0 to 6 carry a common anode seven segment font,
+Gaelco Loto-Play "multn" board. PORTB bits 0 to 6 carry a common anode seven segment font,
 and the value displayed is a credit counter clamped to ten.
 -->
 <mamelayout version="2">

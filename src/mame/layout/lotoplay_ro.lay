@@ -4,9 +4,9 @@ license:CC0-1.0
 
 Gaelco / Covielsa "Loto-Play" bezel plaque.
 
-The outputs are named after the MCU pin that drives them, so the ring is not in
-numerical order.  The wiring comes from the LED pattern table in the program
-ROM (DF BF 7F FE FD FB F7 EF).
+The outputs are named after the physical slot, clockwise from the green one
+at twelve o'clock, because the two boards that use this artwork do not wire
+the ring the same way round.  Each driver maps its own pins onto them.
 -->
 <mamelayout version="2">
 
@@ -30,13 +30,13 @@ ROM (DF BF 7F FE FD FB F7 EF).
 	</element>
 
 	<group name="redleds">
-		<element name="led6" ref="led"><bounds x="70.08" y="21.42" width="6.5" height="6.5" /></element>
-		<element name="led7" ref="led"><bounds x="79.75" y="44.75" width="6.5" height="6.5" /></element>
-		<element name="led0" ref="led"><bounds x="70.08" y="68.08" width="6.5" height="6.5" /></element>
-		<element name="led1" ref="led"><bounds x="46.75" y="77.75" width="6.5" height="6.5" /></element>
-		<element name="led2" ref="led"><bounds x="23.42" y="68.08" width="6.5" height="6.5" /></element>
-		<element name="led3" ref="led"><bounds x="13.75" y="44.75" width="6.5" height="6.5" /></element>
-		<element name="led4" ref="led"><bounds x="23.42" y="21.42" width="6.5" height="6.5" /></element>
+		<element name="led1" ref="led"><bounds x="70.08" y="21.42" width="6.5" height="6.5" /></element>
+		<element name="led2" ref="led"><bounds x="79.75" y="44.75" width="6.5" height="6.5" /></element>
+		<element name="led3" ref="led"><bounds x="70.08" y="68.08" width="6.5" height="6.5" /></element>
+		<element name="led4" ref="led"><bounds x="46.75" y="77.75" width="6.5" height="6.5" /></element>
+		<element name="led5" ref="led"><bounds x="23.42" y="68.08" width="6.5" height="6.5" /></element>
+		<element name="led6" ref="led"><bounds x="13.75" y="44.75" width="6.5" height="6.5" /></element>
+		<element name="led7" ref="led"><bounds x="23.42" y="21.42" width="6.5" height="6.5" /></element>
 	</group>
 
 	<view name="LED Roulette">
@@ -51,7 +51,7 @@ ROM (DF BF 7F FE FD FB F7 EF).
 
 		<group ref="redleds"><color red="1.00" green="0.16" blue="0.12" /></group>
 
-		<element name="led5" ref="led">
+		<element name="led0" ref="led">
 			<bounds x="46.75" y="11.75" width="6.5" height="6.5" />
 			<color red="0.22" green="1.00" blue="0.30" />
 		</element>
