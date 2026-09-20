@@ -37,16 +37,16 @@
   JP3 =  5 pin [PU5, PU6, PU7, PU8, GND]
 
   There is a newer version of the PCB with the same components (Gaelco REF.920505, from 1992).
-  It adds a fuse, a LED for PCB control, and better connectors, but it has a single 15-pin
-  connector and no connector for the external display board.
+  It adds a fuse, a LED for PCB control, and better connectors, but it only has the single
+  15-pin connector, without connector for the external display board.
 
 
   Hardware details, deduced from the 'IRN' kiddie ride program (m.irn_pic16c56.u3) and the PCB:
 
-  The PIC runs in RC oscillator mode, with the frequency set by trimmer C11 and R1. The decapped 'IR' PIC
-  (see 'donpepito') has config word 0x?07: RC oscillator, watchdog enabled, code protected. The program assumes 4 MHz: the main loop runs
-  every 10 ms and the ride times are exact seconds. The M6295 is presumably clocked from the PIC OSC2/CLKOUT
-  pin (Fosc / 4 = 1 MHz), so C11 adjusts both the timings and the sound pitch.
+  The PIC runs in RC oscillator mode, with the frequency set by trimmer C11 and R1.
+  The program assumes 4 MHz: the main loop runs every 10 ms and the ride times are exact seconds.
+  The M6295 is presumably clocked from the PIC OSC2/CLKOUT pin (Fosc / 4 = 1 MHz), so C11 adjusts
+  both the timings and the sound pitch.
 
   PIC port A (all outputs):
 	RA0  M6295 /CS
@@ -75,8 +75,7 @@
   segments (a, f, e, d, c, g, b), then the time display enable and the tens digit segments (f, g, c, d, e, b, a).
   The program alternates the credits and time left displays on every main loop tick (multiplexing).
 
-  'IRN' kiddie ride program (the 'IR' PIC of 'donpepito' holds exactly the same 1024 program words, and the
-  same ID words 0A 05 02 01):
+  'IRN'/'IR' kiddie ride program:
 	- Idle: with demo sounds enabled, phrase 1 plays about every 4 minutes while the lamps blink.
 	- A credit starts the ride: phrase 2, then phrase 8 (the song) loops on voice 1, the motor runs,
 	  the lamps alternate and the time display counts from 99 down to 0.
@@ -89,10 +88,10 @@
 	- Phrase 6 is not used.
 	- The DIP switches are read only at power on.
 
-  The 'IRN' sound ROMs share a common set of phrases: 2 (ride start), 3 and 4 (button sounds), 5 (ride end)
-  and 7 (credits left) are byte identical in all of them. Phrase 9 (75/50/25 announcement) is also identical in
-  'autopapa' and 'susanita', while 'donpepito', 'mueve' and 'obladi' don't have it. Phrase 1 (attract jingle)
-  and phrase 8 (song) are specific to each ride.
+  The 'IRN'/'IR' sound ROMs share a common set of phrases: 2 (ride start), 3 and 4 (button sounds), 5
+  (ride end) and 7 (credits left) are byte identical in all of them. Phrase 9 (75/50/25 announcement) is
+  also identical in 'autopapa' and 'susanita', while 'donpepito', 'mueve' and 'obladi' don't have it.
+  Phrase 1 (attract jingle) and phrase 8 (song) are specific to each ride.
 
   The hex number on the sound ROM labels ('mueve_reclam_ea76', 'obladi_reclam_5a5c', "AUTO PAPA reclam. F2C7")
   is the 16-bit sum of all the EPROM bytes, including any leftover data after the phrases. The labels also name
