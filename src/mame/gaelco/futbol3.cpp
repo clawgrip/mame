@@ -1,7 +1,8 @@
 // license:BSD-3-Clause
 // copyright-holders:
 /*
-  Gaelco 'Futbol-3' hardware for kiddie rides, pinballs, and electromechanicals.
+  Gaelco 'Futbol-3' hardware for kiddie rides, pinballs, and electromechanicals
+  from Gaelco, Cresmatic, and other manufacturers.
 
   The PCB is very compact and has few components. The main ones are:
 
@@ -35,21 +36,10 @@
   JP2 = 14 pin [12VA, 12VA, +5V, ALT, CON, BOM, MOT, N/U, BOM, POT, ALT, 12V, GND, GND]
   JP3 =  5 pin [PU5, PU6, PU7, PU8, GND]
 
-  The PCBs were inside two "Coche de Bomberos" kiddie rides from CMC Cresmatic (https://www.recreativas.org/coche-de-bomberos-6022-cresmatic).
-  Anyway, the hardware is generic enough to serve any basic kiddie ride.
+  There is a newer version of the PCB with the same components (Gaelco REF.920505, from 1992).
+  It adds a fuse, a LED for PCB control, and better connectors, but it has a single 15-pin
+  connector and no connector for the external display board.
 
-  There is a newer version of the PCB with the same components (Gaelco REF.920505, from 1992). It adds a fuse, a LED for PCB control, and
-  better connectors. One of them, seen with the 'autopapa' sound ROM, has:
-	U1   NEC D27C2001D-15 EPROM, labeled "AUTO PAPA reclam. F2C7 Pic. IRN" (0xF2C7 is the byte sum of the dump).
-	U2   44-pin QFP (M6295, marking barely legible).
-	U3   PIC16C56-RC/P (factory RC oscillator version), hand labeled "FUTBOL.N", not dumped.
-	U7   SN74HCT273N output latch.
-	U8   SN74LS365AN, buffers the 6 dips of SW1 (pull-ups in RR3).
-	OP1  16-pin quad optocoupler, OP2 single optocoupler, TR1 to TR5 output transistors.
-	C11  trimmer next to the PIC; there is no crystal or resonator on the PCB.
-	SW2  2-position switch and SW3 MOT/LAMP jumpers, functions unknown.
-	D7   'PCB CONTROL' LED, F1 fuse.
-  It has a single 15-pin connector and no connector for the external display board.
 
   Hardware details, deduced from the 'IRN' kiddie ride program (m.irn_pic16c56.u3) and the PCB:
 
@@ -108,6 +98,47 @@
   is the 16-bit sum of all the EPROM bytes, including any leftover data after the phrases. The labels also name
   the PIC program the ROM is meant for ('Pic. IRN').
 
+  The 'futbol' pinball has five 2-digit 7-segment displays on the backglass (home score, home knockdowns, away
+  score, away knockdowns and a central one) plus the CREDITO and TIEMPO LEDs. Its sound ROM is a normal M6295
+  one with 21 phrases: an announcer, crowd noise, referee whistles, a siren, hits and a 12.6 second tune.
+
+  The 'futbolt' diagnostic PIC uses the same port A sequences as the kiddie ride programs (0A at power on, 0F,
+  05 to read the dips through the 74LS365, then 0E) and the same M6295 command sequence, so the pinball uses
+  the same board wiring. It also shows how its external board works:
+
+  Displays: frames of three bytes are shifted out through Q0/Q1 and latched when Q2 goes high, as in the kiddie
+  rides but eight bits at a time. The first byte selects the display (one-hot: 01 home score, 02 away score,
+  04 home knockdowns, 08 away knockdowns, 10 central) and has an indicator in bit 5 and another in bit 6, which
+  the game lights while the home or the away team plays. The other two bytes are the segments of the units digit
+  and then the tens digit, in the usual a-g order with the decimal point in bit 7. Each display has its own latch,
+  so the game only sends a frame when a value changes, while the diagnostic program keeps refreshing all five.
+
+  The central display shows the credits while idle and the time during a game, and its two decimal points say
+  which of the two: they are the CREDITO and TIEMPO LEDs of the backglass.
+
+  Inputs: the external board also has a parallel-in shift register loaded while Q2 is high (it ignores the clock
+  pulse the program sends before releasing Q2) and clocked by Q1, the same clock as the displays. Nine bits are
+  read from bus line D0, first bit first, and one more input comes directly from bus line D1. The game counts how
+  many of those ten are active and adds the newly closed ones to the knockdown display of the team playing, so
+  they are the knocked down players of the table; it does not care which one closed. The other bus lines are read
+  as individual inputs, active low: D3 starts a game and takes a credit, D4 scores a goal and D6 is the coin.
+  D5 is a level, not a pulse: the game waits for it before kicking off, and if it stays closed at certain marks
+  the other team scores, so it looks like the sensor of the ball sitting in front of a goal. D7 stops the sounds,
+  plays a phrase and runs a short sequence on the playfield outputs, and D2 just alternates two sounds.
+
+  A game has two periods. Each one starts with a countdown on the central display, a goal is worth 1, 2 or 5
+  points depending on how many targets are down, and when the last period ends the program compares both scores
+  and plays the winner phrase. Bit 4 of its state says which side the player is on, which is what the two turn
+  indicators show, and it alternates from one game to the next. The diagnostic program instead plays
+  M6295 phrase 1 to 10 on voice 2 for each of the ten counted inputs, in this order: target 8 comes out of the
+  register first and is its phrase 8, down to target 1, then the direct input is phrase 9 and target 9 is
+  phrase 10. Note that the diagnostic program checks the M6295 status with port B still set as an output, so it
+  reads back its own latch instead of the chip and now and then it skips a sound; that is how the real thing
+  behaves too.
+
+  Dip switches of the pinball: 1 and 2 set how many coins or credits, 3 picks which of the two, 4 enables the
+  attract sound and 5 and 6 set the length of a game.
+
   TODO:
   - Verify the M6295 SS pin. PIN7_HIGH is the most likely setting: at 7575 Hz the songs of 'mueve' (a cover of a
 	dance hit of about 123-130 BPM), 'donpepito' (known recordings at 130-137 BPM) and 'obladi' (original at
@@ -115,7 +146,10 @@
 	96.1 BPM. The tuning of the musical pieces is inconclusive.
   - Verify the DIP switch order and the connector assignment of the inputs and outputs.
   - Dump the 'FUTBOL.N' PIC of the REF.920505 PCB, and find out what SW2, SW3 and D7 do.
-  - The pinballs have not been analysed.
+  - Work out what the pinball latch outputs Q3 to Q7 drive on the table, and which switch each of D2, D5 and D7
+	really is.
+  - Find out which physical display each select bit drives, which digit of each pair comes first, the polarity of
+	the two LEDs, and what the ten pinball inputs and the latch outputs Q3 to Q7 do in the game.
 */
 
 #include "emu.h"
@@ -125,6 +159,7 @@
 
 #include "speaker.h"
 
+#include "futbol3_fut.lh"
 #include "futbol3_kid.lh"
 
 #define LOG_OKI     (1U << 1)
@@ -155,19 +190,31 @@ public:
 	{ }
 
 	void gaelcof3(machine_config &config) ATTR_COLD;
-	void gaelcof3_c54(machine_config &config) ATTR_COLD;
 
-	void init_irn() ATTR_COLD;
+	void init_rc_wdt() ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
 	virtual void machine_reset() override ATTR_COLD;
 
-private:
+	// hooks for the different external boards
+	virtual void display_shift(int bit);        // Q1 falling edge (rising at the connector)
+	virtual void display_strobe();              // Q2 rising edge
+	virtual void update_outputs();
+	virtual u8 bus_inputs_r();                  // bus value when nothing else drives it
+
+	void common(machine_config &config) ATTR_COLD;
+
 	required_device<pic16c5x_device> m_maincpu;
 	required_device<okim6295_device> m_oki;
 	required_ioport m_inputs;
 	required_ioport m_dsw;
+
+	u8 m_latch = 0x00;
+	u64 m_display_shift = 0;
+	u8 m_display_bits = 0;
+
+private:
 	output_finder<2> m_lamps;
 	output_finder<> m_motor;
 	output_finder<> m_aux;
@@ -176,10 +223,6 @@ private:
 	u8 m_porta = 0x0f;
 	u8 m_portb = 0xff;
 	u8 m_portb_driven = 0x00;
-	u8 m_latch = 0x00;
-	u16 m_display_shift = 0;
-
-	void common(machine_config &config) ATTR_COLD;
 
 	void porta_w(offs_t offset, u8 data, u8 mem_mask);
 	u8 portb_r();
@@ -187,7 +230,6 @@ private:
 
 	u8 bus_r();
 	void latch_w(u8 data);
-	void update_outputs();
 	void update_display();
 };
 
@@ -199,6 +241,7 @@ void gaelcof3_state::machine_start()
 	save_item(NAME(m_portb_driven));
 	save_item(NAME(m_latch));
 	save_item(NAME(m_display_shift));
+	save_item(NAME(m_display_bits));
 }
 
 void gaelcof3_state::machine_reset()
@@ -207,14 +250,17 @@ void gaelcof3_state::machine_reset()
 	m_porta = 0x0f;
 	m_portb_driven = 0x00;
 
+	m_display_bits = 0;
+
 	// assume the 74HCT273 is cleared by the reset circuit
 	m_latch = 0x00;
 	update_outputs();
 }
 
-void gaelcof3_state::init_irn()
+void gaelcof3_state::init_rc_wdt()
 {
-	// RC oscillator, watchdog enabled (0x0fff in the 'IRN' dump, 0x?07 in the decapped 'IR' PIC, which is code protected)
+	// every dumped config word has the same setting: RC oscillator and watchdog enabled (0xfff when the chip is
+	// not code protected, 0x?07 when it is)
 	m_maincpu->set_config(0x0fff);
 }
 
@@ -230,6 +276,11 @@ u8 gaelcof3_state::bus_r()
 		return m_oki->read();
 
 	// nothing drives the bus: pull-ups and inputs
+	return bus_inputs_r();
+}
+
+u8 gaelcof3_state::bus_inputs_r()
+{
 	return m_inputs->read();
 }
 
@@ -282,11 +333,24 @@ void gaelcof3_state::latch_w(u8 data)
 	// external display board, shift register clocked on the Q1 falling edge
 	// (rising edge at the connector, after the ULN2803A inverter)
 	if (BIT(old, 1) && !BIT(data, 1))
-		m_display_shift = (m_display_shift << 1) | BIT(data, 0);
+		display_shift(BIT(data, 0));
 
 	// the shifted data is latched when Q2 goes high again
 	if (!BIT(old, 2) && BIT(data, 2))
-		update_display();
+		display_strobe();
+}
+
+void gaelcof3_state::display_shift(int bit)
+{
+	m_display_shift = (m_display_shift << 1) | bit;
+	if (m_display_bits < 64)
+		m_display_bits++;
+}
+
+void gaelcof3_state::display_strobe()
+{
+	update_display();
+	m_display_bits = 0;
 }
 
 void gaelcof3_state::update_outputs()
@@ -300,6 +364,13 @@ void gaelcof3_state::update_outputs()
 
 void gaelcof3_state::update_display()
 {
+	// the display board keeps the last 16 bits clocked into its shift register
+	if (m_display_bits < 16)
+	{
+		LOGMASKED(LOG_DISPLAY, "short display frame, only %d bits\n", m_display_bits);
+		return;
+	}
+
 	// 16-bit frame, the first bit shifted in ends at bit 15 (1 = active):
 	// bit 15: credits display enable, bits 14-8: units digit segments (a, f, e, d, c, g, b)
 	// bit 7:  time display enable,    bits 6-0:  tens digit segments  (f, g, c, d, e, b, a)
@@ -322,24 +393,202 @@ void gaelcof3_state::update_display()
 }
 
 
-static INPUT_PORTS_START( gaelcof3 ) // generic, for programs not analysed yet
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON4 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON5 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON6 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON7 )
+// Pinball: the external board multiplexes five 2-digit displays and returns the inputs through a shift register
 
-	PORT_START("DSW1") // only 6 switches, order not verified
-	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW1:1" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW1:2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW1:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW1:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW1:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SW1:6" )
+class futbol_state : public gaelcof3_state
+{
+public:
+	futbol_state(const machine_config &mconfig, device_type type, const char *tag) :
+		gaelcof3_state(mconfig, type, tag),
+		m_serial(*this, "SERIAL"),
+		m_score_home(*this, "score_home%u", 0U),
+		m_knock_home(*this, "knock_home%u", 0U),
+		m_score_away(*this, "score_away%u", 0U),
+		m_knock_away(*this, "knock_away%u", 0U),
+		m_center(*this, "center%u", 0U),
+		m_led_credit(*this, "led_credit"),
+		m_led_time(*this, "led_time"),
+		m_led_home(*this, "led_home"),
+		m_led_away(*this, "led_away"),
+		m_outputs(*this, "out%u", 3U)
+	{ }
+
+	void futbol(machine_config &config) ATTR_COLD;
+	void futbol_c54(machine_config &config) ATTR_COLD;
+
+protected:
+	virtual void machine_start() override ATTR_COLD;
+	virtual void machine_reset() override ATTR_COLD;
+
+	virtual void display_shift(int bit) override;
+	virtual void display_strobe() override;
+	virtual void update_outputs() override;
+	virtual u8 bus_inputs_r() override;
+
+private:
+	void load_inputs();
+
+	required_ioport m_serial;
+	output_finder<2> m_score_home;
+	output_finder<2> m_knock_home;
+	output_finder<2> m_score_away;
+	output_finder<2> m_knock_away;
+	output_finder<2> m_center;
+	output_finder<> m_led_credit;
+	output_finder<> m_led_time;
+	output_finder<> m_led_home;
+	output_finder<> m_led_away;
+	output_finder<5> m_outputs;
+
+	u16 m_input_shift = 0xffff;
+};
+
+
+void futbol_state::machine_start()
+{
+	gaelcof3_state::machine_start();
+	save_item(NAME(m_input_shift));
+}
+
+void futbol_state::machine_reset()
+{
+	gaelcof3_state::machine_reset();
+	m_input_shift = 0xffff;
+}
+
+void futbol_state::display_shift(int bit)
+{
+	gaelcof3_state::display_shift(bit);
+
+	// the input shift register of the external board runs on the same clock, but it ignores it while Q2 keeps
+	// it in parallel load; the program does clock it once before releasing Q2
+	if (BIT(m_latch, 2))
+		load_inputs();
+	else
+		m_input_shift = (m_input_shift << 1) | 1;
+}
+
+void futbol_state::load_inputs()
+{
+	// nine bits are read out of bus line D0, the first one being input 8 and the ninth one input 10
+	u16 const serial = m_serial->read();
+	m_input_shift = (serial << 8) | (BIT(serial, 8) << 7) | 0x7f;
+}
+
+void futbol_state::display_strobe()
+{
+	// three bytes: display select and LEDs, then the segments of the two digits.
+	// m_display_shift holds the data as seen before the ULN2803A inverters, so it is already the complement
+	// of what the external board receives: 1 means a lit segment, and the select byte has to be inverted.
+	// the board keeps the last 24 bits clocked into its shift register; the program also clocks it while
+	// reading the inputs, so there are usually more bits than that between two strobes
+	if (m_display_bits >= 24)
+	{
+		// the bits are captured before the ULN2803A inverters, so the three bytes come out complemented
+		u8 const select = ~BIT(m_display_shift, 16, 8) & 0xff;
+		u8 const units = ~BIT(m_display_shift, 8, 8) & 0xff;    // sent first
+		u8 const tens = ~BIT(m_display_shift, 0, 8) & 0xff;
+
+		LOGMASKED(LOG_DISPLAY, "display frame: select %02x digits %02x %02x\n", select, tens, units);
+
+		if (BIT(select, 0))
+		{
+			m_score_home[0] = tens & 0x7f;
+			m_score_home[1] = units & 0x7f;
+		}
+		if (BIT(select, 1))
+		{
+			m_score_away[0] = tens & 0x7f;
+			m_score_away[1] = units & 0x7f;
+		}
+		if (BIT(select, 2))
+		{
+			m_knock_home[0] = tens & 0x7f;
+			m_knock_home[1] = units & 0x7f;
+		}
+		if (BIT(select, 3))
+		{
+			m_knock_away[0] = tens & 0x7f;
+			m_knock_away[1] = units & 0x7f;
+		}
+		if (BIT(select, 4))
+		{
+			m_center[0] = tens & 0x7f;
+			m_center[1] = units & 0x7f;
+
+			// the decimal points of the central display tell what it shows: credits when idle, time in play
+			m_led_credit = BIT(units, 7);
+			m_led_time = BIT(tens, 7);
+		}
+
+		// the game lights one of these while a team plays
+		m_led_home = BIT(select, 5);
+		m_led_away = BIT(select, 6);
+	}
+	else
+	{
+		LOGMASKED(LOG_DISPLAY, "short display frame, only %d bits\n", m_display_bits);
+	}
+
+	m_display_bits = 0;
+
+	// the parallel-in shift register of the external board is loaded while Q2 is high
+	load_inputs();
+}
+
+void futbol_state::update_outputs()
+{
+	// Q3 to Q7 drive the playfield, what each one does is not known
+	for (int i = 0; i < 5; i++)
+		m_outputs[i] = BIT(m_latch, i + 3);
+}
+
+u8 futbol_state::bus_inputs_r()
+{
+	// D0 comes from the shift register of the external board, D1 is a direct input
+	return (gaelcof3_state::bus_inputs_r() & 0xfe) | BIT(m_input_shift, 15);
+}
+
+
+static INPUT_PORTS_START( futbol )
+	PORT_START("IN0") // direct bus lines, active low
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED ) // serial data from the external board
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 10")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Bus D2 (plays a sound)")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Goal")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Bus D5 (hold to play)")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Bus D7 (playfield sequence)")
+
+	PORT_START("SERIAL") // shifted in through the external board, target 8 first
+	PORT_BIT( 0x001, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 1")
+	PORT_BIT( 0x002, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 2")
+	PORT_BIT( 0x004, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 3")
+	PORT_BIT( 0x008, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 4")
+	PORT_BIT( 0x010, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 5")
+	PORT_BIT( 0x020, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 6")
+	PORT_BIT( 0x040, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 7")
+	PORT_BIT( 0x080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 8")
+	PORT_BIT( 0x100, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 9")
+
+	PORT_START("DSW1") // only 6 switches, order not verified, read only at power on
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2") // credits or coins, see SW1:3
+	PORT_DIPSETTING(    0x03, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x01, "3" )
+	PORT_DIPSETTING(    0x00, "4" )
+	PORT_DIPNAME( 0x04, 0x04, "Coinage Mode" ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, "Coins per credit" )
+	PORT_DIPSETTING(    0x00, "Credits per coin" )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Game_Time ) ) PORT_DIPLOCATION("SW1:5,6") // tick divider, longest first
+	PORT_DIPSETTING(    0x30, "1 (longest)" )
+	PORT_DIPSETTING(    0x20, "2" )
+	PORT_DIPSETTING(    0x10, "3" )
+	PORT_DIPSETTING(    0x00, "4 (shortest)" )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED ) // not connected, pulled up
 INPUT_PORTS_END
 
@@ -392,7 +641,13 @@ void gaelcof3_state::gaelcof3(machine_config &config)
 	common(config);
 }
 
-void gaelcof3_state::gaelcof3_c54(machine_config &config)
+void futbol_state::futbol(machine_config &config)
+{
+	PIC16C56(config, m_maincpu, PIC_CLOCK);
+	common(config);
+}
+
+void futbol_state::futbol_c54(machine_config &config)
 {
 	PIC16C54(config, m_maincpu, PIC_CLOCK);
 	common(config);
@@ -403,15 +658,15 @@ void gaelcof3_state::gaelcof3_c54(machine_config &config)
 
 ROM_START( futbol )
 	ROM_REGION( 0x2000, "maincpu", 0 )
-	ROM_LOAD( "p4n_pic16c56.bin", 0x0000, 0x2000, CRC(a4d69b51) SHA1(aa0f20b45aa92912ab235c9dc30b3532ff7103eb) )
+	ROM_LOAD( "p4n_pic16c56.bin", 0x0000, 0x2000, CRC(da3530a2) SHA1(d1a99f733901bf66a2025cfb6cf1ffeb30911bb0) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "pinball_futbol_p4_97e7_p4n_26-6-98_27c020.bin", 0x00000, 0x40000, CRC(448d244b) SHA1(51c3d6309b487d17085aac161016190249e2900b) )
+	ROM_LOAD( "pinball_futbol_p4_97e7_p4n_26-6-98_27c020.bin", 0x00000, 0x40000, CRC(448d244b) SHA1(51c3d6309b487d17085aac161016190249e2900b) ) // 21 phrases, sum 0x97e7 matches the label
 ROM_END
 
 ROM_START( futbola )
 	ROM_REGION( 0x2000, "maincpu", 0 )
-	ROM_LOAD( "p4n_pic16c56.bin", 0x0000, 0x2000, CRC(a4d69b51) SHA1(aa0f20b45aa92912ab235c9dc30b3532ff7103eb) )
+	ROM_LOAD( "p4n_pic16c56.bin", 0x0000, 0x2000, CRC(da3530a2) SHA1(d1a99f733901bf66a2025cfb6cf1ffeb30911bb0) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
 	ROM_LOAD( "pinball_futbol_p3_20f6_p4n_21-10-97_27c020.bin", 0x00000, 0x40000, CRC(05a3595d) SHA1(226fd63ea23d06022bbad9eb5a60fe04707a8fca) )
@@ -427,10 +682,10 @@ ROM_END
 
 // Kiddie rides
 
-/* Based on the song "El auto feo", composed by Enrique Fischer 'Pipo Pescador'.
-   Sound ROM label: "AUTO PAPA reclam. F2C7 Pic. IRN" (REF.920505 PCB, with a PIC labeled 'FUTBOL.N'). */
+/* Based on the song "El auto feo", composed by Enrique Fischer 'Pipo Pescador'. */
 ROM_START( autopapa )
 	ROM_REGION( 0x2000, "maincpu", 0 )
+	// RC oscillator, watchdog enabled
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x2000, CRC(089699f5) SHA1(2cc470a97936887804363c8783bad4db4cad4f64) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
@@ -438,23 +693,23 @@ ROM_START( autopapa )
 ROM_END
 
 /* Based on the song "Hola Don Pepito", composed by Ramón del Rivero.
-   The PIC is labeled 'IR'. Its program is identical to the 'IRN' one; the dump also has the ID words and the low
-   byte of the config word (0x07: RC oscillator, watchdog enabled, code protected).
-   The sound ROM has no phrase 9 (the 75/50/25 announcements are silent); the song fills it up to 0x3ff08, and the
-   remaining 247 bytes match the 'mueve' EPROM image, so both were made with the same tools. */
+   The sound ROM has no phrase 9 (the 75/50/25 announcements are silent); the song fills it up to 0x3ff08,
+   and the remaining 247 bytes match the 'mueve' EPROM image, so both were made with the same tools. */
 ROM_START( donpepito )
 	ROM_REGION( 0x2000, "maincpu", 0 )
-	ROM_LOAD( "ir_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) ) // Decapped, config word high byte missing
+	// RC oscillator, watchdog enabled
+	ROM_LOAD( "ir_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "don_pepito.u1", 0x00000, 0x40000, CRC(574fcd14) SHA1(a23f1eb6d2cef5aa07df3a553fe1d33803648f43) ) // byte sum 0x793f
+	ROM_LOAD( "don_pepito.u1", 0x00000, 0x40000, CRC(574fcd14) SHA1(a23f1eb6d2cef5aa07df3a553fe1d33803648f43) )
 ROM_END
 
 /* Based on the Spanish cover version of the song "I Like To Move It" by Reel 2 Real, named "Te Gusta el Mueve Mueve".
    The sound ROM has no phrase 9, so the 75/50/25 announcements are silent. The data area ends at 0x381a7, the rest
-   of the EPROM has leftover data (not played, but included in the label checksum). */
+   of the EPROM has leftover data. */
 ROM_START( mueve )
 	ROM_REGION( 0x2000, "maincpu", 0 )
+	// RC oscillator, watchdog enabled
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x2000, CRC(089699f5) SHA1(2cc470a97936887804363c8783bad4db4cad4f64) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
@@ -472,9 +727,7 @@ ROM_START( obladi )
 ROM_END
 
 /* Based on the song composed by Rafael Pérez Botija.
-   The PIC on this PCB is labeled 'IR' and was not dumped; the 'IR' PIC of 'donpepito' has the same program as the
-   'IRN' ones. The sound ROM defines phrases 1 to 9 with phrase 6 empty, exactly the phrases used by the program,
-   and its common phrases are byte identical to the 'autopapa' ones.
+   The sound ROM defines phrases 1 to 9 with phrase 6 empty.
    The data area ends at 0x287f0, the rest of the EPROM has leftover data (not played). */
 ROM_START( susanita )
 	ROM_REGION( 0x2000, "maincpu", 0 )
@@ -486,12 +739,12 @@ ROM_END
 
 } // anonymous namespace
 
-GAME( 1998, futbol,       0, gaelcof3,     gaelcof3, gaelcof3_state, empty_init, ROT0, "Gaelco / Cresmatic", "Futbol (set 1)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
-GAME( 1997, futbola, futbol, gaelcof3,     gaelcof3, gaelcof3_state, empty_init, ROT0, "Gaelco / Cresmatic", "Futbol (set 2)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
-GAME( 1997, futbolt, futbol, gaelcof3_c54, gaelcof3, gaelcof3_state, empty_init, ROT0, "Gaelco / Cresmatic", "Futbol (test ROM)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
+GAMEL( 1998, futbol,       0, futbol,     futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 1)",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
+GAMEL( 1997, futbola, futbol, futbol,     futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 2)",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
+GAMEL( 1997, futbolt, futbol, futbol_c54, futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (test ROM)", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
 
-GAMEL( 199?, autopapa,  0, gaelcof3, irn, gaelcof3_state, init_irn, ROT0, "Gaelco / Cresmatic", u8"El auto de papá", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?, donpepito, 0, gaelcof3, irn, gaelcof3_state, init_irn, ROT0, "Gaelco / Cresmatic", "Don Pepito",        MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?, mueve,     0, gaelcof3, irn, gaelcof3_state, init_irn, ROT0, "Gaelco / Cresmatic", "Mueve",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?, obladi,    0, gaelcof3, irn, gaelcof3_state, init_irn, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?, susanita,  0, gaelcof3, irn, gaelcof3_state, init_irn, ROT0, "Gaelco / Cresmatic", "Susanita",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, autopapa,  0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", u8"El auto de papá", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, donpepito, 0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Don Pepito",        MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, mueve,     0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Mueve",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, obladi,    0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, susanita,  0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Susanita",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
