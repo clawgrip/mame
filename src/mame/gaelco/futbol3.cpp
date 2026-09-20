@@ -23,7 +23,7 @@
   ||_|  |  |        _________   _________             |
   |JP3  |  |        |TLP504A_| |TLP504A_|             |
   | __  |  |        __________                        |
-  || |  |  |  C11-> |PIC16C56|                        |
+  || |  |  |  C11   |PIC16C56|                        |
   ||_|  |  |                                          |
   | ___ |__|   ___ <-SN74LS365AN                      |
   | VOL        |  |   ______    ___________________   |
@@ -35,10 +35,14 @@
   JP1 = 10 pin [+5V, GND, DAT, CLK, ENA, PU1, PU2, PU3, PU4, GND]
   JP2 = 14 pin [12VA, 12VA, +5V, ALT, CON, BOM, MOT, N/U, BOM, POT, ALT, 12V, GND, GND]
   JP3 =  5 pin [PU5, PU6, PU7, PU8, GND]
+  C11 =  Trimmer
 
   There is a newer version of the PCB with the same components (Gaelco REF.920505, from 1992).
   It adds a fuse, a LED for PCB control, and better connectors, but it only has the single
   15-pin connector, without connector for the external display board.
+
+  'autopapa', 'mueve', 'donpepito', and 'obladi' were found also with 27C040 EPROMs instead of 27C020,
+  with 1st and 2st half identical and same as the 27C020 versions.
 
 
   The PIC runs in RC oscillator mode, with the frequency set by trimmer C11 and R1. The programs assume 4 MHz:
