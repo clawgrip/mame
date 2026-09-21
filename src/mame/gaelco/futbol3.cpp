@@ -6,7 +6,7 @@
 
   The PCB is very compact and has few components. The main ones are:
 
-  PIC16C56 as main CPU (RC oscillator, no crystal)
+  PIC16C56 or PIC16C54 as main CPU (RC oscillator, no crystal)
   OKI M6295 for sound (44-pin QFP, no oscillator of its own)
   AMD Am27C020 sound ROM
   MC74HCT273A output latch driving an ULN2803A
@@ -42,84 +42,42 @@
   15-pin connector, without connector for the external display board.
 
   'autopapa', 'mueve', 'donpepito', and 'obladi' were found also with 27C040 EPROMs instead of 27C020, with
-  1st and 2nd half identical and the same contents as the 27C020 versions. The M6295 only has 18 address lines,
-  so the socket has no A18: on a 27C040 that pin takes whatever the 27C020 wiring puts there, and duplicating
-  the data makes the bigger EPROM work either way.
+  1st and 2nd half identical and the same contents as the 27C020 versions.
 
-
-  The PIC runs in RC oscillator mode, with the frequency set by trimmer C11 and R1. The programs assume 4 MHz:
-  the kiddie ride main loop runs every 10 ms and its ride times are exact seconds. The M6295 has no oscillator
-  of its own, it is presumably clocked from the PIC OSC2/CLKOUT pin (Fosc / 4 = 1 MHz), so C11 sets both the
-  timings and the sound pitch.
-
-  PIC port A (all outputs):
-	RA0  M6295 /CS
-	RA1  M6295 /WR and 74LS365 /G1
-	RA2  74HCT273 CLK
-	RA3  M6295 /RD and 74LS365 /G2
-
-  PIC port B is a data bus shared by the M6295, the 74HCT273 output latch, the 74LS365 (6 DIP switches on
-  D0-D5, enabled when /WR and /RD are both low while /CS is high) and the inputs, active low, read when nothing
-  else drives the bus.
-
-  74HCT273 outputs, through the ULN2803A open collector drivers:
-	Q0-Q2  serial link to the external board (JP1 DAT, CLK and ENA)
-	Q3-Q7  kiddie rides: coin counter, auxiliary output (maybe JP2 POT), two lamps and the motor
-		   pinball: playfield, function unknown
-
-  Kiddie ride program:
+  'IRN' kiddie ride program:
 	- Idle: with demo sounds enabled, phrase 1 plays about every 4 minutes while the lamps blink.
 	- A credit starts the ride: phrase 2, then phrase 8 (the song) loops on voice 1, the motor runs, the lamps
 	  alternate and the time display counts from 99 down to 0.
 	- At 75, 50 and 25 the motor stops for about 0.7 seconds, Q4 toggles and phrase 9 plays on voice 4, with the
-	  buttons ignored meanwhile. Phrase 9 is optional, the M6295 ignores the request when the ROM leaves it empty.
+	  buttons ignored meanwhile.
 	- Button 1 plays phrase 3 on voice 2, button 2 plays phrase 4 on voice 3.
 	- End of ride: phrase 5, unless there are credits left; then phrase 7 plays and the next ride starts after
 	  pressing start or after about 30 seconds.
-	- The DIP switches are read only at power on.
 
-  The kiddie ride sound ROMs share phrases 2, 3, 4, 5 and 7 byte for byte, and 9 where present; phrase 1 (attract
-  jingle) and phrase 8 (song) are specific to each ride. The hex number on their labels is the 16-bit sum of the
-  whole EPROM, and the labels also name the PIC program the ROM is meant for.
+  Its sound ROMs share phrases 2, 3, 4, 5 and 7 byte for byte, and phrase 9, which 'donpepito', 'mueve' and
+  'obladi' leave empty. 'autopapa', 'donpepito', 'mueve' and 'obladi' were also found with 27C040 EPROMs holding
+  the same data twice. The hex number on the sound ROM labels is the 16-bit sum of the whole EPROM.
 
-  The pinball has five 2-digit displays on the backglass (home score, away score, home knockdowns, away
-  knockdowns and a central one), two turn indicators, and the CREDITO and TIEMPO LEDs, which are the decimal
-  points of the central display: it shows the credits while idle and the time during a game. Its external board
-  also returns the inputs: a parallel-in shift register, loaded while Q2 is high and clocked by Q1, gives nine
-  bits on bus line D0, and a tenth input comes directly from D1. The game counts how many of the ten are closed
-  and adds the new ones to the knockdown display of the team playing, so they are the knocked down players of
-  the table. The other bus lines are individual inputs: D3 start, D4 goal, D6 coin, D5 a level the game waits
-  for before kicking off (if it stays closed the other team scores, so it looks like the sensor of the ball in
-  front of a goal), D7 runs a short sequence on the playfield outputs and D2 alternates two sounds. A game has
-  two periods, a goal is worth 1, 2 or 5 points depending on how many targets are down, and at the end the
-  program compares both scores and plays the winner phrase. Its sound ROM has 21 phrases: an announcer, crowd
-  noise, referee whistles, a siren, hits and a 12.6 second tune.
+  Pinball: the ten targets are the knocked down players of the table, the game adds the newly closed ones to the
+  knockdown display of the team playing. D5 looks like the sensor of the ball in front of a goal: the game waits
+  for it before kicking off, and if it stays closed the other team scores. A game has two periods, a goal is worth
+  1, 2 or 5 points depending on how many targets are down, and at the end the program plays the winner phrase.
+  The 'futbolt' diagnostic program plays phrase N for target N (phrase 9 for target 10 and 10 for target 9). It
+  reads the M6295 status with port B still set as an output, so now and then it skips a sound; the real thing
+  behaves the same.
 
-  The 'Grúa Carrus' crane ('GR' and 'GR2' programs, PIC16C54A) has no external board: the eight latch outputs
-  drive the machine directly and the joystick is not read by the PIC. Inputs: D0 coin, D1 home position sensor,
-  D2 turns Q1 on while held during play (up to the time set by dip switches 4 to 6), D3 ends the play phase
-  (grab), D4 is waited for with Q7 on, and D5 sends the crane home. Outputs: Q0 and Q1 drive the crane home at
-  power on and after the grab, Q3 is the coin counter, Q4 and Q5 are on during play, Q6 lights up while idle
-  after some games and Q7 goes with the D4 check. If the crane does not get home in time, all the outputs go off
-  and phrase 5 sounds. 'GR2' adds the D4 check before every game, with a 30 second timeout, and a dip switch
-  that gives a free game after one ended without grabbing, taking one of the coinage switches. Phrase 3 of the
-  sound ROM is not used.
-
-  The 'futbolt' diagnostic program uses the same port A sequences and M6295 commands, walks a segment through
-  the displays, blinks the indicators and plays M6295 phrase 1 to 10 for each of the ten counted inputs: target 8
-  comes out of the register first and is its phrase 8, down to target 1, then the direct input is phrase 9 and
-  target 9 is phrase 10. It reads the M6295 status with port B still set as an output, so it reads back its own
-  latch and now and then it skips a sound; the real thing behaves the same.
+  Crane: the joystick is not read by the PIC. Q0 and Q1 drive the crane home at power on and after the grab, Q4
+  and Q5 are on during play, Q6 lights up while idle after some games and Q7 goes with the D4 check. If the crane
+  does not get home in time, all the outputs go off and phrase 5 sounds. The 'GR2' program adds the D4 check
+  before every game, with a 30 second timeout. Phrase 3 of its sound ROM is not used.
 
   TODO:
-  - Verify the M6295 SS pin. PIN7_HIGH is the most likely setting: at 7575 Hz the songs of 'mueve' (a cover of a
-	dance hit of about 123-130 BPM), 'donpepito' (known recordings at 130-137 BPM) and 'obladi' (original at
-	113-115 BPM) play at 123.6, 128.9 and 120.1 BPM, while at 6060 Hz they would drop to 98.9, 103.1 and 96.1 BPM.
+  - Verify the M6295 SS pin: with PIN7_HIGH the known songs of 'mueve', 'donpepito' and 'obladi' play at their
+	original tempo, with PIN7_LOW they would be 20% slower.
   - Verify the DIP switch order and the connector assignment of the inputs and outputs.
   - Dump the 'FUTBOL.N' PIC of the REF.920505 PCB, and find out what SW2 and SW3 do.
   - Find out what the crane outputs drive and what its D2 and D4 lines are.
-  - Work out what the pinball latch outputs Q3 to Q7 drive on the table, and which switch each of D2, D5 and D7
-	really is.
+  - Find out what the pinball outputs Q3 to Q7 drive, and which switch each of its D2, D5 and D7 lines is.
 */
 
 #include "emu.h"
@@ -141,7 +99,7 @@
 
 namespace {
 
-// RC oscillator adjusted with trimmer C11, the programs expect 4 MHz
+// RC oscillator, the programs expect 4 MHz
 static constexpr u32 PIC_CLOCK = 4'000'000;
 
 class gaelcof3_state : public driver_device
@@ -230,7 +188,7 @@ void gaelcof3_state::machine_reset()
 
 void gaelcof3_state::init_rc_wdt()
 {
-	// RC oscillator, watchdog enabled, as read from the PICs
+	// RC oscillator, watchdog enabled
 	m_maincpu->set_config(0x0fff);
 }
 
@@ -300,12 +258,9 @@ void gaelcof3_state::latch_w(u8 data)
 	m_latch = data;
 	update_outputs();
 
-	// external display board, shift register clocked on the Q1 falling edge
-	// (rising edge at the connector, after the ULN2803A inverter)
 	if (BIT(old, 1) && !BIT(data, 1))
 		display_shift(BIT(data, 0));
 
-	// the shifted data is latched when Q2 goes high again
 	if (!BIT(old, 2) && BIT(data, 2))
 		display_strobe();
 }
@@ -363,7 +318,7 @@ void gaelcof3_state::update_display()
 }
 
 
-// Pinball: the external board multiplexes five 2-digit displays and returns the inputs through a shift register
+// Pinball: the external board drives five 2-digit displays and returns the inputs through a shift register
 
 class futbol_state : public gaelcof3_state
 {
@@ -437,7 +392,7 @@ void futbol_state::display_shift(int bit)
 
 void futbol_state::load_inputs()
 {
-	// nine bits are read out of bus line D0, the first one being input 8 and the ninth one input 10
+	// nine bits are read out of bus line D0, target 8 first and target 9 last
 	u16 const serial = m_serial->read();
 	m_input_shift = (serial << 8) | (BIT(serial, 8) << 7) | 0x7f;
 }
@@ -445,8 +400,7 @@ void futbol_state::load_inputs()
 void futbol_state::display_strobe()
 {
 	// three bytes: display select and indicators, then the segments of the units and the tens digit.
-	// the board keeps the last 24 bits of its shift register, and the program also clocks it while reading
-	// the inputs, so there are usually more bits than that between two strobes
+	// the board keeps the last 24 bits, the program also clocks it while reading the inputs
 	if (m_display_bits >= 24)
 	{
 		// the bits are captured before the ULN2803A inverters, so they come out complemented
@@ -543,7 +497,7 @@ void grua_state::update_outputs()
 
 
 static INPUT_PORTS_START( futbol )
-	PORT_START("IN0") // direct bus lines, active low
+	PORT_START("IN0") // direct bus lines
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED ) // serial data from the external board
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 10")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Bus D2 (plays a sound)")
@@ -564,7 +518,7 @@ static INPUT_PORTS_START( futbol )
 	PORT_BIT( 0x080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 8")
 	PORT_BIT( 0x100, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Target 9")
 
-	PORT_START("DSW1") // only 6 switches, order not verified, read only at power on
+	PORT_START("DSW1") // order not verified, read only at power on
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2") // credits or coins, see SW1:3
 	PORT_DIPSETTING(    0x03, "1" )
 	PORT_DIPSETTING(    0x02, "2" )
@@ -594,7 +548,7 @@ static INPUT_PORTS_START( gruacarr )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Return Home")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("DSW1") // only 6 switches, order not verified, read only at power on
+	PORT_START("DSW1") // order not verified, read only at power on
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
@@ -635,7 +589,7 @@ static INPUT_PORTS_START( irn ) // 'IRN' kiddie ride program
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 ) // only read at the end of a ride, when there are credits left
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("DSW1") // only 6 switches, order not verified, read only at power on
+	PORT_START("DSW1") // order not verified, read only at power on
 	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Game_Time ) ) PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(    0x00, "140 seconds" )
 	PORT_DIPSETTING(    0x01, "126 seconds" )
@@ -665,7 +619,7 @@ void gaelcof3_state::common(machine_config &config)
 
 	SPEAKER(config, "mono").front_center();
 
-	// clocked from the PIC CLKOUT pin (Fosc / 4), SS pin not verified
+	// presumably clocked from the PIC CLKOUT pin, so trimmer C11 also sets the pitch; SS pin not verified
 	OKIM6295(config, m_oki, PIC_CLOCK / 4, okim6295_device::PIN7_HIGH);
 	m_oki->add_route(ALL_OUTPUTS, "mono", 1.0);
 }
@@ -690,7 +644,7 @@ ROM_START( futbol )
 	ROM_LOAD( "p4n_pic16c56.bin", 0x0000, 0x2000, CRC(da3530a2) SHA1(d1a99f733901bf66a2025cfb6cf1ffeb30911bb0) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "pinball_futbol_p4_97e7_p4n_26-6-98_27c020.bin", 0x00000, 0x40000, CRC(448d244b) SHA1(51c3d6309b487d17085aac161016190249e2900b) ) // 21 phrases, sum 0x97e7 matches the label
+	ROM_LOAD( "pinball_futbol_p4_97e7_p4n_26-6-98_27c020.bin", 0x00000, 0x40000, CRC(448d244b) SHA1(51c3d6309b487d17085aac161016190249e2900b) )
 ROM_END
 
 ROM_START( futbola )
@@ -718,10 +672,10 @@ ROM_START( autopapa )
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "autopapa.u1", 0x00000, 0x40000, CRC(a3e5607e) SHA1(24a9c79edec7b2f7f64b622240f2ad8f3ffa29ca) ) // NEC D27C2001D, sum 0xf2c7 matches the label
+	ROM_LOAD( "autopapa.u1", 0x00000, 0x40000, CRC(a3e5607e) SHA1(24a9c79edec7b2f7f64b622240f2ad8f3ffa29ca) ) // NEC D27C2001D
 ROM_END
 
-// Based on the song "Hola Don Pepito", composed by Ramón del Rivero. Its sound ROM has no phrase 9.
+// Based on the song "Hola Don Pepito", composed by Ramón del Rivero.
 ROM_START( donpepito )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
@@ -738,23 +692,22 @@ ROM_START( kwairi )
 	ROM_LOAD( "k_wai_regalo_italia_11-03_m3_a669_27c020.u1", 0x00000, 0x40000, CRC(fad3f35c) SHA1(ecc2b9764bcdddee0f6b479eceb4be9395c4b99a) )
 ROM_END
 
-/* Based on the Spanish cover version of the song "I Like To Move It" by Reel 2 Real, named "Te Gusta el Mueve
-   Mueve". Its sound ROM has no phrase 9. */
+// Based on the Spanish cover version of the song "I Like To Move It" by Reel 2 Real, named "Te Gusta el Mueve Mueve".
 ROM_START( mueve )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "mueve_reclam_ea76_pic_irn_27c020.u1", 0x00000, 0x40000, CRC(f3cc6936) SHA1(35334aeb85f3524f2afdf20f49005d7573ec5494) ) // sum 0xea76 matches the label
+	ROM_LOAD( "mueve_reclam_ea76_pic_irn_27c020.u1", 0x00000, 0x40000, CRC(f3cc6936) SHA1(35334aeb85f3524f2afdf20f49005d7573ec5494) )
 ROM_END
 
-// Based on the song by the Beatles. Its sound ROM has no phrase 9.
+// Based on the song by the Beatles.
 ROM_START( obladi )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "obladi_reclam_5a5c_pic_irn_27c020.u1", 0x00000, 0x40000, CRC(a156f749) SHA1(f2bcbe5857e8ea6d96c2abe3051a5d02308dc963) ) // sum 0x5a5c matches the label
+	ROM_LOAD( "obladi_reclam_5a5c_pic_irn_27c020.u1", 0x00000, 0x40000, CRC(a156f749) SHA1(f2bcbe5857e8ea6d96c2abe3051a5d02308dc963) )
 ROM_END
 
 // Based on the song composed by Rafael Pérez Botija.
@@ -795,6 +748,7 @@ ROM_START( futbolin )
 	ROM_REGION( 0x40000, "oki", 0 )
 	ROM_LOAD( "futbolin_4107_pic_27c020.u1", 0x00000, 0x40000, CRC(0b555366) SHA1(ef6e67ada1db0579f9ddd841928fe43165de9638) )
 ROM_END
+
 
 } // anonymous namespace
 
