@@ -2,13 +2,7 @@
 <!--
 license:CC0-1.0
 copyright-holders:
-Gaelco 'Futbol' pinball: backglass displays.
-
-Five 2-digit 7-segment displays (home score, home knockdowns, away score, away knockdowns and the central one)
-plus the CREDITO and TIEMPO LEDs (the decimal points of the central display) and the two turn indicators that
-the game lights for the team playing, laid out like the real backglass but without any artwork.
-
-Nothing drives these outputs yet, the 'p4n' PIC program has not been analysed.
+Gaelco 'Futbol' pinball: backglass displays and indicators, laid out like the real backglass without artwork.
 -->
 <mamelayout version="2">
 
