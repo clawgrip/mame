@@ -41,8 +41,10 @@
   It adds a fuse, a LED for PCB control, and better connectors, but it only has the single
   15-pin connector, without connector for the external display board.
 
-  'autopapa', 'mueve', 'donpepito', and 'obladi' were found also with 27C040 EPROMs instead of 27C020,
-  with 1st and 2st half identical and same as the 27C020 versions.
+  'autopapa', 'mueve', 'donpepito', and 'obladi' were found also with 27C040 EPROMs instead of 27C020, with
+  1st and 2nd half identical and the same contents as the 27C020 versions. The M6295 only has 18 address lines,
+  so the socket has no A18: on a 27C040 that pin takes whatever the 27C020 wiring puts there, and duplicating
+  the data makes the bigger EPROM work either way.
 
 
   The PIC runs in RC oscillator mode, with the frequency set by trimmer C11 and R1. The programs assume 4 MHz:
@@ -93,6 +95,16 @@
   program compares both scores and plays the winner phrase. Its sound ROM has 21 phrases: an announcer, crowd
   noise, referee whistles, a siren, hits and a 12.6 second tune.
 
+  The 'Grúa Carrus' crane ('GR' and 'GR2' programs, PIC16C54A) has no external board: the eight latch outputs
+  drive the machine directly and the joystick is not read by the PIC. Inputs: D0 coin, D1 home position sensor,
+  D2 turns Q1 on while held during play (up to the time set by dip switches 4 to 6), D3 ends the play phase
+  (grab), D4 is waited for with Q7 on, and D5 sends the crane home. Outputs: Q0 and Q1 drive the crane home at
+  power on and after the grab, Q3 is the coin counter, Q4 and Q5 are on during play, Q6 lights up while idle
+  after some games and Q7 goes with the D4 check. If the crane does not get home in time, all the outputs go off
+  and phrase 5 sounds. 'GR2' adds the D4 check before every game, with a 30 second timeout, and a dip switch
+  that gives a free game after one ended without grabbing, taking one of the coinage switches. Phrase 3 of the
+  sound ROM is not used.
+
   The 'futbolt' diagnostic program uses the same port A sequences and M6295 commands, walks a segment through
   the displays, blinks the indicators and plays M6295 phrase 1 to 10 for each of the ten counted inputs: target 8
   comes out of the register first and is its phrase 8, down to target 1, then the direct input is phrase 9 and
@@ -105,6 +117,7 @@
 	113-115 BPM) play at 123.6, 128.9 and 120.1 BPM, while at 6060 Hz they would drop to 98.9, 103.1 and 96.1 BPM.
   - Verify the DIP switch order and the connector assignment of the inputs and outputs.
   - Dump the 'FUTBOL.N' PIC of the REF.920505 PCB, and find out what SW2 and SW3 do.
+  - Find out what the crane outputs drive and what its D2 and D4 lines are.
   - Work out what the pinball latch outputs Q3 to Q7 drive on the table, and which switch each of D2, D5 and D7
 	really is.
 */
@@ -147,6 +160,7 @@ public:
 	{ }
 
 	void gaelcof3(machine_config &config) ATTR_COLD;
+	void gaelcof3_c54(machine_config &config) ATTR_COLD;
 
 	void init_rc_wdt() ATTR_COLD;
 
@@ -369,7 +383,6 @@ public:
 		m_outputs(*this, "out%u", 3U)
 	{ }
 
-	void futbol_c54(machine_config &config) ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
@@ -502,6 +515,33 @@ u8 futbol_state::bus_inputs_r()
 }
 
 
+// Crane: no external board, all the latch outputs drive the machine
+
+class grua_state : public gaelcof3_state
+{
+public:
+	grua_state(const machine_config &mconfig, device_type type, const char *tag) :
+		gaelcof3_state(mconfig, type, tag),
+		m_outputs(*this, "out%u", 0U)
+	{ }
+
+protected:
+	virtual void display_shift(int bit) override { }
+	virtual void display_strobe() override { }
+	virtual void update_outputs() override;
+
+private:
+	output_finder<8> m_outputs;
+};
+
+void grua_state::update_outputs()
+{
+	machine().bookkeeping().coin_counter_w(0, BIT(m_latch, 3));
+	for (int i = 0; i < 8; i++)
+		m_outputs[i] = BIT(m_latch, i);
+}
+
+
 static INPUT_PORTS_START( futbol )
 	PORT_START("IN0") // direct bus lines, active low
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED ) // serial data from the external board
@@ -542,6 +582,49 @@ static INPUT_PORTS_START( futbol )
 	PORT_DIPSETTING(    0x10, "3" )
 	PORT_DIPSETTING(    0x00, "4 (shortest)" )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED ) // not connected, pulled up
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( gruacarr )
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Home Sensor")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Button 2 (Q1 while held)")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Grab")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Sensor D4 (waited for with Q7 on)")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Return Home")
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("DSW1") // only 6 switches, order not verified, read only at power on
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x02, 0x02, "Free Game After No Grab" ) PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x38, 0x38, "Button 2 Time" ) PORT_DIPLOCATION("SW1:4,5,6")
+	PORT_DIPSETTING(    0x38, "0.5 seconds" )
+	PORT_DIPSETTING(    0x30, "1 second" )
+	PORT_DIPSETTING(    0x28, "1.5 seconds" )
+	PORT_DIPSETTING(    0x20, "2 seconds" )
+	PORT_DIPSETTING(    0x18, "2.5 seconds" )
+	PORT_DIPSETTING(    0x10, "3 seconds" )
+	PORT_DIPSETTING(    0x08, "3.5 seconds" )
+	PORT_DIPSETTING(    0x00, "4 seconds" )
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED ) // not connected, pulled up
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( gruacarra )
+	PORT_INCLUDE( gruacarr )
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( irn ) // 'IRN' kiddie ride program
@@ -593,7 +676,7 @@ void gaelcof3_state::gaelcof3(machine_config &config)
 	common(config);
 }
 
-void futbol_state::futbol_c54(machine_config &config)
+void gaelcof3_state::gaelcof3_c54(machine_config &config)
 {
 	PIC16C54(config, m_maincpu, PIC_CLOCK);
 	common(config);
@@ -626,6 +709,7 @@ ROM_START( futbolt )
 	ROM_LOAD( "test_futbol_27c010a.bin", 0x00000, 0x20000, CRC(57cf1ca4) SHA1(8d7f027bf7809194035c5b4671919d3b3dce2f1b) )
 ROM_END
 
+
 // Kiddie rides
 
 // Based on the song "El auto feo", composed by Enrique Fischer 'Pipo Pescador'.
@@ -640,7 +724,7 @@ ROM_END
 // Based on the song "Hola Don Pepito", composed by Ramón del Rivero. Its sound ROM has no phrase 9.
 ROM_START( donpepito )
 	ROM_REGION( 0x2000, "maincpu", 0 )
-	ROM_LOAD( "ir_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
+	ROM_LOAD( "m.irn_pic16c56.u3", 0x0000, 0x1fff, CRC(a2c24ec3) SHA1(e87520c6de714b1638c9b156411522e0209fb06e) )
 
 	ROM_REGION( 0x40000, "oki", 0 )
 	ROM_LOAD( "don_pepito.u1", 0x00000, 0x40000, CRC(574fcd14) SHA1(a23f1eb6d2cef5aa07df3a553fe1d33803648f43) )
@@ -674,14 +758,36 @@ ROM_START( susanita )
 	ROM_LOAD( "susanita.u1", 0x00000, 0x40000, CRC(766868cb) SHA1(eb42dc46b865bc448052d9d67c840e51c49ce49a) ) // Am27C020
 ROM_END
 
+
+// Cranes
+
+ROM_START( gruacarr )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.gr2_pic16c54a.u3", 0x0000, 0x2000, CRC(cfa6f8c0) SHA1(bc72c54ac7e5b9df2e9dfb3581114c76de1b338c) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "grua_carrus_7bfd_pic_gr_27c020.u1", 0x00000, 0x40000, CRC(a1322e89) SHA1(4c1995c6cf54acf174de7d9497ef30a69a007964) )
+ROM_END
+
+ROM_START( gruacarra )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.gr_pic16c54a.u3", 0x0000, 0x2000, CRC(8ba92d8a) SHA1(a4cb34cbebe49b6a381fd1032aab348a99e6376d) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "grua_carrus_7bfd_pic_gr_27c020.u1", 0x00000, 0x40000, CRC(a1322e89) SHA1(4c1995c6cf54acf174de7d9497ef30a69a007964) )
+ROM_END
+
 } // anonymous namespace
 
-GAMEL( 1998, futbol,       0, gaelcof3,   futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 1)",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
-GAMEL( 1997, futbola, futbol, gaelcof3,   futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 2)",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
-GAMEL( 1997, futbolt, futbol, futbol_c54, futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (test ROM)", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
+GAMEL( 1998, futbol,       0, gaelcof3,     futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 1)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
+GAMEL( 1997, futbola, futbol, gaelcof3,     futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 2)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
+GAMEL( 1997, futbolt, futbol, gaelcof3_c54, futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (test ROM)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
 
 GAMEL( 199?, autopapa,  0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", u8"El auto de papá", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?, donpepito, 0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Don Pepito",        MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?, mueve,     0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Mueve",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?, obladi,    0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?, susanita,  0, gaelcof3, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Susanita",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+
+GAME( 199?, gruacarr,   0,        gaelcof3_c54, gruacarr,  grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 1)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
+GAME( 199?, gruacarra,  gruacarr, gaelcof3_c54, gruacarra, grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 2)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
