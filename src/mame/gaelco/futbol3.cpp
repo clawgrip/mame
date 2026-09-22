@@ -753,15 +753,6 @@ ROM_START( donpepito )
 	ROM_LOAD( "don_pepito.u1", 0x00000, 0x40000, CRC(574fcd14) SHA1(a23f1eb6d2cef5aa07df3a553fe1d33803648f43) )
 ROM_END
 
-// Needs a different PIC program (M3), maybe the PCB is also different
-ROM_START( kwairi )
-	ROM_REGION( 0x2000, "maincpu", 0 )
-	ROM_LOAD( "m3_pic16c54c.u3", 0x0000, 0x2000, NO_DUMP ) // Protected
-
-	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "k_wai_regalo_italia_11-03_m3_a669_27c020.u1", 0x00000, 0x40000, CRC(fad3f35c) SHA1(ecc2b9764bcdddee0f6b479eceb4be9395c4b99a) )
-ROM_END
-
 // Based on the Spanish cover version of the song "I Like To Move It" by Reel 2 Real, named "Te Gusta el Mueve Mueve".
 ROM_START( mueve )
 	ROM_REGION( 0x2000, "maincpu", 0 )
@@ -787,6 +778,25 @@ ROM_START( susanita )
 
 	ROM_REGION( 0x40000, "oki", 0 )
 	ROM_LOAD( "susanita.u1", 0x00000, 0x40000, CRC(766868cb) SHA1(eb42dc46b865bc448052d9d67c840e51c49ce49a) ) // Am27C020
+ROM_END
+
+
+// These sets need different PIC programs (M3 or M4, both undumped)
+
+ROM_START( kwairi )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m3_pic16c54c.bin", 0x0000, 0x2000, NO_DUMP ) // Protected
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "k_wai_regalo_italia_11-03_m3_a669_27c020.bin", 0x00000, 0x40000, CRC(fad3f35c) SHA1(ecc2b9764bcdddee0f6b479eceb4be9395c4b99a) )
+ROM_END
+
+ROM_START( motvespa )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m4_pic16c54c.bin", 0x0000, 0x2000, NO_DUMP ) // Protected
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "moto_freno_italia_vespa_cd9b_pic_m4_27c010.bin", 0x00000, 0x20000, CRC(937de303) SHA1(ac47aada63eab433b33a07b50b07689558698968) )
 ROM_END
 
 
@@ -895,10 +905,12 @@ GAMEL( 1997, futbolt, futbol, gaelcof3_c54, futbol, futbol_state, init_rc_wdt, R
 
 GAMEL( 199?,  autopapa,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", u8"El auto de papá",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?,  donpepito, 0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Don Pepito",           MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 2003?, kwairi,    0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Rumatic",   "K Wai Regalo (Italy)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?,  mueve,     0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Mueve",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?,  obladi,    0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 199?,  susanita,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Susanita",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+
+GAMEL( 2003?, kwairi,   0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Rumatic", "K Wai Regalo (Italy)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 200?,  motvespa, 0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco",           "Moto Vespa (with brake)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 
 GAMEL( 200?, memo0102, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 0102 (44 Gatti / Torero Camomillo)",                      MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo0304, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 0304 (Volevo Un Gatto Nero / Il Valzer Del Moscerino)",   MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
