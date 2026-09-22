@@ -824,7 +824,7 @@ ROM_START( cochegkr )
 	ROM_LOAD( "m4_pic16c54c.bin", 0x0000, 0x2000, NO_DUMP ) // Protected
 
 	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "coche_freno_italia_-r-_69f0_pic.bin", 0x00000, 0x20000, CRC(c2f26fdd) SHA1(92eed91d5e491b3563dd48933be570fc8a96d78f) ) // sum 0x6f90, the label says 69f0, probably a typo
+	ROM_LOAD( "coche_freno_italia_-r-_69f0_pic_m4.bin", 0x00000, 0x20000, CRC(c2f26fdd) SHA1(92eed91d5e491b3563dd48933be570fc8a96d78f) ) // sum 0x6f90, the label says 69f0, probably a typo
 ROM_END
 
 ROM_START( kwairi )
