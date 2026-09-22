@@ -838,6 +838,14 @@ ROM_END
 
 // Italian kiddie rides, different PCB
 
+ROM_START( aladigkr )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i3_pic16c54c.bin", 0x0000, 0x2000, CRC(c1f74d05) SHA1(6c09d4854141ee7731f246db9eb916a1ebecfd2e) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "aladino_27c020.bin", 0x00000, 0x40000, CRC(8714993a) SHA1(097f71d7a7cc238add1d439363df89632f0932e8) ) // phrase 9, the second song, ends at 0x47400, out of the M6295 range
+ROM_END
+
 ROM_START( m2003_1 )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
@@ -987,6 +995,8 @@ GAMEL( 199?, susanita,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0,
 
 GAMEL( 2003?, kwairi,   0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Rumatic", "K Wai Regalo (Italy)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 200?,  motvespa, 0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco",           "Moto Vespa (with brake)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+
+GAMEL( 200?, aladigkr, 0, gaelcof3_c54, i3, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Aladino (Gaelco kiddie ride, Italy)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i ) // Not working because an unreachable sound that causes silent rides
 
 GAMEL( 2003?, m2003_1, 0, gaelcof3_c54, m2003_1, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Març 2003 1 (Nella Vecchia Fattoria / Popoff)", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 2003?, m2003_a, 0, gaelcof3_c54, m2003_a, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Març 2003 A (Dagli Una Spinta)",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
