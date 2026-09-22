@@ -74,7 +74,9 @@
 
   Later kiddie ride PCB, with the 'I3' program: RA0 and RA2 are swapped (the program only lowers RA2 around the
   M6295 accesses) and there is no external display board, the latch drives four lamps that run a light sequence
-  during a ride. Each credit adds ride time, and the songs in phrases 8 and 9 play on alternate rides.
+  during a ride. Each credit adds ride time, and the songs in phrases 8 and 9 play on alternate rides. The 'I4'
+  program drops the after ride phase: when the time runs out, the lamps and the music stop but the motor keeps
+  running for about 16 seconds, unless the stop input is activated.
 
   TODO:
   - Verify the M6295 SS pin: with PIN7_HIGH the known songs of 'mueve', 'donpepito' and 'obladi' play at their
@@ -679,6 +681,33 @@ static INPUT_PORTS_START( i3 ) // 'I3' kiddie ride program
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED ) // not connected, pulled up
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( i4 ) // 'I4' kiddie ride program
+	PORT_INCLUDE( i3 )
+
+	PORT_MODIFY("IN0")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Stop") // only read after a ride, stops the motor
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPNAME( 0x20, 0x20, "Extra Attract Phrase" ) PORT_DIPLOCATION("SW1:6") // phrase 6 after the attract one
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( m2003_1 ) // no buttons for the child
+	PORT_INCLUDE( i4 )
+
+	PORT_MODIFY("IN0")
+	PORT_BIT( 0x06, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( m2003_a )
+	PORT_INCLUDE( i4 )
+
+	PORT_MODIFY("IN0")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Phone")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Horn")
+INPUT_PORTS_END
+
 
 void gaelcof3_state::common(machine_config &config)
 {
@@ -802,6 +831,22 @@ ROM_END
 
 // Italian kiddie rides, different PCB
 
+ROM_START( m2003_1 )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "m_2003_1_b5b7_27c2001.bin", 0x00000, 0x40000, CRC(73d0357b) SHA1(e33dc3fe2778983372145b20df7a0857748ff684) )
+ROM_END
+
+ROM_START( m2003_a )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "m_2003_a_5e54.bin", 0x00000, 0x40000, CRC(b7e28e08) SHA1(590bfc716d8d56c0899ff1232cb9314fe44598f3) )
+ROM_END
+
 ROM_START( memo0102 )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m.i3_pic16c54c.bin", 0x0000, 0x2000, CRC(c1f74d05) SHA1(6c09d4854141ee7731f246db9eb916a1ebecfd2e) )
@@ -903,14 +948,17 @@ GAMEL( 1998, futbol,       0, gaelcof3,     futbol, futbol_state, init_rc_wdt, R
 GAMEL( 1997, futbola, futbol, gaelcof3,     futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (set 2)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
 GAMEL( 1997, futbolt, futbol, gaelcof3_c54, futbol, futbol_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Futbol (test ROM)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_fut )
 
-GAMEL( 199?,  autopapa,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", u8"El auto de papá",    MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?,  donpepito, 0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Don Pepito",           MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?,  mueve,     0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Mueve",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?,  obladi,    0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
-GAMEL( 199?,  susanita,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Susanita",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, autopapa,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", u8"El auto de papá", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, donpepito, 0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Don Pepito",        MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, mueve,     0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Mueve",             MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, obladi,    0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Ob-La-Di",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+GAMEL( 199?, susanita,  0, gaelcof3,     irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Cresmatic", "Susanita",          MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 
 GAMEL( 2003?, kwairi,   0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco / Rumatic", "K Wai Regalo (Italy)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
 GAMEL( 200?,  motvespa, 0, gaelcof3_c54, irn, gaelcof3_state, init_rc_wdt, ROT0, "Gaelco",           "Moto Vespa (with brake)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid )
+
+GAMEL( 2003?, m2003_1, 0, gaelcof3_c54, m2003_1, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Març 2003 1 (Nella Vecchia Fattoria / Popoff)", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
+GAMEL( 2003?, m2003_a, 0, gaelcof3_c54, m2003_a, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Març 2003 A (Dagli Una Spinta)",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 
 GAMEL( 200?, memo0102, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 0102 (44 Gatti / Torero Camomillo)",                      MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo0304, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 0304 (Volevo Un Gatto Nero / Il Valzer Del Moscerino)",   MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
@@ -921,7 +969,6 @@ GAMEL( 200?, memo1011, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, 
 GAMEL( 200?, memo1213, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 1213 (Nella Vecchia Fattoria / Sandokan)",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo1415, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 1415 (Attenti Al Lupo / Viva La Pappa Col Pomodoro)",     MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo1617, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Memo 1617 (Dolce Remì / Anna Dei Capelli Rossi)",            MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
-
 
 GAME( 199?, gruacarr,  0,        gaelcof3_c54, gruacarr,  grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 1)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
 GAME( 199?, gruacarra, gruacarr, gaelcof3_c54, gruacarra, grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 2)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
