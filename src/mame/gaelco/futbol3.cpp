@@ -1,8 +1,9 @@
 // license:BSD-3-Clause
-// copyright-holders:
+// copyright-holders: Tomás García-Merás Capote (ClawGrip)
+
 /*
   Gaelco 'Futbol-3' hardware for kiddie rides, pinballs, and electromechanicals
-  from Gaelco, Cresmatic, and other manufacturers.
+  from Gaelco, Cresmatic, Rumatic, and other manufacturers.
 
   The PCB is very compact and has few components. The main ones are:
 
@@ -684,6 +685,7 @@ ROM_START( donpepito )
 	ROM_LOAD( "don_pepito.u1", 0x00000, 0x40000, CRC(574fcd14) SHA1(a23f1eb6d2cef5aa07df3a553fe1d33803648f43) )
 ROM_END
 
+// Needs a different PIC program (M3), maybe the PCB is also different
 ROM_START( kwairi )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD( "m3_pic16c54c.u3", 0x0000, 0x2000, NO_DUMP ) // Protected
