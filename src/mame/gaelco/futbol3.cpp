@@ -708,6 +708,13 @@ static INPUT_PORTS_START( m2003_a )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Horn")
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( pokemgkr ) // one button
+	PORT_INCLUDE( i4 )
+
+	PORT_MODIFY("IN0")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
 
 void gaelcof3_state::common(machine_config &config)
 {
@@ -911,6 +918,30 @@ ROM_START( memo1617 )
 	ROM_LOAD( "memo_1617_29ed_27c020.bin", 0x00000, 0x40000, CRC(c7a6a65d) SHA1(283296db184724cef879b13513155f0682c3bf3c) )
 ROM_END
 
+ROM_START( pokemgkr )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "pokemon_puls_d5e1_27c020.bin", 0x00000, 0x40000, CRC(e4af0060) SHA1(4d26c92d4034afdd095d159a0a25b9b1f486d26a) )
+ROM_END
+
+ROM_START( pokemgkra )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "pokemon_reclamo_d7ed_am27c020.bin", 0x00000, 0x40000, CRC(f2b07781) SHA1(8e8fb589ad15cd93ac9655be1a05726253f5d9d0) )
+ROM_END
+
+ROM_START( pokemgkrb )
+	ROM_REGION( 0x2000, "maincpu", 0 )
+	ROM_LOAD( "m.i4_pic16c54.bin", 0x0000, 0x2000, CRC(a241a001) SHA1(0ea534fa4e8c7740cd1dce79ad0cf13f0b9444f9) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "pokemon_sense_polsador_4225_27c2001.bin", 0x00000, 0x40000, CRC(cb9dc64a) SHA1(28239a674c5eecc0a6737cb36d5e8254a6a81fb2) )
+ROM_END
+
 
 // Cranes
 
@@ -969,6 +1000,10 @@ GAMEL( 200?, memo1011, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, 
 GAMEL( 200?, memo1213, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 1213 (Nella Vecchia Fattoria / Sandokan)",                MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo1415, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", "Memo 1415 (Attenti Al Lupo / Viva La Pappa Col Pomodoro)",     MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 GAMEL( 200?, memo1617, 0, gaelcof3_c54, i3,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Memo 1617 (Dolce Remì / Anna Dei Capelli Rossi)",            MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
+
+GAMEL( 200?, pokemgkr,  0,        gaelcof3_c54, pokemgkr, kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Pokémon (Gaelco kiddie ride, with button)",        MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
+GAMEL( 200?, pokemgkra, pokemgkr, gaelcof3_c54, m2003_1,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Pokémon (Gaelco kiddie ride, with attract sound)", MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
+GAMEL( 200?, pokemgkrb, pokemgkr, gaelcof3_c54, m2003_1,  kiddie_i_state, init_rc_wdt, ROT0, "Gaelco", u8"Pokémon (Gaelco kiddie ride, without button)",     MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE, layout_futbol3_kid_i )
 
 GAME( 199?, gruacarr,  0,        gaelcof3_c54, gruacarr,  grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 1)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
 GAME( 199?, gruacarra, gruacarr, gaelcof3_c54, gruacarra, grua_state, init_rc_wdt, ROT0, "Gaelco", u8"Grúa Carrus (set 2)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_REQUIRES_ARTWORK | MACHINE_SUPPORTS_SAVE )
