@@ -177,6 +177,10 @@
 	32 data bits are followed by 0,0,0,1, that trailing '1' being the start bit
 	of the next frame, so each frame latches the data sent on the previous one.
 	This is the one emulated here, and the one JP1 selects on every board seen.
+	The firmware always sends a blank frame right before the data one, so the
+	display is really blanked for about 0.5 ms on each refresh (every 12 ms),
+	unnoticeable on the real LEDs but not when sampled at the frontend frame
+	rate, hence the PWM display device.
   - bit 5 high: four dummy clocks with data low followed by the 32 bits shifted
 	out by the MCS51 serial port in mode 0 (plus a latch strobe on P1.2 on the
 	V1 board), segments active low, shift register board.  Not emulated, as the
@@ -213,6 +217,7 @@
 #include "machine/i2cmem.h"
 #include "sound/dac.h"
 #include "sound/spkrdev.h"
+#include "video/pwm.h"
 
 #include "speaker.h"
 
@@ -233,10 +238,10 @@ public:
 		, m_i2cmem(*this, "i2cmem")
 		, m_dac(*this, "dac")
 		, m_speaker(*this, "speaker")
+		, m_display(*this, "display")
 		, m_rom(*this, "maincpu")
 		, m_inputs(*this, "IN%u", 0U)
 		, m_conf(*this, "CONF")
-		, m_digits(*this, "digit%u", 0U)
 		, m_outputs(*this, "out%u", 0U)
 		, m_motors(*this, "motor%u", 0U)
 		, m_claw(*this, "claw")
@@ -262,10 +267,10 @@ private:
 	required_device<i2cmem_device> m_i2cmem;
 	optional_device<dac_8bit_r2r_device> m_dac;
 	optional_device<speaker_sound_device> m_speaker;
+	required_device<pwm_display_device> m_display;
 	required_region_ptr<u8> m_rom;
 	required_ioport_array<2> m_inputs;
 	optional_ioport m_conf;
-	output_finder<4> m_digits;
 	output_finder<8> m_outputs;
 	output_finder<6> m_motors;
 	output_finder<> m_claw;
@@ -495,7 +500,7 @@ void compucranes_state::display_w(u8 data)
 			for (int digit = 0; digit < 4; digit++)
 			{
 				// bits as sent: a f g e d dp c b (MSB of the byte = first bit sent)
-				m_digits[digit] = bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7);
+				m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
 			}
 			m_shifter = 0;
 		}
@@ -634,6 +639,11 @@ void compucranes_state::common(machine_config &config)
 
 	I2C_24C16(config, m_i2cmem);
 
+	PWM_DISPLAY(config, m_display).set_size(4, 8);
+	m_display->set_segmask(0xf, 0xff);
+	m_display->set_interpolation(1.0); // the display is static, no need to smooth it
+	m_display->set_bri_levels(0.5);    // ignore the sub-millisecond blanking between frames
+
 	SPEAKER(config, "mono").front_center();
 }
 
@@ -678,37 +688,37 @@ void compucranes_state::toyshop(machine_config &config)
 	ROM definitions
 ********************************************************************************/
 
-// "GANCHONEW/CPU-V1 COMP" PCB. Temic TSC80C31-12CA CPU.
+// "GANCHONEW/CPU-V1 COMP" PCB. Temic TSC80C31-12CA CPU, 32 pin windowed EPROM.
 ROM_START(crsauruss)
 	ROM_REGION(0x80000, "maincpu", 0)
-	ROM_LOAD("30.01.ic3",      0x00000, 0x20000, CRC(c735e024) SHA1(63dd3a71472bde7f9dead49a8dc889365fd024ef)) // 1xxxxxxxxxxxxxxxx = 0xFF
+	ROM_LOAD("30.01.ic3",   0x00000, 0x20000, CRC(c735e024) SHA1(63dd3a71472bde7f9dead49a8dc889365fd024ef)) // 1xxxxxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION(0x00117, "pld", 0)
 	ROM_LOAD("palce16v8h.ic4", 0x00000, 0x00117, NO_DUMP) // AMD PALCE16V8H-25, its location couldn't be read on the pictures
 
 	ROM_REGION(0x00800, "i2cmem", 0)
-	ROM_LOAD("24lc16b.ic5",    0x00000, 0x00800, BAD_DUMP CRC(7213cbb9) SHA1(7417c83c5a5254f86f3d56529341ae8a254e8e53)) // hand built, see the notes at the top
+	ROM_LOAD("24lc16b.ic5", 0x00000, 0x00800, BAD_DUMP CRC(7213cbb9) SHA1(7417c83c5a5254f86f3d56529341ae8a254e8e53)) // hand built, see the notes at the top
 ROM_END
 
-// "GANCHONEW-V8" PCB with ATX PSU connector. TS80C32X2-MCA CPU.
+// "GANCHONEW-V8" PCB with ATX PSU connector. TS80C32X2-MCA CPU, Winbond W29C020C flash, Lattice GAL16V8A or Atmel ATF16V8B at IC4.
 ROM_START(mastcrane)
 	ROM_REGION(0x80000, "maincpu", 0)
-	ROM_LOAD("v8_w29c020c.ic3", 0x00000, 0x40000, CRC(733dfcbc) SHA1(d18d7945e9b8f189f2169d3d90c3cfea97d3b39c)) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD("v8.ic3",      0x00000, 0x40000, CRC(733dfcbc) SHA1(d18d7945e9b8f189f2169d3d90c3cfea97d3b39c)) // 1ST AND 2ND HALF IDENTICAL
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("gal16v8.ic4",     0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // Verified to be the same on all known PCB revisions
+	ROM_LOAD("gal16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // Verified to be the same on all known PCB revisions
 
 	ROM_REGION(0x00800, "i2cmem", 0)
-	ROM_LOAD("24c16_v8.ic5",    0x00000, 0x00800, BAD_DUMP CRC(9b919023) SHA1(aafbabfc70f33e0a453c6bd9bec2c7127733fb15)) // hand built, see the notes at the top
+	ROM_LOAD("24c16_v8.ic5", 0x00000, 0x00800, BAD_DUMP CRC(9b919023) SHA1(aafbabfc70f33e0a453c6bd9bec2c7127733fb15)) // hand built, see the notes at the top
 ROM_END
 
 // "GANCHONEW V7" PCB with AT PSU connector
 ROM_START(mastcranea)
 	ROM_REGION(0x80000, "maincpu", 0)
-	ROM_LOAD("v7.ic3",       0x00000, 0x40000, CRC(299c9ad1) SHA1(b0ba2ab588151dba89307e118ba061cad2b8116b)) // 1ST AND 2ND HALF IDENTICAL (W29C020C)
+	ROM_LOAD("v7.ic3",      0x00000, 0x40000, CRC(299c9ad1) SHA1(b0ba2ab588151dba89307e118ba061cad2b8116b)) // 1ST AND 2ND HALF IDENTICAL (W29C020C)
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("atf16v8.ic4",  0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // Verified to be the same on all known PCB revisions
+	ROM_LOAD("atf16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // Verified to be the same on all known PCB revisions
 
 	ROM_REGION(0x00800, "i2cmem", 0)
 	ROM_LOAD("24c16_v7.ic5", 0x00000, 0x00800, BAD_DUMP CRC(eebe1da3) SHA1(472650d0884aff0b3d406c17bbca32af41468070)) // hand built, see the notes at the top
@@ -726,7 +736,8 @@ ROM_START(mastcraneb)
 	ROM_LOAD("24c16_v2.ic5", 0x00000, 0x00800, BAD_DUMP CRC(2d4ce67d) SHA1(77f2cd20f057dbfe5cd99e0eb7f14274781bd8ad)) // hand built, see the notes at the top
 ROM_END
 
-// "GANCHONEW-V2 COMP" PCB with AT PSU connector, machine number sticker "NºMAQ. 00-356  13/06/00"
+/* "GANCHONEW-V2 COMP" PCB with AT PSU connector, machine number sticker "NºMAQ. 00-356  13/06/00".
+   The flash is at IC3 (it was listed as IC5, which is the SEEPROM, when the set was added). */
 ROM_START(octopussy)
 	ROM_REGION(0x80000, "maincpu", 0)
 	ROM_LOAD("w29c011.ic3", 0x00000, 0x20000, CRC(47da93e8) SHA1(aa821dd22c1912ec2942ca6afd989d61df4387d7))
@@ -758,7 +769,7 @@ ROM_END
 } // anonymous namespace
 
 // Years and versions are the ones the programs show on the display (or store in the SEEPROM) at power on
-//     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT        ROT   COMPANY               FULLNAME                       FLAGS                                       LAYOUT
+//    YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT        ROT   COMPANY               FULLNAME                     FLAGS                                      LAYOUT
 GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init, ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
 GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
 GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
