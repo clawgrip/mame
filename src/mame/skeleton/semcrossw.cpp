@@ -128,7 +128,7 @@ Other parameters: 127 start-up flashing duration (0 = 255 s), 160 lamp monitor m
 161/162 synchronisation limits (maximum wait, shortening window), 164 step after which the
 lamps rest in step 0 until there is a pedestrian demand.
 
-With the RAM empty the controller flashes amber for about four minutes and then hangs.
+With the RAM empty, the controller flashes amber for about four minutes and then hangs.
 Example crosswalk program (R, address, data and K for each value): 100=20, 101=3, 102=5,
 103=10, 104=2, 105=3, 124=6, 125=3, 126=3, 127=5, 161=60.
 
@@ -425,5 +425,5 @@ ROM_END
 } // anonymous namespace
 
 
-//    YEAR  NAME       PARENT MACHINE    INPUT      CLASS            INIT        MONITOR COMPANY FULLNAME                                              FLAGS                                        LAYOUT
-GAMEL(198?, semcrossw, 0,     semcrossw, semcrossw, semcrossw_state, empty_init, ROT0,   "Etra", "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_semcrossw)
+//    YEAR   NAME       PARENT MACHINE    INPUT      CLASS            INIT        MONITOR COMPANY FULLNAME                                              FLAGS                                      LAYOUT
+GAMEL(1985?, semcrossw, 0,     semcrossw, semcrossw, semcrossw_state, empty_init, ROT0,   "Etra", "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_semcrossw)
