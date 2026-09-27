@@ -104,33 +104,75 @@ Notes from one operator that used to work with this controller model:
  seven programs, with 100 for green, 101 for yellow, 102 for clear, and then repeat it again.
 
 Hardware details deduced from the firmware, not verified on real hardware:
- - 2000-23FF is assumed to be the battery backed RAM holding the programs. The EEPROM dump
-   has a configuration laid out for this range, probably for another firmware version, but
-   its programs (17 and 3 steps) don't match the 6 step lamp tables this firmware reads
-   from the EEPROM at C625.
+ - 2000-23FF is assumed to be the battery backed RAM holding the programs. This firmware
+   only reads the lamp tables of the EEPROM (pointer at C625), mapped at C000. The rest of
+   the EEPROM has programs laid out for 2000 (17 and 3 steps) and tables at 400-611, never
+   read; with the EEPROM also at 2000 the controller wouldn't work: 103 s of steady amber
+   and 103 s of all red at start-up, no lamp phases for 11 of the 17 steps, no vehicle
+   amber in the 3 step program.
  - Up to ten relays PCBs (selected by A2-A11); the lamp tables in the EEPROM drive three.
    Outputs: bits 0/4 red, 1/5 amber, 2/6 green. The lamp current sensors are compared with
    the outputs using the mask at 160, three failed checks restart the flashing start-up.
 
-Keyboard (3 address and 3 data digits, decimal by default): R clears the entry, M toggles
-the hexadecimal mode (4 + 2 digits, any address), K stores and advances to the next address,
-N clears from the address up to the value entered as data. Addresses 000-099 show the
-internal RAM (091 selects the program when not selected externally), 100-999 the RAM at
-2064-23E7. The rightmost DP is off while there is no pending pedestrian demand.
-
 Programs 1-4 at 100, 200, 300, 400:
  +0..+23   step durations in seconds, run from step N-1 down to step 0 (main green)
  +24       number of steps N
- +25, +26  start-up all red and steady amber durations
+ +25, +26  start-up all red and steady amber durations (program 1 ones at power-up)
  +29       synchronisation offset
  +30..+53  non zero if the step also times out in manual mode
 Other parameters: 127 start-up flashing duration (0 = 255 s), 160 lamp monitor mask,
 161/162 synchronisation limits (maximum wait, shortening window), 164 step after which the
 lamps rest in step 0 until there is a pedestrian demand.
 
-With the RAM empty, the controller flashes amber for about four minutes and then hangs.
-Example crosswalk program (R, address, data and K for each value): 100=20, 101=3, 102=5,
-103=10, 104=2, 105=3, 124=6, 125=3, 126=3, 127=5, 161=60.
+How to program it, step by step (a crosswalk cycle for the lamp tables in the EEPROM):
+The display shows a 3 digit address, a dot and the 3 digit value stored there: [100.020]
+means that address 100 holds 020. Keys: 0-9, A-F, R, M, N and K on the PC keyboard, or
+click them on the panel. The dot after the last digit is an indicator (see steps 10 and
+11) and is left out below.
+
+ 1. Leave the three toggle switches down (FLASHING, MANUAL and EXT. PROG. off) and start
+	the machine. With an empty memory the lamps flash amber and the display shows
+	[000.000]. If the program is not complete after about four minutes, the controller
+	stops (the display no longer reacts): reset it (F3) and go on, stored values are kept.
+ 2. Press R. The display goes blank: [   .   ].
+ 3. Type 1 0 0. The display shows [100.000]: address 100, value 000.
+ 4. Type 0 2 0 (20 seconds of green for the vehicles). The display shows [100.020].
+ 5. Press K to store it. The display still shows [100.020].
+ 6. Press K again to go to the next address. The display shows [101.000].
+ 7. For each of these addresses type the value, press K to store it and K again to go to
+	the next one (all the times are in seconds):
+	  101  003  pedestrian clearance (all red)
+	  102  005  flashing pedestrian green
+	  103  010  pedestrian green
+	  104  002  vehicle clearance (all red)
+	  105  003  vehicle amber (no need to press K twice after this one)
+ 8. Press R, type 1 2 4 ([124.000]) and enter these values the same way:
+	  124  006  number of steps
+	  125  003  red at start-up
+	  126  003  steady amber at start-up
+	  127  005  flashing amber at start-up
+ 9. Press R, type 1 6 1 and then 0 6 0 ([161.060]) and press K. This is the maximum
+	synchronisation wait; without it a green time can last about four minutes.
+10. Reset the machine (F3). The lamps flash amber for 5 seconds, show steady amber for 3,
+	red for 3 and then green, where they stay. The dot after the last digit goes off: the
+	controller is waiting for a pedestrian.
+11. Press the pedestrian button (Enter, or PUSH on the panel). The dot after the last
+	digit lights up to confirm it; if it doesn't, try again a bit later. When the current
+	cycle ends (up to about a minute) the vehicle lamps turn amber (3 s) and red, 2 s later
+	the pedestrians get green (10 s), then flashing green (5 s) and red, and 3 s later the
+	vehicles get green again. The pedestrian signal is board 2 B in the "Relay Boards"
+	view (Tab menu, Video Options).
+
+Other keys and tips:
+ - To check a value press R and type its address; to change it type the new value and K.
+ - After a mistake press R and start again from the address: a value is only stored when
+   exactly three digits are followed by K.
+ - M switches to hexadecimal: 4 address digits (any address, e.g. C625 for the lamp tables
+   in the EEPROM) and 2 value digits. Press M again to go back.
+ - N clears a range: R, the first address, the last address typed as the value, and N.
+   For example R 2 0 0 2 9 9 N clears the second program.
+ - Addresses 000-099 show the internal RAM. 091 selects the program (0 to 3 for the ones at
+   100 to 400) when EXT. PROG. is off; it goes back to 0 after every reset.
 
 TODO:
  - verify the memory map, the NMI source and the switch / input assignments
@@ -411,6 +453,8 @@ void semcrossw_state::semcrossw(machine_config &config)
 
 	PWM_DISPLAY(config, m_display).set_size(6, 8);
 	m_display->set_segmask(0x3f, 0xff);
+
+	config.set_default_layout(layout_semcrossw);
 }
 
 
@@ -425,5 +469,5 @@ ROM_END
 } // anonymous namespace
 
 
-//    YEAR   NAME       PARENT MACHINE    INPUT      CLASS            INIT        MONITOR COMPANY FULLNAME                                              FLAGS                                      LAYOUT
-GAMEL(1985?, semcrossw, 0,     semcrossw, semcrossw, semcrossw_state, empty_init, ROT0,   "Etra", "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING, layout_semcrossw)
+//   YEAR  NAME       PARENT COMPAT MACHINE    INPUT      CLASS            INIT        COMPANY  FULLNAME                                              FLAGS
+SYST(198?, semcrossw, 0,     0,     semcrossw, semcrossw, semcrossw_state, empty_init, "Etra",  "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING)
