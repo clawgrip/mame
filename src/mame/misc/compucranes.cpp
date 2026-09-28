@@ -47,15 +47,10 @@
 
  The "GANCHONEW-V2 COMP" board Octopussy runs on has the same part numbering,
  an AT PSU connector instead of the ATX one and the motor connector (CN8) on
- the opposite edge.  SW1 is a slide switch on both, so the firmware staying in
- the menu while it is on is the expected behaviour.  The edge connectors are
- the ones the OM Vending clone silkscreens by name: CN2 joystick (5 ways),
- CN3 coin selector (7), CN4 speaker (2), CN5 sensors (7), CN6 display (5) and
- CN7 counters (12).
-
- One 74HC273 drives the resistor ladder of the DAC, the other one the ULN2803
- that feeds the counters, the lamps and the prize coil, and the two 74HC244
- read the inputs through 10K pull-up arrays, so an idle input reads high.
+ the opposite edge.  SW1, the test switch, is a slide one on both.  The edge
+ connectors are the ones the OM Vending clone silkscreens by name: CN2
+ joystick (5 ways), CN3 coin selector (7), CN4 speaker (2), CN5 sensors (7),
+ CN6 display (5) and CN7 counters (12).
 
  "GANCHONEW/CPU-V1 COMP" PCB has a different layout, with the connectors on
  the side instead of the front edge:
@@ -76,9 +71,9 @@
  |     CN7           XT1 12MHz    P1    :|
  |_______________________________________|
 
- Its part numbering matches the later boards and JP1, a three pin header here,
- again sits next to the display connector.  It carries no DAC and no op-amp at
- all, the motors and the claw magnet hanging from the Darlington arrays.
+ Its part numbering matches the later boards, JP1 (a three pin header here)
+ sits again next to the display connector, and the motors and the claw magnet
+ are driven by the Darlington arrays.
 
  The OM Vending clone is silkscreened "CPU GRUA V2  O. M. VENDING":
 
@@ -115,109 +110,57 @@
  --------------------------------------------------------------------------
  Hardware notes, from the disassembly of the six dumped program ROMs:
 
- The 80C31/80C32 runs from the external EPROM (HC373 address latch), of which
- only the first 64 KBytes are used for code.  The rest of the EPROM holds the
- sound samples, read with MOVX while one of the bank lines decoded by the GAL
- (driven by CPU port pins) is asserted.  While a bank line is active the GAL
- also disables the input buffers, so the whole 64 KBytes window reads from the
- EPROM; the power-on checksum relies on that, as it adds up the whole EPROM,
- code and samples, and expects zero ("EPro" is shown otherwise).  The OM Vending
- clone has no checksum, it just checks the sample table.
+ The EPROM holds the code in its first 64 KBytes and the sound samples above
+ them, read with MOVX while a bank line is low.  The power-on checksum adds up
+ the whole EPROM through both paths and expects zero ("EPro" is shown
+ otherwise); the OM Vending clone has no checksum.  The samples are 8 bit
+ unsigned PCM terminated by a zero byte; the timer 0 interrupt (6.67 kHz)
+ mixes two of them and writes the result to the DAC.
 
- Sound samples are 8 bit unsigned PCM terminated by a zero byte; the timer 0
- interrupt (6.67 kHz) mixes two of them and writes the result to the DAC.
+ The ATF16V8 dumped from the V2, V7 and V8 boards does the decoding in ext_r
+ and ext_w if its pins are 1 /PSEN, 2 /RD, 3 /WR, 5 P3.5, 6 A15, 7 A14, 8 A13,
+ 9 A0 and 19 flash A16, an assignment that fits every access the firmware does
+ (not checked on a PCB).  Pins 12 and 13 just repeat pin 11, whose signal is
+ unknown.  The V1 and OM Vending PLDs aren't dumped.
 
- MOVX map (with all the bank lines inactive):
-   R  8000h  74HC244, sensors, limit switches and coin selector
-   R  8001h  74HC244, joystick, play button, test switch and alarm
-   W  A000h  74HC273, 8 bit R-2R DAC (V2 and later) / motor latch (V1)
-   W  A001h  74HC273, lamps, counters and token hopper
-
- The ATF16V8 dumped from the V2, V7 and V8 boards backs this up.  Its equations
- fit the accesses the firmware does with pin 1 /PSEN, 2 /RD, 3 /WR, 5 P3.5,
- 6 A15, 7 A14, 8 A13 and 9 A0 (not checked on a PCB): the buffers and latches
- are decoded from A15-A13 and A0 only (so mirrored all over 8000h-9fffh and
- a000h-bfffh) and only while P3.5 is high, the flash is enabled for code
- fetches and for every MOVX read while P3.5 is low, and pin 19, low only on
- code fetches, drives the flash A16.  Nothing answers any other MOVX read.
- Pins 12 and 13 just repeat pin 11, whose signal is unknown.  The V1 and OM
- Vending PLDs aren't dumped.
-
- Port usage on the "GANCHONEW V2" to "V8" boards:
-   P1.0      24C16 SCL
-   P1.1      24C16 SDA
-   P1.2      gantry motor, towards the back
-   P1.3      gantry motor, towards the front
-   P1.4      trolley motor, towards the right
-   P1.5      trolley motor, towards the left
-   P1.6      winch motor, claw down
-   P1.7      winch motor, claw up (both bits of a motor set = brake)
-   P3.0      display data
-   P3.1      display clock
-   P3.2      coin selector line 1 (INT0, polled)
-   P3.3      coin selector line 2 (INT1, polled)
-   P3.4      claw magnet, PWMed with a 16 step pattern to set the claw strength
-   P3.5      EPROM A16 (active low)
-
- The V2+ boards have a single input for both limit switches of each horizontal
- axis (the firmware remembers the direction it was moving), plus the claw up
- and claw down switches.  The power-on self test drives every motor until its
- limit switch closes and shows an error ("F Fr", "F  I", "F do", "F uP"...)
- when one doesn't.
-
- The "GANCHONEW" (V1) board has no DAC, sound being generated on the timer 0
- interrupt by pulsing P3.4 for about 23 us at the frequency of the note, so it
- is a train of narrow pulses rather than a square wave.
- There the motors and the claw magnet are driven by the A000h latch (same bit
- order as P1.2-P1.7 above, bit 6 claw magnet), each limit switch has its own input,
- the 24C16 is also on P1.0/P1.1, P1.2 is the latch strobe of one of the two supported
- display boards, P1.3 reads the alarm sensor, P1.4 the display board type and P1.7
- seems to be the EPROM A16 line.  Its coin selector has a single line, on bit 5 of the
- 8001h port.  Its power-on checksum reads the input ports too, so it only passes
- with all the inputs idle (no limit switch closed).
-
- The OM Vending clone ("CPU GRUA V2") has a 512 KBytes flash ROM, so it uses
- three bank lines (P3.3-P3.5, all active low), and moves the claw magnet PWM
- to bit 7 of the A001h latch (which drives the fused "BOBINA 3A" output
- through IC12).
+ The "GANCHONEW" (V1) board has no DAC: the timer 0 interrupt pulses P3.4 for
+ about 23 us at the frequency of the note, a train of narrow pulses rather
+ than a square wave.  Its power-on checksum reads the input ports too, so it
+ only passes with all the inputs idle: resetting it while the crane rests on
+ its home switches shows "EPro".
 
  Display: the four digits are not multiplexed, the 32 segment lines are driven
  by a serial LED driver on the "Plumadig" board.  The firmware supports two
- different display boards, selected by JP1 on bit 5 of the 8001h input port
- (on P1.4 on the V1 board), and carries a different segment table for each:
-  - bit 5 low: 36 clock frames, MM5450 style driver, segments active high.  The
-	32 data bits are followed by 0,0,0,1, that trailing '1' being the start bit
-	of the next frame, so each frame latches the data sent on the previous one.
-	This is the one emulated here, and the one JP1 selects on every board seen.
-	It's the same protocol as MAME's mm5445 family, but the chip on the
-	Plumadig board hasn't been identified.
-	The firmware always sends a blank frame right before the data one, so the
-	display is really blanked for about 0.5 ms on each refresh (every 12 ms),
-	unnoticeable on the real LEDs but not when sampled at the frontend frame
-	rate, hence the PWM display device.
+ different display boards, selected by JP1 (bit 5 of the 8001h port, P1.4 on
+ the V1 board), and carries a different segment table for each:
+  - bit 5 low: MM5450 style driver, segments active high.  Frames are 36
+	clocks long, the 32 data bits followed by 0,0,0,1, that trailing '1' being
+	the start bit of the next frame, so each frame latches the data sent on
+	the previous one.  It's the one emulated, fitted on every board seen, and
+	the same protocol as MAME's mm5445 family, but the chip hasn't been
+	identified.  The firmware always sends a blank frame right before the data
+	one, so the display is really blanked for about 0.5 ms on each refresh
+	(every 12 ms), unnoticeable on the real LEDs but not when sampled at the
+	frontend frame rate, hence the PWM display device.
   - bit 5 high: four dummy clocks with data low followed by the 32 bits shifted
 	out by the MCS51 serial port in mode 0 (plus a latch strobe on P1.2 on the
-	V1 board), segments active low, shift register board.  Not emulated, as the
-	MCS51 core doesn't emulate the mode 0 output timings on the port pins.
-
- Both tables hold one byte per digit, first byte sent = leftmost digit:
-	MM5450 board:      bit 0 a, 1 f, 2 g, 3 e, 4 d, 5 dp, 6 c, 7 b (active high)
-	shift register one: bit 0 g, 1 f, 2 a, 3 b, 4 e, 5 d, 6 c, 7 dp (active low)
+	V1 board) to a shift register board, leftmost digit first, segments active
+	low: bit 0 g, 1 f, 2 a, 3 b, 4 e, 5 d, 6 c, 7 dp.  Not emulated.
 
  The 24C16 must hold the machine type code at address 1 (and a valid BCD value
  at address 2) or the firmware wipes the last 256 bytes of it and hangs on
- purpose: that code is factory
- programmed and never rewritten by the game, while all the other settings are
- rebuilt by the machine itself when their checksums fail ("cLE" is shown on the
- display while doing so).  No SEEPROM has been dumped, so the ones loaded here
- are hand built: each one is what this driver leaves in a SEEPROM holding just
- those two bytes once the machine has initialized it and nothing else changes.
+ purpose: that code is factory programmed and never rewritten by the game,
+ while all the other settings are rebuilt by the machine itself when their
+ checksums fail ("cLE" is shown on the display while doing so).  No SEEPROM
+ has been dumped, so the ones loaded here are hand built: each one is what
+ this driver leaves in a SEEPROM holding just those two bytes once the machine
+ has initialized it and nothing else changes.
 
- The crane itself is simulated just enough for the self test and the game
- cycle to work: each motor moves its axis at a constant speed and the limit
- switches close at the end of the travel.  The travel times and the starting
- position are arbitrary, not taken from a real cabinet.  Prizes aren't
- simulated, the prize sensor is a regular input.
+ The crane is simulated just enough for the game cycle and for the power-on
+ self test, which drives every motor until its limit switch closes and shows
+ an error ("F Fr", "F  I", "F do", "F uP"...) when one doesn't.  The travel
+ times and the starting position are arbitrary, not taken from a real
+ cabinet, and prizes aren't simulated.
 
  TODO:
   - Emulate the shift register display board (needs the MCS51 serial port
@@ -327,9 +270,8 @@ private:
 	u8 m_p3 = 0xff;
 	bool m_claw_on_latch = false;
 
-	// crane mechanics: 0 = front/back (0.0 = front), 1 = left/right (0.0 = left),
-	// 2 = claw (0.0 = up); arbitrary starting point clear of every limit switch,
-	// as the V1 power-on checksum also reads the inputs
+	// crane position from 0.0 to 1.0: front to back, left to right and claw up
+	// to down; starts clear of every limit switch, which the V1 checksum reads
 	double m_pos[3] = { 0.5, 0.5, 0.1 };
 	u8 m_motor_state = 0;
 	attotime m_mech_time;
@@ -351,11 +293,9 @@ void compucranes_state::machine_start()
 
 void compucranes_state::machine_reset()
 {
-	// the CPU reset has already gone through the port callbacks with P1 and P3
-	// high, which leaves the bank lines and the display clock as they should be
+	// the CPU reset has already written all ones to the ports
 
-	// assumed, as at power on: the reset line clears both 74HC273 (the V2 PLD
-	// passes one of its inputs straight to two outputs, maybe for this)
+	// assumed: the reset line clears both 74HC273 latches
 	outputs_w(0);
 	if (m_dac)
 		m_dac->write(0);
@@ -367,11 +307,10 @@ void compucranes_state::machine_reset()
 
 void compucranes_state::init_toyshop()
 {
-	// the program runs from the external ROM; the core
-	// would otherwise overlay the undumped internal flash on its first 8 KiB
+	// EA presumably tied low: run from the external flash, not the internal one
 	m_maincpu->space(AS_PROGRAM).install_rom(0x0000, 0xffff, &m_rom[0]);
 
-	// this board moves the claw magnet to bit 7 of the A001h latch
+	// the claw magnet ("BOBINA 3A") is on bit 7 of the A001h latch here
 	m_claw_on_latch = true;
 }
 
@@ -397,7 +336,6 @@ void compucranes_state::ext_v1_map(address_map &map)
 
 u8 compucranes_state::ext_r(offs_t offset)
 {
-	// flash while a bank line is low, otherwise only the input buffers answer
 	if (m_bank)
 		return m_rom[((m_bank << 16) | offset) & (m_rom.bytes() - 1)];
 	else if ((offset & 0xe000) == 0x8000)
@@ -419,14 +357,13 @@ u8 compucranes_state::ext_v1_r(offs_t offset)
 
 void compucranes_state::ext_w(offs_t offset, u8 data)
 {
-	// the latches are only decoded while the bank lines are high
 	if (m_bank || ((offset & 0xe000) != 0xa000))
 		return;
 
 	if (BIT(offset, 0))
 		outputs_w(data);
 	else
-		m_dac->write(data); // R-2R ladder and LM358 buffer
+		m_dac->write(data);
 }
 
 void compucranes_state::ext_v1_w(offs_t offset, u8 data)
@@ -445,7 +382,7 @@ void compucranes_state::ext_v1_w(offs_t offset, u8 data)
 
 void compucranes_state::mech_update()
 {
-	// arbitrary full travel times: 3 seconds on the horizontal axes, 2 for the claw
+	// arbitrary speeds, in full travels per second
 	static constexpr double SPEED[3] = { 1.0 / 3.0, 1.0 / 3.0, 1.0 / 2.0 };
 
 	attotime const now = machine().time();
@@ -454,7 +391,6 @@ void compucranes_state::mech_update()
 
 	for (int axis = 0; axis < 3; axis++)
 	{
-		// motor bits: back/front, right/left, down/up (both set = brake)
 		int const dir = BIT(m_motor_state, axis * 2) - BIT(m_motor_state, axis * 2 + 1);
 		m_pos[axis] = std::clamp(m_pos[axis] + dir * SPEED[axis] * elapsed, 0.0, 1.0);
 	}
@@ -476,7 +412,7 @@ void compucranes_state::set_motors(u8 data)
 
 ioport_value compucranes_state::limits_r()
 {
-	// V2+ boards: claw up, claw down, both left/right ends, both front/back ends
+	// the firmware knows which end of each horizontal axis it's heading to
 	if (!machine().side_effects_disabled())
 		mech_update();
 	return
@@ -488,7 +424,6 @@ ioport_value compucranes_state::limits_r()
 
 ioport_value compucranes_state::limits_v1_r()
 {
-	// V1 board: back, front, right, left, claw down, claw up
 	if (!machine().side_effects_disabled())
 		mech_update();
 	return
@@ -507,8 +442,7 @@ ioport_value compucranes_state::limits_v1_r()
 
 void compucranes_state::motors_w(u8 data)
 {
-	// V1 board: motors on bits 0-5 (same order as P1.2-P1.7 on the later
-	// boards), bit 6 = claw magnet, bit 7 = unknown
+	// V1 board; bit 7 is unknown, the firmware toggles it during the game
 	set_motors(data);
 
 	m_claw = BIT(data, 6);
@@ -516,7 +450,7 @@ void compucranes_state::motors_w(u8 data)
 
 void compucranes_state::outputs_w(u8 data)
 {
-	// lamps, electromechanical counters and token hopper
+	// lamps, counters and token hopper, through a ULN2803
 	for (int i = 0; i < 8; i++)
 		m_outputs[i] = BIT(data, i);
 
@@ -528,20 +462,18 @@ void compucranes_state::outputs_w(u8 data)
 
 void compucranes_state::display_w(u8 data)
 {
-	// P3.0 = data, P3.1 = clock
 	bool const clk = BIT(data, 1);
 
 	if (clk && !m_disp_clk)
 	{
 		m_shifter = (m_shifter << 1) | BIT(data, 0);
 
-		// MM5450 type driver: the start bit reaching the end of the 36 bit
-		// shift register latches the 35 data bits following it
+		// start bit at the end of the 36 bit shift register
 		if (BIT(m_shifter, 35))
 		{
 			for (int digit = 0; digit < 4; digit++)
 			{
-				// bits as sent: a f g e d dp c b (MSB of the byte = first bit sent)
+				// bits as sent: a f g e d dp c b
 				m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
 			}
 			m_shifter = 0;
@@ -558,7 +490,6 @@ u8 compucranes_state::p1_r()
 
 u8 compucranes_state::p1_v1_r()
 {
-	// P1.3 reads the alarm sensor and P1.4 the display board type
 	return 0xe5 | (m_i2cmem->read_sda() << 1) | (m_conf->read() & 0x18);
 }
 
@@ -566,8 +497,6 @@ void compucranes_state::p1_w(u8 data)
 {
 	m_i2cmem->write_scl(BIT(data, 0));
 	m_i2cmem->write_sda(BIT(data, 1));
-
-	// gantry, trolley and winch motors
 	set_motors(data >> 2);
 }
 
@@ -576,7 +505,7 @@ void compucranes_state::p1_v1_w(u8 data)
 	m_i2cmem->write_scl(BIT(data, 0));
 	m_i2cmem->write_sda(BIT(data, 1));
 
-	m_bank = BIT(data, 7); // EPROM A16
+	m_bank = BIT(data, 7); // probably the EPROM A16
 }
 
 void compucranes_state::p3_w(u8 data)
@@ -584,7 +513,7 @@ void compucranes_state::p3_w(u8 data)
 	display_w(data);
 
 	m_bank = BIT(~data, 5); // EPROM A16
-	m_claw = BIT(data, 4);  // claw magnet PWM
+	m_claw = BIT(data, 4);  // claw magnet, PWMed to set its strength
 
 	m_p3 = data;
 }
@@ -594,7 +523,7 @@ void compucranes_state::p3_v1_w(u8 data)
 	display_w(data);
 
 	if (BIT(data ^ m_p3, 4))
-		m_speaker->level_w(BIT(data, 4)); // square wave sound
+		m_speaker->level_w(BIT(data, 4));
 
 	m_p3 = data;
 }
@@ -614,14 +543,14 @@ void compucranes_state::p3_toyshop_w(u8 data)
 ********************************************************************************/
 
 static INPUT_PORTS_START(ganchonew)
-	PORT_START("IN0") // 74HC244 read at 8000h
-	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(compucranes_state::limits_r)) // limit switches
+	PORT_START("IN0")
+	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(compucranes_state::limits_r))
 	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_COIN3)
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_START1) // only used when not set to start automatically
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Prize Sensor")  PORT_CODE(KEYCODE_P)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Hopper Sensor") PORT_CODE(KEYCODE_H)
 
-	PORT_START("IN1") // 74HC244 read at 8001h
+	PORT_START("IN1")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP)    // towards the back
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN)  // towards the front
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT)
@@ -630,22 +559,22 @@ static INPUT_PORTS_START(ganchonew)
 	PORT_CONFNAME(0x20, 0x00, "JP1 - Display Board")
 	PORT_CONFSETTING(   0x00, "Serial LED driver (MM5450 type)")
 	PORT_CONFSETTING(   0x20, "Shift registers (not emulated)")
-	PORT_SERVICE(0x40, IP_ACTIVE_LOW) // "TEST SW" on the PCB
+	PORT_SERVICE(0x40, IP_ACTIVE_LOW)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Alarm Sensor")  PORT_CODE(KEYCODE_A)
 
-	PORT_START("COINS") // coin selector lines, polled on P3.2 and P3.3
+	PORT_START("COINS") // polled, not used as interrupts
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_COIN1)
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_COIN2)
 	PORT_BIT(0xf3, IP_ACTIVE_LOW, IPT_UNUSED)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START(ganchonew_v1)
-	PORT_START("IN0") // 74HC244 read at 8000h
-	PORT_BIT(0x3f, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(compucranes_state::limits_v1_r)) // limit switches
+	PORT_START("IN0")
+	PORT_BIT(0x3f, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(compucranes_state::limits_v1_r))
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Prize Sensor")  PORT_CODE(KEYCODE_P)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Hopper Sensor") PORT_CODE(KEYCODE_H)
 
-	PORT_START("IN1") // 74HC244 read at 8001h
+	PORT_START("IN1")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP)    // towards the back
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN)  // towards the front
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT)
@@ -655,10 +584,10 @@ static INPUT_PORTS_START(ganchonew_v1)
 	PORT_SERVICE(0x40, IP_ACTIVE_LOW)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_START1) // only used when not set to start automatically
 
-	PORT_START("COINS") // not used by this board
+	PORT_START("COINS")
 	PORT_BIT(0xff, IP_ACTIVE_LOW, IPT_UNUSED)
 
-	PORT_START("CONF") // read on P1
+	PORT_START("CONF")
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Alarm Sensor")  PORT_CODE(KEYCODE_A)
 	PORT_CONFNAME(0x10, 0x00, "Display Board")
 	PORT_CONFSETTING(   0x00, "Serial LED driver (MM5450 type)")
@@ -683,8 +612,8 @@ void compucranes_state::common(machine_config &config)
 
 	PWM_DISPLAY(config, m_display).set_size(4, 8);
 	m_display->set_segmask(0xf, 0xff);
-	m_display->set_interpolation(1.0); // the display is static, no need to smooth it
-	m_display->set_bri_levels(0.5);    // ignore the sub-millisecond blanking between frames
+	m_display->set_interpolation(1.0);
+	m_display->set_bri_levels(0.5); // ignore the sub-millisecond blanking between frames
 
 	SPEAKER(config, "mono").front_center();
 }
@@ -748,7 +677,7 @@ ROM_START(mastcrane)
 	ROM_LOAD("v8.ic3",      0x00000, 0x40000, CRC(733dfcbc) SHA1(d18d7945e9b8f189f2169d3d90c3cfea97d3b39c)) // 1ST AND 2ND HALF IDENTICAL
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("gal16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // same dump on the V2, V7 and V8 boards
+	ROM_LOAD("gal16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7))
 
 	ROM_REGION(0x00800, "i2cmem", 0)
 	ROM_LOAD("24c16_v8.ic5", 0x00000, 0x00800, BAD_DUMP CRC(9b919023) SHA1(aafbabfc70f33e0a453c6bd9bec2c7127733fb15)) // hand built, see the notes at the top
@@ -760,7 +689,7 @@ ROM_START(mastcranea)
 	ROM_LOAD("v7.ic3",      0x00000, 0x40000, CRC(299c9ad1) SHA1(b0ba2ab588151dba89307e118ba061cad2b8116b)) // 1ST AND 2ND HALF IDENTICAL (W29C020C)
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("atf16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // same dump on the V2, V7 and V8 boards
+	ROM_LOAD("atf16v8.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7))
 
 	ROM_REGION(0x00800, "i2cmem", 0)
 	ROM_LOAD("24c16_v7.ic5", 0x00000, 0x00800, BAD_DUMP CRC(eebe1da3) SHA1(472650d0884aff0b3d406c17bbca32af41468070)) // hand built, see the notes at the top
@@ -772,7 +701,7 @@ ROM_START(mastcraneb)
 	ROM_LOAD("505.ic3",     0x00000, 0x20000, CRC(3dbb83f1) SHA1(3536762937332add0ca942283cc22ff301884a4a))
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("atf168b.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7)) // same dump on the V2, V7 and V8 boards
+	ROM_LOAD("atf168b.ic4", 0x00000, 0x00117, CRC(4d665a06) SHA1(504f0107482f636cd216579e982c6162c0b120a7))
 
 	ROM_REGION(0x00800, "i2cmem", 0)
 	ROM_LOAD("24c16_v2.ic5", 0x00000, 0x00800, BAD_DUMP CRC(2d4ce67d) SHA1(77f2cd20f057dbfe5cd99e0eb7f14274781bd8ad)) // hand built, see the notes at the top
@@ -792,11 +721,11 @@ ROM_START(octopussy)
 ROM_END
 
 /* Direct clone of the GANCHONEW PCB by OM Vending, silkscreened "CPU GRUA V2  O. M. VENDING".
-   The whole program, vectors included, is in the external flash, so the AT89S52 internal ROM is
-   presumably disabled (EA tied low, see init_toyshop), but the pin hasn't been traced on the PCB. */
+   The whole program, vectors included, is in the external flash, so the AT89S52 EA pin is
+   presumably tied low (see init_toyshop), but it hasn't been traced on the PCB. */
 ROM_START(toyshop)
 	ROM_REGION(0x02000, "maincpu", ROMREGION_ERASEFF)
-	ROM_LOAD("89s52.ic1",   0x00000, 0x02000, NO_DUMP) // 8 KBytes internal flash
+	ROM_LOAD("89s52.ic1",   0x00000, 0x02000, NO_DUMP)
 
 	ROM_REGION(0x80000, "program", 0)
 	ROM_LOAD("39sf040.ic3", 0x00000, 0x80000, CRC(0d9d157d) SHA1(e70f095d3524e3a4c8d5d07857bb2692b6260cc1))
