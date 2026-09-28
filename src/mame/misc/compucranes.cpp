@@ -668,7 +668,7 @@ ROM_START(crsauruss)
 	ROM_LOAD("30.01.ic3",   0x00000, 0x20000, CRC(c735e024) SHA1(63dd3a71472bde7f9dead49a8dc889365fd024ef)) // 1xxxxxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION(0x00117, "pld", 0)
-	ROM_LOAD("palce16v8h.ic4", 0x00000, 0x00117, NO_DUMP) // AMD PALCE16V8H-25, its location couldn't be read on the pictures
+	ROM_LOAD("palce16v8h.ic4", 0x00000, 0x00117, NO_DUMP) // AMD PALCE16V8H-25
 
 	ROM_REGION(0x00800, "i2cmem", 0)
 	ROM_LOAD("24lc16b.ic5", 0x00000, 0x00800, BAD_DUMP CRC(7213cbb9) SHA1(7417c83c5a5254f86f3d56529341ae8a254e8e53)) // hand built, see the notes at the top
@@ -743,7 +743,7 @@ ROM_END
 } // anonymous namespace
 
 // Years and versions are the ones the programs show on the display (or store in the SEEPROM) at power on
-//     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT          ROT   COMPANY               FULLNAME                       FLAGS                                       LAYOUT
+//     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT          ROT   COMPANY               FULLNAME                       FLAGS                                                             LAYOUT
 GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init,   ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
 GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
 GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
