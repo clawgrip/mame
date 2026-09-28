@@ -133,14 +133,15 @@
    W  A000h  74HC273, 8 bit R-2R DAC (V2 and later) / motor latch (V1)
    W  A001h  74HC273, lamps, counters and token hopper
 
- The ATF16V8 dumped from the V2, V7 and V8 boards backs this up.  Matching its
- equations with the accesses the firmware does gives pin 1 /PSEN, 2 /RD, 3 /WR,
- 5 P3.5, 6 A15, 7 A14, 8 A13 and 9 A0: the buffers and latches are decoded from
- A15-A13 and A0 only (so mirrored all over 8000h-9fffh and a000h-bfffh) and
- only while P3.5 is high, the flash is enabled for code fetches and for every
- MOVX read while P3.5 is low, and pin 19, low only on code fetches, drives the
- flash A16.  Nothing answers any other MOVX read.  Pins 12 and 13 just repeat
- pin 11, whose signal is unknown.  The V1 and OM Vending PLDs aren't dumped.
+ The ATF16V8 dumped from the V2, V7 and V8 boards backs this up.  Its equations
+ fit the accesses the firmware does with pin 1 /PSEN, 2 /RD, 3 /WR, 5 P3.5,
+ 6 A15, 7 A14, 8 A13 and 9 A0 (not checked on a PCB): the buffers and latches
+ are decoded from A15-A13 and A0 only (so mirrored all over 8000h-9fffh and
+ a000h-bfffh) and only while P3.5 is high, the flash is enabled for code
+ fetches and for every MOVX read while P3.5 is low, and pin 19, low only on
+ code fetches, drives the flash A16.  Nothing answers any other MOVX read.
+ Pins 12 and 13 just repeat pin 11, whose signal is unknown.  The V1 and OM
+ Vending PLDs aren't dumped.
 
  Port usage on the "GANCHONEW V2" to "V8" boards:
    P1.0      24C16 SCL
@@ -188,6 +189,8 @@
 	32 data bits are followed by 0,0,0,1, that trailing '1' being the start bit
 	of the next frame, so each frame latches the data sent on the previous one.
 	This is the one emulated here, and the one JP1 selects on every board seen.
+	It's the same protocol as MAME's mm5445 family, but the chip on the
+	Plumadig board hasn't been identified.
 	The firmware always sends a blank frame right before the data one, so the
 	display is really blanked for about 0.5 ms on each refresh (every 12 ms),
 	unnoticeable on the real LEDs but not when sampled at the frontend frame
@@ -207,13 +210,14 @@
  programmed and never rewritten by the game, while all the other settings are
  rebuilt by the machine itself when their checksums fail ("cLE" is shown on the
  display while doing so).  No SEEPROM has been dumped, so the ones loaded here
- are hand built: those two bytes plus the defaults each machine writes when it
- initializes a SEEPROM holding just them.
+ are hand built: each one is what this driver leaves in a SEEPROM holding just
+ those two bytes once the machine has initialized it and nothing else changes.
 
  The crane itself is simulated just enough for the self test and the game
  cycle to work: each motor moves its axis at a constant speed and the limit
- switches close at the end of the travel.  Prizes aren't simulated, the prize
- sensor is a regular input.
+ switches close at the end of the travel.  The travel times and the starting
+ position are arbitrary, not taken from a real cabinet.  Prizes aren't
+ simulated, the prize sensor is a regular input.
 
  TODO:
   - Emulate the shift register display board (needs the MCS51 serial port
@@ -251,7 +255,7 @@ public:
 		, m_dac(*this, "dac")
 		, m_speaker(*this, "speaker")
 		, m_display(*this, "display")
-		, m_rom(*this, "maincpu")
+		, m_rom(*this, "program")
 		, m_inputs(*this, "IN%u", 0U)
 		, m_conf(*this, "CONF")
 		, m_outputs(*this, "out%u", 0U)
@@ -269,6 +273,8 @@ public:
 	void ganchonew(machine_config &config) ATTR_COLD;
 	void ganchonew_v1(machine_config &config) ATTR_COLD;
 	void toyshop(machine_config &config) ATTR_COLD;
+
+	void init_toyshop() ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
@@ -319,9 +325,11 @@ private:
 	u64 m_shifter = 0;
 	bool m_disp_clk = false;
 	u8 m_p3 = 0xff;
+	bool m_claw_on_latch = false;
 
 	// crane mechanics: 0 = front/back (0.0 = front), 1 = left/right (0.0 = left),
-	// 2 = claw (0.0 = up); the crane starts wherever it was left, not at home
+	// 2 = claw (0.0 = up); arbitrary starting point clear of every limit switch,
+	// as the V1 power-on checksum also reads the inputs
 	double m_pos[3] = { 0.5, 0.5, 0.1 };
 	u8 m_motor_state = 0;
 	attotime m_mech_time;
@@ -343,12 +351,28 @@ void compucranes_state::machine_start()
 
 void compucranes_state::machine_reset()
 {
-	m_bank = 0;
-	m_shifter = 0;
-	m_disp_clk = false;
-	m_p3 = 0xff;
+	// the CPU reset has already gone through the port callbacks with P1 and P3
+	// high, which leaves the bank lines and the display clock as they should be
+
+	// assumed, as at power on: the reset line clears both 74HC273 (the V2 PLD
+	// passes one of its inputs straight to two outputs, maybe for this)
+	outputs_w(0);
+	if (m_dac)
+		m_dac->write(0);
+	else
+		motors_w(0);
 
 	mech_update();
+}
+
+void compucranes_state::init_toyshop()
+{
+	// the program runs from the external ROM; the core
+	// would otherwise overlay the undumped internal flash on its first 8 KiB
+	m_maincpu->space(AS_PROGRAM).install_rom(0x0000, 0xffff, &m_rom[0]);
+
+	// this board moves the claw magnet to bit 7 of the A001h latch
+	m_claw_on_latch = true;
 }
 
 
@@ -421,7 +445,7 @@ void compucranes_state::ext_v1_w(offs_t offset, u8 data)
 
 void compucranes_state::mech_update()
 {
-	// full travel takes 3 seconds on the horizontal axes, 2 seconds for the claw
+	// arbitrary full travel times: 3 seconds on the horizontal axes, 2 for the claw
 	static constexpr double SPEED[3] = { 1.0 / 3.0, 1.0 / 3.0, 1.0 / 2.0 };
 
 	attotime const now = machine().time();
@@ -453,7 +477,8 @@ void compucranes_state::set_motors(u8 data)
 ioport_value compucranes_state::limits_r()
 {
 	// V2+ boards: claw up, claw down, both left/right ends, both front/back ends
-	mech_update();
+	if (!machine().side_effects_disabled())
+		mech_update();
 	return
 			((m_pos[2] <= 0.0) ? 0 : 0x01) |
 			((m_pos[2] >= 1.0) ? 0 : 0x02) |
@@ -464,7 +489,8 @@ ioport_value compucranes_state::limits_r()
 ioport_value compucranes_state::limits_v1_r()
 {
 	// V1 board: back, front, right, left, claw down, claw up
-	mech_update();
+	if (!machine().side_effects_disabled())
+		mech_update();
 	return
 			((m_pos[0] >= 1.0) ? 0 : 0x01) |
 			((m_pos[0] <= 0.0) ? 0 : 0x02) |
@@ -493,6 +519,9 @@ void compucranes_state::outputs_w(u8 data)
 	// lamps, electromechanical counters and token hopper
 	for (int i = 0; i < 8; i++)
 		m_outputs[i] = BIT(data, i);
+
+	if (m_claw_on_latch)
+		m_claw = BIT(data, 7);
 
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 0));
 }
@@ -703,7 +732,7 @@ void compucranes_state::toyshop(machine_config &config)
 
 // "GANCHONEW/CPU-V1 COMP" PCB. Temic TSC80C31-12CA CPU, 32 pin windowed EPROM.
 ROM_START(crsauruss)
-	ROM_REGION(0x20000, "maincpu", 0)
+	ROM_REGION(0x20000, "program", 0)
 	ROM_LOAD("30.01.ic3",   0x00000, 0x20000, CRC(c735e024) SHA1(63dd3a71472bde7f9dead49a8dc889365fd024ef)) // 1xxxxxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -715,7 +744,7 @@ ROM_END
 
 // "GANCHONEW-V8" PCB with ATX PSU connector. TS80C32X2-MCA CPU, Winbond W29C020C flash, Lattice GAL16V8A or Atmel ATF16V8B at IC4.
 ROM_START(mastcrane)
-	ROM_REGION(0x40000, "maincpu", 0)
+	ROM_REGION(0x40000, "program", 0)
 	ROM_LOAD("v8.ic3",      0x00000, 0x40000, CRC(733dfcbc) SHA1(d18d7945e9b8f189f2169d3d90c3cfea97d3b39c)) // 1ST AND 2ND HALF IDENTICAL
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -727,7 +756,7 @@ ROM_END
 
 // "GANCHONEW V7" PCB with AT PSU connector
 ROM_START(mastcranea)
-	ROM_REGION(0x40000, "maincpu", 0)
+	ROM_REGION(0x40000, "program", 0)
 	ROM_LOAD("v7.ic3",      0x00000, 0x40000, CRC(299c9ad1) SHA1(b0ba2ab588151dba89307e118ba061cad2b8116b)) // 1ST AND 2ND HALF IDENTICAL (W29C020C)
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -739,7 +768,7 @@ ROM_END
 
 // "GANCHONEW V2" PCB with AT PSU connector. W78C32C-40 CPU.
 ROM_START(mastcraneb)
-	ROM_REGION(0x20000, "maincpu", 0)
+	ROM_REGION(0x20000, "program", 0)
 	ROM_LOAD("505.ic3",     0x00000, 0x20000, CRC(3dbb83f1) SHA1(3536762937332add0ca942283cc22ff301884a4a))
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -752,7 +781,7 @@ ROM_END
 /* "GANCHONEW-V2 COMP" PCB with AT PSU connector, machine number sticker "NºMAQ. 00-356  13/06/00".
    The flash is at IC3 (it was listed as IC5, which is the SEEPROM, when the set was added). */
 ROM_START(octopussy)
-	ROM_REGION(0x20000, "maincpu", 0)
+	ROM_REGION(0x20000, "program", 0)
 	ROM_LOAD("w29c011.ic3", 0x00000, 0x20000, CRC(47da93e8) SHA1(aa821dd22c1912ec2942ca6afd989d61df4387d7))
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -764,14 +793,12 @@ ROM_END
 
 /* Direct clone of the GANCHONEW PCB by OM Vending, silkscreened "CPU GRUA V2  O. M. VENDING".
    The whole program, vectors included, is in the external flash, so the AT89S52 internal ROM is
-   presumably disabled (EA tied low), but the pin hasn't been traced on the PCB.  The CPU core
-   maps its internal ROM from the maincpu region, which holds the external flash here, so it
-   behaves as with EA tied low. */
+   presumably disabled (EA tied low, see init_toyshop), but the pin hasn't been traced on the PCB. */
 ROM_START(toyshop)
-	ROM_REGION(0x02000, "internal", 0)
+	ROM_REGION(0x02000, "maincpu", ROMREGION_ERASEFF)
 	ROM_LOAD("89s52.ic1",   0x00000, 0x02000, NO_DUMP) // 8 KBytes internal flash
 
-	ROM_REGION(0x80000, "maincpu", 0)
+	ROM_REGION(0x80000, "program", 0)
 	ROM_LOAD("39sf040.ic3", 0x00000, 0x80000, CRC(0d9d157d) SHA1(e70f095d3524e3a4c8d5d07857bb2692b6260cc1))
 
 	ROM_REGION(0x00117, "pld", 0)
@@ -784,10 +811,10 @@ ROM_END
 } // anonymous namespace
 
 // Years and versions are the ones the programs show on the display (or store in the SEEPROM) at power on
-//     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT        ROT   COMPANY               FULLNAME                       FLAGS                                       LAYOUT
-GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init, ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
-GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
-GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
-GAMEL( 2001, mastcraneb, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Compumatic",         "Master Crane (v05.05)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 16/10/2001
-GAMEL( 2000, octopussy,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init, ROT0, "Covielsa",           "Octopussy (v21.01)",          MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 29/05/2000
-GAMEL( 2016, toyshop,    0,         toyshop,      ganchonew,    compucranes_state, empty_init, ROT0, "OM Vending",         "Toy Shop (v17.01)",           MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 09/12/2016
+//     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT          ROT   COMPANY               FULLNAME                       FLAGS                                       LAYOUT
+GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init,   ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
+GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
+GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
+GAMEL( 2001, mastcraneb, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v05.05)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 16/10/2001
+GAMEL( 2000, octopussy,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Covielsa",           "Octopussy (v21.01)",          MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 29/05/2000
+GAMEL( 2016, toyshop,    0,         toyshop,      ganchonew,    compucranes_state, init_toyshop, ROT0, "OM Vending",         "Toy Shop (v17.01)",           MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 09/12/2016
