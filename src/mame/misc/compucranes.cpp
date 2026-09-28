@@ -160,7 +160,10 @@
  self test, which drives every motor until its limit switch closes and shows
  an error ("F Fr", "F  I", "F do", "F uP"...) when one doesn't.  The travel
  times and the starting position are arbitrary, not taken from a real
- cabinet, and prizes aren't simulated.
+ cabinet, and prizes aren't simulated.  That matters on the 2012 and later
+ programs (because of the Spanish law), which keep replaying a credit until the
+ prize sensor sees a prize:  up to 10 more games with the default "cArA" setting
+ (no, 2, 5, 10, 20, 35, 50 or 75).
 
  TODO:
   - Emulate the shift register display board (needs the MCS51 serial port
@@ -741,9 +744,9 @@ ROM_END
 
 // Years and versions are the ones the programs show on the display (or store in the SEEPROM) at power on
 //     YEAR  NAME        PARENT     MACHINE       INPUT         CLASS              INIT          ROT   COMPANY               FULLNAME                       FLAGS                                       LAYOUT
-GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init,   ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
-GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
-GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
-GAMEL( 2001, mastcraneb, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v05.05)",       MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 16/10/2001
-GAMEL( 2000, octopussy,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Covielsa",           "Octopussy (v21.01)",          MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 29/05/2000
-GAMEL( 2016, toyshop,    0,         toyshop,      ganchonew,    compucranes_state, init_toyshop, ROT0, "OM Vending",         "Toy Shop (v17.01)",           MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 09/12/2016
+GAMEL( 2002, crsauruss,  0,         ganchonew_v1, ganchonew_v1, compucranes_state, empty_init,   ROT0, "Recreativos Presas", "Cranesaurus Single (v30.01)", MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 28/01/2002
+GAMEL( 2012, mastcrane,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v44.12)",       MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 30/04/2012
+GAMEL( 2016, mastcranea, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v46.11)",       MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 05/12/2016
+GAMEL( 2001, mastcraneb, mastcrane, ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Compumatic",         "Master Crane (v05.05)",       MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 16/10/2001
+GAMEL( 2000, octopussy,  0,         ganchonew,    ganchonew,    compucranes_state, empty_init,   ROT0, "Covielsa",           "Octopussy (v21.01)",          MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 29/05/2000
+GAMEL( 2016, toyshop,    0,         toyshop,      ganchonew,    compucranes_state, init_toyshop, ROT0, "OM Vending",         "Toy Shop (v17.01)",           MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_compucranes ) // 09/12/2016
