@@ -49,8 +49,9 @@
 	- Idle: with demo sounds enabled, phrase 1 plays about every 4 minutes while the lamps blink.
 	- A credit starts the ride: phrase 2, then phrase 8 (the song) loops on voice 1, the motor runs, the lamps
 	  alternate and the time display counts from 99 down to 0.
-	- At 75, 50 and 25 the motor stops for about 0.7 seconds, Q4 toggles and phrase 9 plays on voice 4, with the
-	  buttons ignored meanwhile.
+	- At 75, 50 and 25 Q7 goes off for about 0.7 seconds, then Q4 toggles, and phrase 9 plays on voice 4, with the
+	  buttons ignored meanwhile. The driver takes Q7 as the motor, but the real rides don't stop there: Q4 and Q7
+	  are the MOT and POT pins of JP2, and which one is which, and what POT does, is not known.
 	- Button 1 plays phrase 3 on voice 2, button 2 plays phrase 4 on voice 3.
 	- End of ride: phrase 5, unless there are credits left; then phrase 7 plays and the next ride starts after
 	  pressing start or after about 30 seconds.
@@ -83,6 +84,7 @@
 	original tempo, with PIN7_LOW they would be 20% slower.
   - Verify the DIP switch order and the connector assignment of the inputs and outputs.
   - Dump the 'FUTBOL.N' PIC of the REF.920505 PCB, and find out what SW2 and SW3 do.
+  - Find out which of Q4 and Q7 drive the MOT and POT pins of the kiddie rides, and what POT does.
   - Find out what the crane outputs drive and what its D2 and D4 lines are.
   - Find out what the pinball outputs Q3 to Q7 drive, and which switch each of its D2, D5 and D7 lines is.
 */
