@@ -22,7 +22,7 @@
  | __________    __________     __ __  _|_
  | SN74HC273N    SN74HC244N    | || | |   |
  |   IC6           IC7         | || | | C |
- | __________    __________    |F2 F1| O |
+ | __________    __________    |F2 F1 | O |
  | SN74HC273N    SN74HC244N    | || | | N |
  |   IC11          IC8         |_||_| | N |
  | __________    __________           |___|
@@ -136,16 +136,17 @@
   - bit 5 low: MM5450 style driver, segments active high.  Frames are 36
 	clocks long, the 32 data bits followed by 0,0,0,1, that trailing '1' being
 	the start bit of the next frame, so each frame latches the data sent on
-	the previous one.  It's the one emulated, fitted on every board seen, and
-	the same protocol as MAME's mm5445 family, but the chip hasn't been
-	identified.  The firmware always sends a blank frame right before the data
-	one, so the display is really blanked for about 0.5 ms on each refresh
-	(every 12 ms), unnoticeable on the real LEDs but not when sampled at the
-	frontend frame rate, hence the PWM display device.
+	the previous one.  It's the one fitted on every board seen and the same
+	protocol as MAME's mm5445 family, but the chip hasn't been identified.
+	The firmware always sends a blank frame right before the data one, so the
+	display is really blanked for about 0.5 ms on each refresh (every 12 ms),
+	unnoticeable on the real LEDs but not when sampled at the frontend frame
+	rate, hence the PWM display device.
   - bit 5 high: four dummy clocks with data low followed by the 32 bits shifted
-	out by the MCS51 serial port in mode 0 (plus a latch strobe on P1.2 on the
-	V1 board) to a shift register board, leftmost digit first, segments active
-	low: bit 0 g, 1 f, 2 a, 3 b, 4 e, 5 d, 6 c, 7 dp.  Not emulated.
+	out by the MCS51 serial port in mode 0 to a shift register board, leftmost
+	digit first, segments active low: bit 0 g, 1 f, 2 a, 3 b, 4 e, 5 d, 6 c,
+	7 dp.  Only the V1 program strobes a latch afterwards (on P1.2), so the
+	later boards are taken as unlatched.
 
  The 24C16 must hold the machine type code at address 1 (and a valid BCD value
  at address 2) or the firmware wipes the last 256 bytes of it and hangs on
@@ -166,9 +167,7 @@
  (no, 2, 5, 10, 20, 35, 50 or 75).
 
  TODO:
-  - Emulate the shift register display board (needs the MCS51 serial port
-	mode 0 output emulated on the port pins).
-  - Dump a real SEEPROM and the V1 PLD.
+  - Dump a real SEEPROM and the missing PLDs	.
 
 ********************************************************************************/
 
@@ -264,12 +263,16 @@ private:
 	void motors_w(u8 data);
 	void outputs_w(u8 data);
 	void display_w(u8 data);
+	bool shift_register_board();
+	void shift_register_update();
 	void set_motors(u8 data);
 	void mech_update();
 
 	u32 m_bank = 0;
 	u64 m_shifter = 0;
+	u32 m_sreg = ~u32(0);
 	bool m_disp_clk = false;
+	bool m_disp_strobe = false;
 	u8 m_p3 = 0xff;
 	bool m_claw_on_latch = false;
 
@@ -290,7 +293,9 @@ void compucranes_state::machine_start()
 	save_item(NAME(m_mech_time));
 	save_item(NAME(m_bank));
 	save_item(NAME(m_shifter));
+	save_item(NAME(m_sreg));
 	save_item(NAME(m_disp_clk));
+	save_item(NAME(m_disp_strobe));
 	save_item(NAME(m_p3));
 }
 
@@ -469,21 +474,47 @@ void compucranes_state::display_w(u8 data)
 
 	if (clk && !m_disp_clk)
 	{
-		m_shifter = (m_shifter << 1) | BIT(data, 0);
-
-		// start bit at the end of the 36 bit shift register
-		if (BIT(m_shifter, 35))
+		if (shift_register_board())
 		{
-			for (int digit = 0; digit < 4; digit++)
+			m_sreg = (m_sreg << 1) | BIT(data, 0);
+
+			// only the V1 board has a latch strobe
+			if (!m_conf)
+				shift_register_update();
+		}
+		else
+		{
+			m_shifter = (m_shifter << 1) | BIT(data, 0);
+
+			// start bit at the end of the 36 bit shift register
+			if (BIT(m_shifter, 35))
 			{
-				// bits as sent: a f g e d dp c b
-				m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
+				for (int digit = 0; digit < 4; digit++)
+				{
+					// bits as sent: a f g e d dp c b
+					m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
+				}
+				m_shifter = 0;
 			}
-			m_shifter = 0;
 		}
 	}
 
 	m_disp_clk = clk;
+}
+
+bool compucranes_state::shift_register_board()
+{
+	// JP1 removed
+	return m_conf ? BIT(m_conf->read(), 4) : BIT(m_inputs[1]->read(), 5);
+}
+
+void compucranes_state::shift_register_update()
+{
+	for (int digit = 0; digit < 4; digit++)
+	{
+		// bits as sent: g f a b e d c dp, active low, the first one ending up in bit 7
+		m_display->write_row(digit, bitswap<8>(~m_sreg >> (24 - 8 * digit), 0, 7, 6, 3, 2, 1, 4, 5));
+	}
 }
 
 u8 compucranes_state::p1_r()
@@ -507,6 +538,11 @@ void compucranes_state::p1_v1_w(u8 data)
 {
 	m_i2cmem->write_scl(BIT(data, 0));
 	m_i2cmem->write_sda(BIT(data, 1));
+
+	bool const strobe = BIT(data, 2);
+	if (strobe && !m_disp_strobe && shift_register_board())
+		shift_register_update();
+	m_disp_strobe = strobe;
 
 	m_bank = BIT(data, 7); // probably the EPROM A16
 }
@@ -561,7 +597,7 @@ static INPUT_PORTS_START(ganchonew)
 	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_BUTTON1)
 	PORT_CONFNAME(0x20, 0x00, "JP1 - Display Board")
 	PORT_CONFSETTING(   0x00, "Serial LED driver (MM5450 type)")
-	PORT_CONFSETTING(   0x20, "Shift registers (not emulated)")
+	PORT_CONFSETTING(   0x20, "Shift registers")
 	PORT_SERVICE(0x40, IP_ACTIVE_LOW)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Alarm Sensor")  PORT_CODE(KEYCODE_A)
 
@@ -594,7 +630,7 @@ static INPUT_PORTS_START(ganchonew_v1)
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER)  PORT_NAME("Alarm Sensor")  PORT_CODE(KEYCODE_A)
 	PORT_CONFNAME(0x10, 0x00, "Display Board")
 	PORT_CONFSETTING(   0x00, "Serial LED driver (MM5450 type)")
-	PORT_CONFSETTING(   0x10, "Shift registers (not emulated)")
+	PORT_CONFSETTING(   0x10, "Shift registers")
 	PORT_BIT(0xe7, IP_ACTIVE_LOW, IPT_UNUSED)
 INPUT_PORTS_END
 

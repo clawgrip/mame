@@ -239,10 +239,12 @@ void mcs51_cpu_device::scon_w(u8 data)
 	if (!BIT(old, 4) && BIT(m_scon, 4))
 	{
 		LOGMASKED(LOG_RX, "rx enabled SCON 0x%02x\n", m_scon);
-		if (!BIT(m_scon, 6, 2))
-			logerror("mode 0 serial input is not emulated\n");
 		m_uart.rxbit = SIO_IDLE;
 	}
+
+	// leaving mode 0 in the middle of a transmission releases RXD
+	if (BIT(m_scon, 6, 2) && !m_uart.rxd)
+		set_mode0_pins(1, m_uart.txd);
 }
 
 u8 mcs51_cpu_device::sbuf_r()
@@ -323,11 +325,7 @@ u8 mcs51_cpu_device::p3_r()
 void mcs51_cpu_device::p3_w(u8 data)
 {
 	m_p3 = data;
-	// P3.1 = SFR(P3) & TxD
-	if (!m_uart.txd)
-		m_port_out_cb[3](m_p3 & ~0x02);
-	else
-		m_port_out_cb[3](m_p3);
+	m_port_out_cb[3](p3_pins());
 }
 
 u8 mcs51_cpu_device::tl0_r()
@@ -509,6 +507,120 @@ void mcs51_cpu_device::transmit(int state)
 	}
 }
 
+u8 mcs51_cpu_device::p3_pins() const
+{
+	// P3.0 = SFR(P3) & RxD (mode 0 output), P3.1 = SFR(P3) & TxD
+	return m_p3 & (m_uart.rxd ? 0xff : 0xfe) & (m_uart.txd ? 0xff : 0xfd);
+}
+
+void mcs51_cpu_device::set_mode0_pins(u8 rxd, u8 txd)
+{
+	u8 const old = p3_pins();
+	m_uart.rxd = rxd;
+	m_uart.txd = txd;
+
+	u8 const pins = p3_pins();
+	if (pins != old)
+		m_port_out_cb[3](pins);
+}
+
+void mcs51_cpu_device::transmit_receive_mode0()
+{
+	// called once per machine cycle; TXD outputs the shift clock, low during
+	// S3-S5 and high during S6-S2, while RXD carries the data, LSB first
+	switch (m_uart.txbit)
+	{
+	case SIO_IDLE:
+		break;
+
+	case SIO_START:
+		// SEND goes active a machine cycle after writing SBUF
+		m_uart.txbit = SIO_DATA0;
+		return;
+
+	case SIO_DATA0: case SIO_DATA1: case SIO_DATA2: case SIO_DATA3:
+	case SIO_DATA4: case SIO_DATA5: case SIO_DATA6: case SIO_DATA7:
+		{
+			unsigned const bit = m_uart.txbit - SIO_DATA0;
+			LOGMASKED(LOG_TX, "tx bit %u data %d (%s)\n", bit, BIT(m_uart.data_out, bit), machine().time().to_string());
+			if (!bit)
+				set_mode0_pins(BIT(m_uart.data_out, 0), m_uart.txd);
+			set_mode0_pins(m_uart.rxd, 0);
+			set_mode0_pins(m_uart.rxd, 1);
+
+			// the next bit is shifted out at S6P2, RXD is released after the last one
+			if (bit < 7)
+			{
+				set_mode0_pins(BIT(m_uart.data_out, bit + 1), 1);
+				m_uart.txbit++;
+			}
+			else
+			{
+				set_mode0_pins(1, 1);
+				m_uart.txbit = SIO_STOP;
+			}
+		}
+		return;
+
+	case SIO_STOP:
+		// TI is set at S1P1 of the tenth machine cycle after writing SBUF
+		LOGMASKED(LOG_TX, "tx done (%s)\n", machine().time().to_string());
+		set_ti(1);
+		m_uart.txbit = SIO_IDLE;
+		return;
+
+	default: // left over by the UART modes
+		m_uart.txbit = SIO_IDLE;
+		break;
+	}
+
+	switch (m_uart.rxbit)
+	{
+	case SIO_IDLE:
+		// reception starts when REN is set with RI clear
+		if (BIT(m_scon, SCON_REN) && !BIT(m_scon, SCON_RI))
+			m_uart.rxbit = SIO_START;
+		break;
+
+	case SIO_START:
+		// RECEIVE goes active at the end of the next machine cycle
+		m_uart.data_in = 0;
+		m_uart.rxbit = SIO_DATA0;
+		break;
+
+	case SIO_DATA0: case SIO_DATA1: case SIO_DATA2: case SIO_DATA3:
+	case SIO_DATA4: case SIO_DATA5: case SIO_DATA6: case SIO_DATA7:
+		{
+			set_mode0_pins(1, 0);
+
+			// RXD is sampled at S5P2, before the clock rises
+			int const data = BIT(m_port_in_cb[3](), 0);
+			LOGMASKED(LOG_RX, "rx bit %d data %d (%s)\n", m_uart.rxbit - SIO_DATA0, data, machine().time().to_string());
+			if (data)
+				m_uart.data_in |= 1U << (m_uart.rxbit - SIO_DATA0);
+
+			set_mode0_pins(1, 1);
+			if (m_uart.rxbit == SIO_DATA7)
+				m_uart.rxbit = SIO_STOP;
+			else
+				m_uart.rxbit++;
+		}
+		break;
+
+	case SIO_STOP:
+		// SBUF is loaded and RI set at S1P1 of the tenth machine cycle
+		LOGMASKED(LOG_RX, "rx byte 0x%02x (%s)\n", m_uart.data_in, machine().time().to_string());
+		m_sbuf = m_uart.data_in;
+		set_ri(1);
+		m_uart.rxbit = SIO_IDLE;
+		break;
+
+	default: // left over by the UART modes
+		m_uart.rxbit = SIO_IDLE;
+		break;
+	}
+}
+
 void mcs51_cpu_device::handle_8bit_uart_clock(int source)
 {
 	if (source == 1)
@@ -527,43 +639,10 @@ void mcs51_cpu_device::transmit_receive(int source)
 
 	switch (mode)
 	{
-		// 8 bit shifter - rate set by clock freq / 12
+		// 8 bit shift register - rate set by clock freq / 12
 		case 0:
 			if (source == 0)
-			{
-				// TODO: mode 0 serial input is unemulated
-				// FIXME: output timing is highly simplified and incorrect
-				switch (m_uart.txbit)
-				{
-				case SIO_IDLE:
-					break;
-				case SIO_START:
-					m_p3 |= 0x03;
-					m_port_out_cb[3](m_p3);
-					m_uart.txbit = SIO_DATA0;
-					break;
-				case SIO_DATA0: case SIO_DATA1: case SIO_DATA2: case SIO_DATA3:
-				case SIO_DATA4: case SIO_DATA5: case SIO_DATA6: case SIO_DATA7:
-					m_p3 &= ~0x03;
-					if (BIT(m_uart.data_out, m_uart.txbit - SIO_DATA0))
-						m_p3 |= 1U << 0;
-					m_port_out_cb[3](m_p3);
-
-					if (m_uart.txbit == SIO_DATA7)
-					{
-						set_ti(1);
-						m_uart.txbit = SIO_STOP;
-					}
-					else
-						m_uart.txbit++;
-					break;
-				case SIO_STOP:
-					m_p3 |= 0x03;
-					m_port_out_cb[3](m_p3);
-					m_uart.txbit = SIO_IDLE;
-					break;
-				}
-			}
+				transmit_receive_mode0();
 			return;
 		// 8 bit uart (+ start,stop bit) - baud set by timer1 or timer2
 		case 1:
@@ -1246,6 +1325,7 @@ void mcs51_cpu_device::device_start()
 	save_item(NAME(m_uart.data_in));
 	save_item(NAME(m_uart.txbit));
 	save_item(NAME(m_uart.txd));
+	save_item(NAME(m_uart.rxd));
 	save_item(NAME(m_uart.rxbit));
 	save_item(NAME(m_uart.rxb8));
 	save_item(NAME(m_uart.smod_div));
@@ -1342,6 +1422,9 @@ void mcs51_cpu_device::device_reset()
 	m_th0 = 0;
 	m_tl1 = 0;
 	m_tl0 = 0;
+
+	// release RXD before driving the ports
+	m_uart.rxd = 1;
 
 	// set the port configurations to all 1's
 	p3_w(0xff);
