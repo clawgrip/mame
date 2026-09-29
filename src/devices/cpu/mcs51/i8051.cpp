@@ -1409,9 +1409,8 @@ void mcs51_cpu_device::device_reset()
 	m_tl1 = 0;
 	m_tl0 = 0;
 
-	// release RXD and TXD before driving the ports
+	// release RXD before driving the ports
 	m_uart.rxd = 1;
-	m_uart.txd = 1;
 
 	// set the port configurations to all 1's
 	p3_w(0xff);
@@ -1424,6 +1423,11 @@ void mcs51_cpu_device::device_reset()
 	m_uart.rx_clk = 0;
 	m_uart.tx_clk = 0;
 	m_uart.txbit = SIO_IDLE;
+	// TODO: TXD should also be released before driving the ports, as P3.1 reads
+	// low on the first reset otherwise (m_uart.txd isn't initialized until here),
+	// but that changes what drivers listening to TXD see at power on, so it has
+	// to be checked against them first
+	m_uart.txd = 1;
 	m_uart.rxbit = SIO_IDLE;
 	m_uart.rxb8 = 0;
 	m_uart.smod_div = 0;
