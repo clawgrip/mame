@@ -1,161 +1,39 @@
 // license:BSD-3-Clause
 // copyright-holders:Dirk Best
 /*
-    Azkoyen "Design" series tobacco vending machines
+    Azkoyen "Design" tobacco vending machines (D6, D8, D10, D12, D14, D21...)
 
-    The "Design" line (D6, D8, D10, D12, D14, D21...) was sold in Spain
-    from the early 1990s (the operator manual is dated 1993/1994).  For
-    the D14 and D21, the number in the model name is the number of product
-    channels.  Two firmware dumps are supported:
+    * design6: pesetas firmware, only has tables for a six channel machine.
+    * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
+      presets selected in the CONFIGURACION menu.
 
-    * design6: pesetas firmware.  Only contains tables for a six channel
-      machine (D6).
-    * designe: euro firmware, part number 43521600-5, version string
-      "05-10-06 DES ESTANDAR-REYNOLDS-FOTOS-CASETES-MEDIAS-AEOPUERTO
-      BARCELONA".  Contains 16 model presets (D6, D8, D10 RODE, D10/D12,
-      D14, D21, promotional and special variants) selected by the operator
-      from the CONFIGURACION menu.
-
-    This driver distinguishes three kinds of information:
-
-    * Confirmed: seen on the PCB, or directly observable in the firmware
-      (addresses accessed, values written, conditions tested, messages
-      shown).  Firmware facts apply to both dumps unless noted.
-    * Assumed: interpretations that fit the firmware behaviour and the
-      operator manual but have not been checked on real hardware.  Marked
-      with "(assumption)" in comments.
-    * Simulated: mechanical parts of the machine (not on the PCB) that are
-      modelled with arbitrary timings so the firmware can run.  Marked with
-      "(simulated)" in comments.
-
-    Hardware, as listed in the original notes for this driver (it is not
-    stated which of the two dumps they refer to):
-    * Intel P8051
-    * 27C256 EPROM
-    * NEC D446C-2 SRAM (2K x 8, battery backed)
-    * OKI M62X428 RTC (MSM6242 compatible)
-    * Rockwell 10937P-50 A8201-17 VFD controller (16 characters)
+    Hardware (from the original notes, dump not specified):
+    * Intel P8051, 27C256 EPROM, NEC D446C-2 2K SRAM (battery backed)
+    * OKI M62X428 RTC
+    * Rockwell 10937P-50 A8201-17 VFD controller, 16 characters
     * Azkoyen L66S coin selector with PIC16C76/PIC16F76 (undumped)
 
-    The crystal frequency is not documented.  6 MHz is assumed, the same as
-    the related T61 board below.  Both firmware dumps use exactly the same
-    I/O map and timer settings, so the same hardware is assumed for both.
+    The I/O map and signal meanings come from analysing both firmware
+    dumps, which use the same map.  "(assumption)" marks interpretations
+    not verified on hardware and "(simulated)" marks machine mechanics
+    modelled with made-up timings; the rest is firmware behaviour.
+    Quoted messages are the firmware errors tied to an input or output.
 
-    Confirmed from the firmware:
+    designe initialises the UART but never uses it.  The operator manual
+    available (D14/D21, pesetas, 7/94, adapted for euro) does not fully
+    match the dumps.
 
-    * P1.0-P1.3: key matrix column select (one hot, active high)
-    * P1.4: never used
-    * P1.5: selects external data space: 0 = I/O, 1 = SRAM.  The timer
-      interrupt saves P1 and clears P1.5 before accessing I/O.
-    * P1.6: driven low around SRAM writes and high afterwards (write
-      enable, assumption)
-    * P1.7: pulsed high/low at the start of most routines (watchdog kick,
-      assumption; the watchdog is not emulated)
-    * P2 is always 0 when I/O is accessed through MOVX @Ri
-    * P3.3 (INT1): polled; must be high for a paid vend to start (with
-      credit and P3.3 low, pressing a selection only shows the price).
-      Function unknown.
-    * designe only: the UART is initialised (mode 1, timer 1 reload 0xf4,
-      about 1302 baud at 6 MHz) but SBUF is never accessed; the
-      "TRANSMISION" strings are not referenced.
-
-    External data space with P1.5 = 1: SRAM, firmware uses 0x0000-0x03ff.
-
-    External data space with P1.5 = 0 (P2 = 0):
-    * 0x00-0x07 w: 8-bit addressable latch, data on D0 (CD4099, as fitted on
-      the T61 board, assumption)
-      - 0: hopper 1 motor
-      - 1: hopper 2 motor
-      - 2: hopper 3 motor
-      - 3: set while the machine is not out of service, cleared in control
-        mode (coin selector enable, assumption)
-      - 4: active during the coin return sequence; the firmware waits for
-        code 0xe on the coin bus while it is on (escrow to return chute,
-        assumption)
-      - 5: active after a sale; same handling as 4 (escrow to cash box,
-        assumption)
-      - 6: recovery motor; runs until IN1 bit 6 has gone high and back low
-        ("AVERIA RECUP." when this fails)
-      - 7: pulsed for two timer ticks after a valid coin code is read;
-        the firmware then waits for the coin selector to send the same code
-        again before giving credit (accept handshake)
-    * 0x00 r:
-      - 0-3: coin code from the coin selector (0 = idle, 0xf ignored)
-      - 4: designe: part of the idle check that clears a coin selector
-        fault, otherwise ignored
-      - 5: designe: coin code bit 4 (5-bit coin codes)
-      - 6: service/control switch "CS" (1 = control)
-      - 7: hopper 2 full (active low, assumption about the meaning)
-    * 0x10-0x17 w: addressable latch
-      - 0-2: coin sorter gates; combinations route coins to the hoppers
-      - 3-4: never used
-      - 5: VFD data
-      - 6: VFD clock
-      - 7: VFD reset (active low)
-    * 0x10 r:
-      - 0-2: coin exit sensors of hoppers 3, 2 and 1 (design6: high while a
-        coin passes; designe: polarity selected by the model preset)
-      - 3-5: coin level of hoppers 3, 2 and 1 (0 = empty, "VACIO DEVOL.")
-      - 6: recovery motor position (1 = away from rest).  designe: a
-        short high pulse while idle enables sales in the adult access
-        modes (see remote_pressed() below)
-      - 7: hopper 1 full (active low, assumption about the meaning)
-    * 0x20-0x47 w: three addressable latches, 24 extractor motor outputs.
-      ROM tables map product channels to latch addresses.
-    * 0x20 r: key matrix row (active high)
-    * 0x30 r:
-      - 0-2: product flaps ("trampillas") 1-3, low while a product lifts
-        the flap ("AVERIA TRAMP." when stuck)
-      - 3: hopper 3 full (active low, assumption about the meaning)
-    * 0x60-0x6f r/w: RTC
-    * 0x70 w: message number (0 = no change available, 1 = sold out,
-      2 = after a completed sale).  Probably the optional voice
-      synthesizer kit listed in the manual (assumption).
-
-    Key matrix (key = column * 8 + row), from the ROM tables:
-    * key 0: coin return button
-    * keys 1-9 and 16-25: selection buttons (which key drives which
-      selection depends on the model preset in designe)
-    * keys 28-31: operator keypad A, B, C and D
-
-    Coin codes, from the ROM tables:
-    * design6: 1 = 500, 2/8 = 5, 3 = 10, 4/11 = 200, 5/9 = 25, 6/10 = 50,
-      7 = 100 pesetas.  The operator chooses whether codes 2/5, 8/9 or
-      both feed the hoppers ("ANTIGUA", "NUEVAS", "NUE. VIE." settings),
-      so 2/5 are presumably the old 5 and 25 peseta coins and 8/9 the new
-      ones (assumption).  The hoppers hold 5, 25 and 100 peseta coins.
-    * designe: 0x13-0x18 = 0.05, 0.10, 0.20, 0.50, 1 and 2 euro,
-      0x0c = token ("FICHA").  Depending on the "ACCESO ADULTO" setting,
-      coins are refused ("ADULTO") until a token or the adult access
-      remote enables the sale.  The hopper coin values are selectable:
-      0.10-0.20-0.50, 0.05-0.10-0.50 or 0.05-0.20-0.50 euro.
-
-    The operator manual available (models D14 and D21, pesetas, 7/94,
-    adapted for euro) describes a service switch "CS", an independent
-    A/B/C/D keypad, a coin return button, three hoppers, up to three
-    product flaps, an optional voice synthesizer kit and an L60 coin
-    selector.  It does not necessarily match the dumped firmware: for
-    example it lists 0.05-0.10-0.20 instead of 0.10-0.20-0.50 as a hopper
-    configuration.
-
-    Usage: turn on the service switch (CS) to enter control mode and walk
-    through the menus with the coin return button; the keypad keys A-D are
-    used to program (the first key pressed after choosing a selection
-    clears its price).  A fresh machine shows "DESPROGRAMADA" until the
-    prices are programmed and, on designe, a model preset is chosen in the
-    CONFIGURACION menu (D shows the current one, B steps through the
-    presets, D pressed four times confirms).  On designe, press the adult
-    access remote before inserting coins, or change the "ACCESO ADULTO"
-    setting.
+    Usage: the service switch (CS) enters control mode, the coin return
+    button steps through the menus and keypad A-D programs (the first key
+    after choosing a selection clears its price).  A fresh machine needs
+    prices and, on designe, a model preset (D, then B to step, then D four
+    times).  designe refuses coins until the adult access remote is
+    pressed, unless "ACCESO ADULTO" is changed.
 
     TODO:
-    - The coin selector is simulated (see coin_inserted() below).  The
-      protocol timings and the meaning of code 0xe are unknown.
-    - Hoppers, product flaps and the recovery motor are simulated with
-      made-up timings; empty and full hopper sensors are manual toggles.
-    - Voice synthesizer kit
-    - Watchdog
-    - Verify the assumptions above on real hardware
+    - Coin selector timings, meaning of coin code 0xe
+    - P3.3 function, voice synthesizer kit, watchdog
+    - Verify the assumptions on real hardware
 */
 
 #include "emu.h"
@@ -318,7 +196,7 @@ void design_state::data_map(address_map &map)
 {
 	map(0x0000, 0xffff).view(m_xdata_view);
 
-	// P1.5 = 0: I/O (the firmware only generates addresses 0x00xx here)
+	// P1.5 = 0: I/O, P2 is always 0
 	m_xdata_view[0](0x0000, 0x0000).portr("IN0");
 	m_xdata_view[0](0x0000, 0x0007).w("outlatch0", FUNC(cd4099_device::write_d0));
 	m_xdata_view[0](0x0010, 0x0010).portr("IN1");
@@ -331,7 +209,7 @@ void design_state::data_map(address_map &map)
 	m_xdata_view[0](0x0060, 0x006f).rw("rtc", FUNC(msm6242_device::read), FUNC(msm6242_device::write));
 	m_xdata_view[0](0x0070, 0x0070).w(FUNC(design_state::voice_w));
 
-	// P1.5 = 1: 2K SRAM (address decoding above A10 unknown)
+	// P1.5 = 1: SRAM, decoding above A10 unknown
 	m_xdata_view[1](0x0000, 0x07ff).mirror(0xf800).ram().share("nvram");
 }
 
@@ -341,10 +219,11 @@ void design_state::data_map(address_map &map)
     Input ports
 **************************************************************************/
 
+// the firmware stops routing coins to a hopper while its "full" input is low (meaning assumed)
 static INPUT_PORTS_START( design )
 	PORT_START("IN0")
 	PORT_BIT(0x2f, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(design_state::coin_code_r))
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED) // designe expects 0 to clear a coin selector fault
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_TOGGLE PORT_NAME("Service/Control Switch (CS)")
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 2 Full")
 
@@ -352,23 +231,22 @@ static INPUT_PORTS_START( design )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<2>))
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<1>))
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<0>))
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 3 Empty")
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 3 Empty") // "VACIO DEVOL."
 	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 2 Empty")
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 1 Empty")
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::recovery_position_r))
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 1 Full")
 
 	PORT_START("IN3")
-	PORT_BIT(0x07, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(design_state::flaps_r))
+	PORT_BIT(0x07, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_CUSTOM_MEMBER(FUNC(design_state::flaps_r)) // "AVERIA TRAMP."
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 3 Full")
 	PORT_BIT(0xf0, IP_ACTIVE_HIGH, IPT_UNUSED)
 
-	// the name describes what the firmware does with P3.3, its function is unknown
+	// with P3.3 low a selection only shows the price, even with credit; function unknown
 	PORT_START("P3")
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Vend Inhibit (P3.3)")
 	PORT_BIT(0xf7, IP_ACTIVE_LOW, IPT_UNUSED)
 
-	// manual control of the product flap sensors, in addition to the simulation
 	PORT_START("FLAPS")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Product Flap 1")
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Product Flap 2")
@@ -404,7 +282,7 @@ static INPUT_PORTS_START( design6 )
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_T) PORT_NAME("Selection 5")
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_Y) PORT_NAME("Selection 6")
 
-	// the parameter is the code sent by the coin selector
+	// codes 2/5 are presumably the old 5/25 peseta coins and 8/9 the new ones (assumption)
 	PORT_START("COINS")
 	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
 	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
@@ -422,7 +300,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( designe )
 	PORT_INCLUDE(design)
 
-	// key names follow the D21 preset (keys 1-9 and 16-25 are selections 1-19)
+	// named as in the D21 preset, other presets map the keys differently
 	PORT_MODIFY("KEY0")
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_Q) PORT_NAME("Selection 1")
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_W) PORT_NAME("Selection 2")
@@ -450,7 +328,6 @@ static INPUT_PORTS_START( designe )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_L) PORT_NAME("Selection 18")
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_COLON) PORT_NAME("Selection 19")
 
-	// pulses IN1 bit 6, see remote_pressed()
 	PORT_START("REMOTE")
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_M) PORT_NAME("Adult Access Remote") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::remote_pressed), 0)
 
@@ -463,7 +340,7 @@ static INPUT_PORTS_START( designe )
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("2 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x18)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("Token") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x0c)
 
-	// bit 0 of the model preset flags selects the hopper exit sensor polarity
+	// the firmware takes the hopper exit sensor polarity from the model preset
 	PORT_START("CONF")
 	PORT_CONFNAME(0x01, 0x00, "Hopper Exit Sensors")
 	PORT_CONFSETTING(   0x01, "Active High (D6, D8, D10/D12 presets)")
@@ -481,10 +358,8 @@ INPUT_PORTS_END
 
 void design_state::port1_w(u8 data)
 {
-	// 0-3: key matrix column select
-	// 5: external data space select
-	// 6: SRAM write enable (assumption, not emulated)
-	// 7: watchdog (assumption, not emulated)
+	// bit 6 is low during SRAM writes (write enable, assumption)
+	// bit 7 is pulsed all the time (watchdog, assumption)
 	m_port1 = data;
 	m_xdata_view.select(BIT(data, 5));
 }
@@ -500,6 +375,8 @@ u8 design_state::keys_r()
 	return data;
 }
 
+// 0 = no change available, 1 = sold out, 2 = sale completed; probably
+// the optional voice synthesizer kit (assumption)
 void design_state::voice_w(u8 data)
 {
 	LOGVOICE("%s: message %u\n", machine().describe_context(), data);
@@ -554,7 +431,7 @@ void design_state::extractors_w(u8 data)
 	for (unsigned i = 0; i < 8; i++)
 		m_out_extractor[N * 8 + i] = BIT(data, i);
 
-	// (simulated) a product lifts the flap a while after a motor starts
+	// (simulated) a product lifts the flaps a while after a motor starts
 	if (!old && m_extractors)
 		m_flap_timer->adjust(attotime::from_msec(500));
 	else if (old && !m_extractors && !m_flap_raised)
@@ -581,7 +458,7 @@ void design_state::recovery_motor_w(int state)
 
 	m_recovery_motor = state;
 
-	// (simulated) the cam switch is away from rest for 400 ms per turn
+	// (simulated) position switch
 	if (m_recovery_motor)
 		m_recovery_timer->adjust(attotime::from_msec(m_recovery_pos ? 400 : 150));
 	else
@@ -595,12 +472,10 @@ TIMER_CALLBACK_MEMBER(design_state::recovery_update)
 }
 
 /*
-    designe only: while idle, the firmware treats a high pulse of about
-    10 to 45 timer ticks on IN1 bit 6 as the activation for adult access
-    ("ACCESO ADULTO" set to "MANDO" or "FICHA+MANDO"; "MANDO" is the default
-    after the memory is initialised).  Longer high levels are handled as
-    the recovery motor position.  The adult access remote control receiver
-    is presumably connected to this input (assumption).
+    designe: while idle, a high pulse of about 10-45 timer ticks on IN1
+    bit 6 enables sales in the "MANDO" adult access modes (the default);
+    longer levels are the recovery motor position.  The remote receiver
+    is presumably wired here (assumption).
 */
 
 INPUT_CHANGED_MEMBER(design_state::remote_pressed)
@@ -621,15 +496,10 @@ TIMER_CALLBACK_MEMBER(design_state::remote_release)
 /*
     Coin selector (simulated)
 
-    The firmware expects the following sequence for every coin:
-    1. the selector puts the coin code on the bus (validation)
-    2. if the code is valid, the CPU pulses latch 0 bit 7 (accept)
-    3. the code must return to 0
-    4. the selector sends the same code again (coin accepted)
-    5. the code must return to 0, then credit is given
-
-    Pulse lengths and delays are unknown and chosen to satisfy the firmware
-    time-outs.  Coins that are not accepted are returned.
+    For a valid code the CPU pulses latch 0 bit 7, then gives credit only
+    after the selector sends the same code a second time.  Code 0 is idle,
+    0xf is ignored and 0xe is awaited while the escrow outputs are on.
+    Pulse lengths and delays are made up.
 */
 
 INPUT_CHANGED_MEMBER(design_state::coin_inserted)
@@ -715,7 +585,6 @@ void design_state::machine_start()
 
 void design_state::machine_reset()
 {
-	// port latches are set to 0xff on reset
 	m_port1 = 0xff;
 	m_xdata_view.select(1);
 
@@ -732,7 +601,7 @@ void design_state::machine_reset()
 
 void design_state::design6(machine_config &config)
 {
-	I8051(config, m_maincpu, 6_MHz_XTAL); // XTAL not documented
+	I8051(config, m_maincpu, 6_MHz_XTAL); // XTAL not documented, same as T61 board (assumption)
 	m_maincpu->set_addrmap(AS_PROGRAM, &design_state::program_map);
 	m_maincpu->set_addrmap(AS_DATA, &design_state::data_map);
 	m_maincpu->port_out_cb<1>().set(FUNC(design_state::port1_w));
@@ -740,14 +609,15 @@ void design_state::design6(machine_config &config)
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0);
 
+	// latch types as on the T61 board (assumption)
 	cd4099_device &outlatch0(CD4099(config, "outlatch0"));
 	outlatch0.q_out_cb<0>().set(FUNC(design_state::hopper_motor_w<0>));
 	outlatch0.q_out_cb<1>().set(FUNC(design_state::hopper_motor_w<1>));
 	outlatch0.q_out_cb<2>().set(FUNC(design_state::hopper_motor_w<2>));
-	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w));
-	outlatch0.q_out_cb<4>().set(FUNC(design_state::escrow_return_w));
-	outlatch0.q_out_cb<5>().set(FUNC(design_state::escrow_collect_w));
-	outlatch0.q_out_cb<6>().set(FUNC(design_state::recovery_motor_w));
+	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; coin selector enable (assumption)
+	outlatch0.q_out_cb<4>().set(FUNC(design_state::escrow_return_w)); // on during coin return; escrow (assumption)
+	outlatch0.q_out_cb<5>().set(FUNC(design_state::escrow_collect_w)); // on after a sale; escrow (assumption)
+	outlatch0.q_out_cb<6>().set(FUNC(design_state::recovery_motor_w)); // "AVERIA RECUP."
 	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_accept_w));
 
 	cd4099_device &outlatch1(CD4099(config, "outlatch1"));
@@ -758,6 +628,7 @@ void design_state::design6(machine_config &config)
 	outlatch1.q_out_cb<6>().set("vfd", FUNC(roc10937_device::sclk));
 	outlatch1.q_out_cb<7>().set("vfd", FUNC(roc10937_device::por));
 
+	// ROM tables map each product channel to one of these outputs
 	CD4099(config, "outlatch2").parallel_out_cb().set(FUNC(design_state::extractors_w<0>));
 	CD4099(config, "outlatch3").parallel_out_cb().set(FUNC(design_state::extractors_w<1>));
 	CD4099(config, "outlatch4").parallel_out_cb().set(FUNC(design_state::extractors_w<2>));
