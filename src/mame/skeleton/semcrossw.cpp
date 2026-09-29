@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:
+// copyright-holders: Tomás García-Merás Capote (ClawGrip)
 
 /***************************************************************************
 
@@ -158,10 +158,10 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 	controller is waiting for a pedestrian.
 11. Press the pedestrian button (Enter, or PUSH on the panel). The dot after the last
 	digit lights up to confirm it; if it doesn't, try again a bit later. When the current
-	cycle ends (up to about a minute) the vehicle lamps turn amber (3 s) and red, 2 s later
-	the pedestrians get green (10 s), then flashing green (5 s) and red, and 3 s later the
-	vehicles get green again. The pedestrian signal is board 2 B in the "Relay Boards"
-	view (Tab menu, Video Options).
+	cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
+	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
+	green (5 s) and red, and 3 s later the vehicles get green again. The pedestrian signal
+	is board 2 B in the "Relay Boards" view (Tab menu, Video Options).
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
@@ -231,7 +231,7 @@ private:
 
 	u8 m_pia_pa = 0xff;
 	u8 m_pia_pb = 0xff;
-	u8 m_relay_pa[RELAY_BOARDS] = { 0xff, 0xff, 0xff };
+	u8 m_relay_pa[RELAY_BOARDS];
 	u8 m_mains = 0;
 	u8 m_nmi_div = 0;
 
@@ -253,6 +253,8 @@ private:
 
 void semcrossw_state::machine_start()
 {
+	std::fill(std::begin(m_relay_pa), std::end(m_relay_pa), 0xff);
+
 	save_item(NAME(m_pia_pa));
 	save_item(NAME(m_pia_pb));
 	save_item(NAME(m_relay_pa));
@@ -463,11 +465,11 @@ ROM_START(semcrossw)
 	ROM_LOAD("at27c16.bin",    0x000, 0x800, CRC(2e7b10b1) SHA1(fba6465db1baa38ab79ed24a85de460f8be488b9))
 
 	ROM_REGION(0x800, "eeprom", 0)
-	ROM_LOAD("x2816cp-12.bin", 0x000, 0x800, CRC(c2ef2e80) SHA1(6c3c4215169c2941a37053888174fe0499301bac))
+	ROM_LOAD("x2816cp-12.bin", 0x000, 0x800, CRC(c2ef2e80) SHA1(6c3c4215169c2941a37053888174fe0499301bac)) // Configured for 3 relay boards
 ROM_END
 
 } // anonymous namespace
 
 
-//   YEAR  NAME       PARENT COMPAT MACHINE    INPUT      CLASS            INIT        COMPANY  FULLNAME                                              FLAGS
-SYST(198?, semcrossw, 0,     0,     semcrossw, semcrossw, semcrossw_state, empty_init, "Etra",  "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING)
+//   YEAR  NAME       PARENT COMPAT  MACHINE    INPUT      CLASS            INIT        COMPANY  FULLNAME                                              FLAGS
+SYST(198?, semcrossw, 0,     0,      semcrossw, semcrossw, semcrossw_state, empty_init, "Etra",  "Crosswalk traffic light controller (unknown model)", MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING | MACHINE_SUPPORTS_SAVE)
