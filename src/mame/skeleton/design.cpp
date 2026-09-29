@@ -21,7 +21,10 @@
 
     designe initialises the UART but never uses it.  The operator manual
     available (D14/D21, pesetas, 7/94, adapted for euro) does not fully
-    match the dumps.
+    match the dumps.  The L66S service manual (13.02.01) says the selector
+    identifies up to 32 coin types, and that the selector and sorter
+    assembly connects to the machine with 4 coin outputs, a general inhibit
+    input and drivers for three sorter coils; there is no accept input.
 
     Usage: the service switch (CS) enters control mode, the coin return
     button steps through the menus and keypad A-D programs (the first key
@@ -32,17 +35,14 @@
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
-    - P3.3 function, voice synthesizer kit, watchdog
+    - Function of latch 0 bit 7 and P3.3, voice synthesizer kit, watchdog
     - Verify the assumptions on real hardware
 */
 
 #include "emu.h"
 
-#include "cpu/mcs48/mcs48.h"
 #include "cpu/mcs51/i8051.h"
 #include "machine/74259.h"
-#include "machine/i8279.h"
-#include "machine/msm5832.h"
 #include "machine/msm6242.h"
 #include "machine/nvram.h"
 #include "machine/ticket.h"
@@ -79,8 +79,8 @@ public:
 		, m_out_escrow_return(*this, "escrow_return")
 		, m_out_escrow_collect(*this, "escrow_collect")
 		, m_out_recovery_motor(*this, "recovery_motor")
-		, m_out_coin_accept(*this, "coin_accept")
-		, m_out_sorter(*this, "sorter_gate%u", 1U)
+		, m_out_coin_valid(*this, "coin_valid")
+		, m_out_sorter(*this, "sorter_coil%u", 1U)
 		, m_out_extractor(*this, "extractor%u", 1U)
 		, m_out_flap(*this, "flap")
 	{
@@ -121,7 +121,7 @@ private:
 	output_finder<> m_out_escrow_return;
 	output_finder<> m_out_escrow_collect;
 	output_finder<> m_out_recovery_motor;
-	output_finder<> m_out_coin_accept;
+	output_finder<> m_out_coin_valid;
 	output_finder<3> m_out_sorter;
 	output_finder<24> m_out_extractor;
 	output_finder<> m_out_flap;
@@ -135,7 +135,7 @@ private:
 	u8 m_coinsel_state = COINSEL_IDLE;
 	u8 m_coinsel_coin = 0;
 	u8 m_coinsel_code = 0;
-	bool m_coinsel_accepted = false;
+	bool m_coinsel_enable = false;
 	bool m_recovery_motor = false;
 	bool m_recovery_pos = false;
 	u32 m_extractors = 0;
@@ -154,7 +154,7 @@ private:
 	void escrow_return_w(int state);
 	void escrow_collect_w(int state);
 	void recovery_motor_w(int state);
-	void coin_accept_w(int state);
+	void coin_valid_w(int state);
 	template <unsigned N> void sorter_w(int state);
 	template <unsigned N> void extractors_w(u8 data);
 
@@ -162,23 +162,6 @@ private:
 	TIMER_CALLBACK_MEMBER(recovery_update);
 	TIMER_CALLBACK_MEMBER(flap_update);
 	TIMER_CALLBACK_MEMBER(remote_release);
-};
-
-
-class azkoyent_state : public driver_device
-{
-public:
-	azkoyent_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag)
-		, m_maincpu(*this, "maincpu")
-	{
-	}
-
-	void azkoyent(machine_config &config) ATTR_COLD;
-	void azkoyent61(machine_config &config) ATTR_COLD;
-
-private:
-	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -347,9 +330,6 @@ static INPUT_PORTS_START( designe )
 	PORT_CONFSETTING(   0x00, "Active Low (other presets)")
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( azkoyent )
-INPUT_PORTS_END
-
 
 
 /**************************************************************************
@@ -404,6 +384,7 @@ void design_state::hopper_motor_w(int state)
 void design_state::enable_w(int state)
 {
 	m_out_enable = state;
+	m_coinsel_enable = state;
 }
 
 void design_state::escrow_return_w(int state)
@@ -496,10 +477,10 @@ TIMER_CALLBACK_MEMBER(design_state::remote_release)
 /*
     Coin selector (simulated)
 
-    For a valid code the CPU pulses latch 0 bit 7, then gives credit only
-    after the selector sends the same code a second time.  Code 0 is idle,
-    0xf is ignored and 0xe is awaited while the escrow outputs are on.
-    Pulse lengths and delays are made up.
+    The firmware gives credit only after reading the same code twice, with
+    code 0 in between.  Code 0 is idle, 0xf is ignored and 0xe is awaited
+    while the escrow outputs are on.  Pulse lengths and delays are made up.
+    Coins are rejected while latch 0 bit 3 is low (assumption).
 */
 
 INPUT_CHANGED_MEMBER(design_state::coin_inserted)
@@ -507,24 +488,24 @@ INPUT_CHANGED_MEMBER(design_state::coin_inserted)
 	if (!newval || (m_coinsel_state != COINSEL_IDLE))
 		return;
 
+	if (!m_coinsel_enable)
+	{
+		LOGCOINSEL("coin code %02x rejected, selector inhibited\n", param);
+		return;
+	}
+
 	LOGCOINSEL("coin inserted, code %02x\n", param);
 
 	m_coinsel_coin = param;
-	m_coinsel_accepted = false;
 	m_coinsel_state = COINSEL_VALIDATE;
 	m_coinsel_code = m_coinsel_coin;
 	m_coinsel_timer->adjust(attotime::from_msec(50));
 }
 
-void design_state::coin_accept_w(int state)
+// pulsed when a valid coin code is read; not a selector input according to the L66S manual
+void design_state::coin_valid_w(int state)
 {
-	m_out_coin_accept = state;
-
-	if (state && (m_coinsel_state == COINSEL_VALIDATE))
-	{
-		LOGCOINSEL("coin accepted by CPU\n");
-		m_coinsel_accepted = true;
-	}
+	m_out_coin_valid = state;
 }
 
 TIMER_CALLBACK_MEMBER(design_state::coinsel_update)
@@ -533,16 +514,8 @@ TIMER_CALLBACK_MEMBER(design_state::coinsel_update)
 	{
 	case COINSEL_VALIDATE:
 		m_coinsel_code = 0;
-		if (m_coinsel_accepted)
-		{
-			m_coinsel_state = COINSEL_TRAVEL;
-			m_coinsel_timer->adjust(attotime::from_msec(100));
-		}
-		else
-		{
-			LOGCOINSEL("coin rejected\n");
-			m_coinsel_state = COINSEL_IDLE;
-		}
+		m_coinsel_state = COINSEL_TRAVEL;
+		m_coinsel_timer->adjust(attotime::from_msec(100));
 		break;
 
 	case COINSEL_TRAVEL:
@@ -575,7 +548,7 @@ void design_state::machine_start()
 	save_item(NAME(m_coinsel_state));
 	save_item(NAME(m_coinsel_coin));
 	save_item(NAME(m_coinsel_code));
-	save_item(NAME(m_coinsel_accepted));
+	save_item(NAME(m_coinsel_enable));
 	save_item(NAME(m_recovery_motor));
 	save_item(NAME(m_recovery_pos));
 	save_item(NAME(m_extractors));
@@ -609,19 +582,19 @@ void design_state::design6(machine_config &config)
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0);
 
-	// latch types as on the T61 board (assumption)
+	// latch types as on the Azkoyen T series boards (assumption)
 	cd4099_device &outlatch0(CD4099(config, "outlatch0"));
 	outlatch0.q_out_cb<0>().set(FUNC(design_state::hopper_motor_w<0>));
 	outlatch0.q_out_cb<1>().set(FUNC(design_state::hopper_motor_w<1>));
 	outlatch0.q_out_cb<2>().set(FUNC(design_state::hopper_motor_w<2>));
-	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; coin selector enable (assumption)
+	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; selector general inhibit (assumption)
 	outlatch0.q_out_cb<4>().set(FUNC(design_state::escrow_return_w)); // on during coin return; escrow (assumption)
 	outlatch0.q_out_cb<5>().set(FUNC(design_state::escrow_collect_w)); // on after a sale; escrow (assumption)
 	outlatch0.q_out_cb<6>().set(FUNC(design_state::recovery_motor_w)); // "AVERIA RECUP."
-	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_accept_w));
+	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_valid_w));
 
 	cd4099_device &outlatch1(CD4099(config, "outlatch1"));
-	outlatch1.q_out_cb<0>().set(FUNC(design_state::sorter_w<0>));
+	outlatch1.q_out_cb<0>().set(FUNC(design_state::sorter_w<0>)); // sorter coils, order relative to the manual's numbering unknown
 	outlatch1.q_out_cb<1>().set(FUNC(design_state::sorter_w<1>));
 	outlatch1.q_out_cb<2>().set(FUNC(design_state::sorter_w<2>));
 	outlatch1.q_out_cb<5>().set("vfd", FUNC(roc10937_device::data));
@@ -652,20 +625,6 @@ void design_state::designe(machine_config &config)
 }
 
 
-void azkoyent_state::azkoyent(machine_config &config)
-{
-	I8039(config, m_maincpu, 6.144_MHz_XTAL);
-	I8279(config, "i8279", 6.144_MHz_XTAL); // Unknown clock
-}
-
-void azkoyent_state::azkoyent61(machine_config &config)
-{
-	I8051(config, m_maincpu, 6_MHz_XTAL);
-	I8279(config, "i8279", 6_MHz_XTAL); // Unknown clock
-	MSM5832(config, "rtc", 6_MHz_XTAL); // Unknown clock, has its own oscillator (unknown frequency)
-}
-
-
 
 /**************************************************************************
     ROM definitions
@@ -688,95 +647,6 @@ ROM_START( designe )
 ROM_END
 
 
-// Different Azkoyen tobacco vending machines on similar hardware
-
-/* Azkoyen models T6, T8, and T12 (Azkoyen PCB 104-4455-02-80/1). MCS-48-based.
-  ___________________________________________________________
- |                                       __________         |
-_|_           ___                       | BATT    |        _|_
-_|_         LM555CN                     |_________|        _|_
- |   ___          ____________________                     _|_
- |  BDX53A  Xtal | PCB 80C39 11P     |    __________       _|_
- |     6.144 MHz |___________________|   |_MC14069U|       _|_
-_|_                                          _____________ _|_
-_|_               ____________________      | EPROM      |  |
-_|_              | NEC D8279C-5      |      |____________| =|
- |        ___    |___________________|       __________    =|
- |=      |..|                               |M74HC373B1    =|
- |=      |..|                                _________     =|
- |=      |..|                               |TC4011BP|     =|
- |=      |..|                        ___     ___            |
- |       |..|              TC4011BP->|  |    |  |          =|
- |=      |..|                        |  |    |  <-TC4011BP =|
- |=      |..|                        |  |    |  |          =|
- |                                   |__|    |__|          =|
- |__________________________________________________________|
-
-*/
-
-// T6 uses a 4 digits 7-segments display.
-ROM_START( azkoyent6 )
-	ROM_REGION(0x2000, "maincpu", 0)
-	ROM_LOAD("43504560-0_t-6.u04",   0x0000, 0x2000, CRC(a4289b26) SHA1(40587094b11c6cf9308673ffac2ed9d445d458e9))
-ROM_END
-
-// T8 uses a 3 digits 7-segments display.
-ROM_START( azkoyent8 )
-	ROM_REGION(0x2000, "maincpu", 0)
-	ROM_LOAD("43504570-2_t8_3.u04",  0x0000, 0x2000, CRC(76ac54bf) SHA1(da4c4a9f1c9c85d59169d62682bb7b73a9dd133b))
-ROM_END
-
-ROM_START( azkoyent12 )
-	ROM_REGION(0x2000, "maincpu", 0)
-	ROM_LOAD("43504580-0_t12-17.u04", 0x0000, 0x2000, CRC(10d4d4a7) SHA1(96804bc173abf2d51de7e7f84decba286916eba7))
-ROM_END
-
-/* Azkoyen model T61 (with OKI M5832 RTC, Azkoyen PCB 131000060-1). MCS-51-based. Unknown display.
-
-  ___|||_||||||||||____________________________________
- |   ||| ||||||||||          ||||||||   |||||||||||   |
- | _____________                    _____             |
- ||::::::::::::|     __________     ·····             |
- |                  |ULN2803A_|                       |
- |      __________   __________   __________         =|
- |     |CD4099BCN|  |CD4099BCN|  |CF74HC240E         =|
- |                                                   =|
- |  L7805CV          __________                      =|
- |                  |_UM6104__|                      =|
- |      __________   __________   __________          |
- |     |_TC4011BP|  |_TC4071BP|  |CD4099BCN|          |
- |      __________   __________   __________          |
- |     |_TC4011BP|  |GD74HC138|  |TC4099BP_|<-Not present on some versions
- |            ______________      __________         =|
- |           | EPROM       |     |TC4099BP_|<-Not present on some versions
- |           |_____________|                         =|
- |          ___   __________                         =|
- |       LM555CN |TC4069UBP|                         =|
- | ______        ___________           ___________    |
- || BATT|       |MM74HC373N|          |TD62083AP_|    |
- ||_____|        ___________                          |
- |              |MM74HC373N|    _____________         |
- | Osc                         |::::::::::::|         |
- | xxx MHz      _________________   _________________ |
- | __________  | Intel P80C51AH |  | NEC D8279C-2   | |
- ||OKI_M5832|  |________________|  |________________| |
- |                ____     Xtal     __________        |
- |                BDX53  6.000 MHz |SN74HC240N        |
- |                                                    |
- |_____________|_|____|_|__|__|||_|||||||||___||||____|
-
-*/
-
-ROM_START( azkoyent61 )
-	ROM_REGION(0x1000, "maincpu", 0)
-	ROM_LOAD("t-61.u4",       0x0000, 0x1000, CRC(16d9b843) SHA1(7c6f177eca9163b5284d2cbe1bdeb3b0bf1a6698))
-ROM_END
-
-ROM_START( azkoyent61a )
-	ROM_REGION(0x1000, "maincpu", 0)
-	ROM_LOAD("t-61-6_t-m.u4", 0x0000, 0x1000, CRC(ce1ed720) SHA1(42cb78ddd8d06764599e97b72b557d164940f7df))
-ROM_END
-
 } // anonymous namespace
 
 
@@ -788,9 +658,3 @@ ROM_END
 //    YEAR   NAME         PARENT      COMPAT  MACHINE     INPUT     CLASS           INIT        COMPANY    FULLNAME                              FLAGS
 SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
 SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, with 43521600-5 kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
-
-SYST( 19??,  azkoyent6,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T6",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent8,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T8",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent12,  0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T12",          MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent61,  0,          0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 1)",  MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent61a, azkoyent61, 0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 2)",  MACHINE_NO_SOUND | MACHINE_NOT_WORKING )

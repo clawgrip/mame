@@ -43762,6 +43762,13 @@ aws220
 @source:skeleton/ax20.cpp
 ax20
 
+@source:skeleton/azkoyent.cpp
+azkoyent12
+azkoyent6
+azkoyent61
+azkoyent61a
+azkoyent8
+
 @source:skeleton/banpresto_tomy_h8s.cpp
 anpanmct
 cmcwa
@@ -43916,11 +43923,6 @@ dash4
 datacast
 
 @source:skeleton/design.cpp
-azkoyent12
-azkoyent6
-azkoyent61
-azkoyent61a
-azkoyent8
 design6
 designe
 

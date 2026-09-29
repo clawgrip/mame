@@ -89,10 +89,10 @@ Azkoyen "Design" layout (euro firmware, selections numbered as in the D21 preset
 	<element name="text_outputs"><text string="OUTPUTS" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_sensors"><text string="SENSORS (click to toggle)" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_hopper"><text string="Hopper motor" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_sorter"><text string="Sorter gate" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_sorter"><text string="Sorter coil" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_extractor"><text string="Extractor" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_recovery"><text string="Recovery motor" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_accept"><text string="Coin accept" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_valid"><text string="Valid coin" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_enable"><text string="Enable" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_escret"><text string="Escrow return" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_esccoll"><text string="Escrow collect" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
@@ -130,13 +130,13 @@ Azkoyen "Design" layout (euro firmware, selections numbered as in the D21 preset
 		<repeat count="3">
 			<param name="n" start="1" increment="1" />
 			<param name="x" start="215" increment="12" />
-			<element name="sorter_gate~n~" ref="lamp"><bounds x="~x~" y="14" width="8" height="8" /></element>
+			<element name="sorter_coil~n~" ref="lamp"><bounds x="~x~" y="14" width="8" height="8" /></element>
 		</repeat>
 
 		<element name="recovery_motor" ref="lamp"><bounds x="0" y="28" width="8" height="8" /></element>
 		<element ref="text_recovery"><bounds x="12" y="28" width="110" height="8" /></element>
-		<element name="coin_accept" ref="lamp"><bounds x="127" y="28" width="8" height="8" /></element>
-		<element ref="text_accept"><bounds x="139" y="28" width="110" height="8" /></element>
+		<element name="coin_valid" ref="lamp"><bounds x="127" y="28" width="8" height="8" /></element>
+		<element ref="text_valid"><bounds x="139" y="28" width="110" height="8" /></element>
 		<element name="enable" ref="lamp"><bounds x="254" y="28" width="8" height="8" /></element>
 		<element ref="text_enable"><bounds x="266" y="28" width="110" height="8" /></element>
 		<element name="escrow_return" ref="lamp"><bounds x="0" y="40" width="8" height="8" /></element>
