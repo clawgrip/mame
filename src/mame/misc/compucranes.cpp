@@ -133,15 +133,17 @@
  by a serial LED driver on the "Plumadig" board.  The firmware supports two
  different display boards, selected by JP1 (bit 5 of the 8001h port, P1.4 on
  the V1 board), and carries a different segment table for each:
-  - bit 5 low: MM5450 style driver, segments active high.  Frames are 36
-	clocks long, the 32 data bits followed by 0,0,0,1, that trailing '1' being
-	the start bit of the next frame, so each frame latches the data sent on
-	the previous one.  It's the one fitted on every board seen and the same
-	protocol as MAME's mm5445 family, but the chip hasn't been identified.
-	The firmware always sends a blank frame right before the data one, so the
-	display is really blanked for about 0.5 ms on each refresh (every 12 ms),
-	unnoticeable on the real LEDs but not when sampled at the frontend frame
-	rate, hence the PWM display device.
+  - bit 5 low: the board fitted on every PCB seen, segments active high.
+	Frames are 36 clocks long, the 32 data bits followed by 0,0,0,1.  That's
+	the MM5450 format with the trailing '1' as the start bit of the next
+	frame, but a real MM5450 would garble the "SEt" screen shown right after
+	the stray clock the boot code makes with MOV P3,#EFh, for almost a second
+	on the later programs, and real machines don't do that, so a frame is
+	latched once its 36 clocks end in that trailer.  The firmware always
+	sends a blank frame right before the data one, so the display is really
+	blanked for about 0.5 ms on each refresh (every 12 ms), unnoticeable on
+	the real LEDs but not when sampled at the frontend frame rate, hence the
+	PWM display device.
   - bit 5 high: four dummy clocks with data low followed by the 32 bits shifted
 	out by the MCS51 serial port in mode 0 to a shift register board, leftmost
 	digit first, segments active low: bit 0 g, 1 f, 2 a, 3 b, 4 e, 5 d, 6 c,
@@ -270,6 +272,7 @@ private:
 
 	u32 m_bank = 0;
 	u64 m_shifter = 0;
+	u8 m_disp_bits = 0;
 	u32 m_sreg = ~u32(0);
 	bool m_disp_clk = false;
 	bool m_disp_strobe = false;
@@ -293,6 +296,7 @@ void compucranes_state::machine_start()
 	save_item(NAME(m_mech_time));
 	save_item(NAME(m_bank));
 	save_item(NAME(m_shifter));
+	save_item(NAME(m_disp_bits));
 	save_item(NAME(m_sreg));
 	save_item(NAME(m_disp_clk));
 	save_item(NAME(m_disp_strobe));
@@ -485,16 +489,18 @@ void compucranes_state::display_w(u8 data)
 		else
 		{
 			m_shifter = (m_shifter << 1) | BIT(data, 0);
+			if (m_disp_bits < 36)
+				m_disp_bits++;
 
-			// start bit at the end of the 36 bit shift register
-			if (BIT(m_shifter, 35))
+			// a whole frame ending in its 0,0,0,1 trailer
+			if ((m_disp_bits == 36) && ((m_shifter & 0x0f) == 0x01))
 			{
 				for (int digit = 0; digit < 4; digit++)
 				{
 					// bits as sent: a f g e d dp c b
-					m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (27 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
+					m_display->write_row(digit, bitswap<8>(u8(m_shifter >> (28 - 8 * digit)), 2, 5, 6, 4, 3, 1, 0, 7));
 				}
-				m_shifter = 0;
+				m_disp_bits = 0;
 			}
 		}
 	}
