@@ -242,9 +242,17 @@ void mcs51_cpu_device::scon_w(u8 data)
 		m_uart.rxbit = SIO_IDLE;
 	}
 
-	// leaving mode 0 in the middle of a transmission releases RXD
-	if (BIT(m_scon, 6, 2) && !m_uart.rxd)
-		set_serial_pins(1, m_uart.txd);
+	if (!BIT(old, 6, 2) && BIT(m_scon, 6, 2))
+	{
+		// leaving mode 0 aborts a reception in progress, so the UART modes
+		// don't pick it up as a frame
+		if (m_uart.rxbit >= SIO_DATA0 && m_uart.rxbit != SIO_DATA8)
+			m_uart.rxbit = SIO_IDLE;
+
+		// and releases RXD if it was in the middle of a transmission
+		if (!m_uart.rxd)
+			set_serial_pins(1, m_uart.txd);
+	}
 }
 
 u8 mcs51_cpu_device::sbuf_r()
@@ -557,23 +565,12 @@ void mcs51_cpu_device::transmit_receive_mode0()
 		m_uart.txbit = SIO_IDLE;
 		return;
 
-	default: // left over by the UART modes
-		m_uart.txbit = SIO_IDLE;
+	default: // left over by the UART modes, kept as it was
 		break;
 	}
 
 	switch (m_uart.rxbit)
 	{
-	case SIO_IDLE:
-		// reception starts when REN is set with RI clear, RECEIVE goes active
-		// a machine cycle later, so RI is set at the same point as TI would be
-		if (BIT(m_scon, SCON_REN) && !BIT(m_scon, SCON_RI))
-		{
-			m_uart.data_in = 0;
-			m_uart.rxbit = SIO_DATA0;
-		}
-		break;
-
 	case SIO_DATA0: case SIO_DATA1: case SIO_DATA2: case SIO_DATA3:
 	case SIO_DATA4: case SIO_DATA5: case SIO_DATA6: case SIO_DATA7:
 		{
@@ -601,8 +598,14 @@ void mcs51_cpu_device::transmit_receive_mode0()
 		m_uart.rxbit = SIO_IDLE;
 		break;
 
-	default: // left over by the UART modes
-		m_uart.rxbit = SIO_IDLE;
+	default: // idle, or left over by the UART modes and kept as it was
+		// reception starts when REN is set with RI clear, RECEIVE goes active
+		// a machine cycle later, so RI is set at the same point as TI would be
+		if (BIT(m_scon, SCON_REN) && !BIT(m_scon, SCON_RI))
+		{
+			m_uart.data_in = 0;
+			m_uart.rxbit = SIO_DATA0;
+		}
 		break;
 	}
 }
