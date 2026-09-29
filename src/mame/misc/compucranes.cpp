@@ -167,7 +167,7 @@
  (no, 2, 5, 10, 20, 35, 50 or 75).
 
  TODO:
-  - Dump a real SEEPROM and the missing PLDs	.
+  - Dump a real SEEPROM and the missing PLDs.
 
 ********************************************************************************/
 
