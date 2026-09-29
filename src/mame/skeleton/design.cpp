@@ -21,7 +21,10 @@
 
     designe initialises the UART but never uses it.  The operator manual
     available (D14/D21, pesetas, 7/94, adapted for euro) does not fully
-    match the dumps.
+    match the dumps.  The L66S service manual (13.02.01) says the selector
+    identifies up to 32 coin types, and that the selector and sorter
+    assembly connects to the machine with 4 coin outputs, a general inhibit
+    input and drivers for three sorter coils; there is no accept input.
 
     Usage: the service switch (CS) enters control mode, the coin return
     button steps through the menus and keypad A-D programs (the first key
@@ -32,7 +35,7 @@
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
-    - P3.3 function, voice synthesizer kit, watchdog
+    - Function of latch 0 bit 7 and P3.3, voice synthesizer kit, watchdog
     - Verify the assumptions on real hardware
 */
 
@@ -79,8 +82,8 @@ public:
 		, m_out_escrow_return(*this, "escrow_return")
 		, m_out_escrow_collect(*this, "escrow_collect")
 		, m_out_recovery_motor(*this, "recovery_motor")
-		, m_out_coin_accept(*this, "coin_accept")
-		, m_out_sorter(*this, "sorter_gate%u", 1U)
+		, m_out_coin_valid(*this, "coin_valid")
+		, m_out_sorter(*this, "sorter_coil%u", 1U)
 		, m_out_extractor(*this, "extractor%u", 1U)
 		, m_out_flap(*this, "flap")
 	{
@@ -121,7 +124,7 @@ private:
 	output_finder<> m_out_escrow_return;
 	output_finder<> m_out_escrow_collect;
 	output_finder<> m_out_recovery_motor;
-	output_finder<> m_out_coin_accept;
+	output_finder<> m_out_coin_valid;
 	output_finder<3> m_out_sorter;
 	output_finder<24> m_out_extractor;
 	output_finder<> m_out_flap;
@@ -135,7 +138,7 @@ private:
 	u8 m_coinsel_state = COINSEL_IDLE;
 	u8 m_coinsel_coin = 0;
 	u8 m_coinsel_code = 0;
-	bool m_coinsel_accepted = false;
+	bool m_coinsel_enable = false;
 	bool m_recovery_motor = false;
 	bool m_recovery_pos = false;
 	u32 m_extractors = 0;
@@ -154,7 +157,7 @@ private:
 	void escrow_return_w(int state);
 	void escrow_collect_w(int state);
 	void recovery_motor_w(int state);
-	void coin_accept_w(int state);
+	void coin_valid_w(int state);
 	template <unsigned N> void sorter_w(int state);
 	template <unsigned N> void extractors_w(u8 data);
 
@@ -404,6 +407,7 @@ void design_state::hopper_motor_w(int state)
 void design_state::enable_w(int state)
 {
 	m_out_enable = state;
+	m_coinsel_enable = state;
 }
 
 void design_state::escrow_return_w(int state)
@@ -496,10 +500,10 @@ TIMER_CALLBACK_MEMBER(design_state::remote_release)
 /*
     Coin selector (simulated)
 
-    For a valid code the CPU pulses latch 0 bit 7, then gives credit only
-    after the selector sends the same code a second time.  Code 0 is idle,
-    0xf is ignored and 0xe is awaited while the escrow outputs are on.
-    Pulse lengths and delays are made up.
+    The firmware gives credit only after reading the same code twice, with
+    code 0 in between.  Code 0 is idle, 0xf is ignored and 0xe is awaited
+    while the escrow outputs are on.  Pulse lengths and delays are made up.
+    Coins are rejected while latch 0 bit 3 is low (assumption).
 */
 
 INPUT_CHANGED_MEMBER(design_state::coin_inserted)
@@ -507,24 +511,24 @@ INPUT_CHANGED_MEMBER(design_state::coin_inserted)
 	if (!newval || (m_coinsel_state != COINSEL_IDLE))
 		return;
 
+	if (!m_coinsel_enable)
+	{
+		LOGCOINSEL("coin code %02x rejected, selector inhibited\n", param);
+		return;
+	}
+
 	LOGCOINSEL("coin inserted, code %02x\n", param);
 
 	m_coinsel_coin = param;
-	m_coinsel_accepted = false;
 	m_coinsel_state = COINSEL_VALIDATE;
 	m_coinsel_code = m_coinsel_coin;
 	m_coinsel_timer->adjust(attotime::from_msec(50));
 }
 
-void design_state::coin_accept_w(int state)
+// pulsed when a valid coin code is read; not a selector input according to the L66S manual
+void design_state::coin_valid_w(int state)
 {
-	m_out_coin_accept = state;
-
-	if (state && (m_coinsel_state == COINSEL_VALIDATE))
-	{
-		LOGCOINSEL("coin accepted by CPU\n");
-		m_coinsel_accepted = true;
-	}
+	m_out_coin_valid = state;
 }
 
 TIMER_CALLBACK_MEMBER(design_state::coinsel_update)
@@ -533,16 +537,8 @@ TIMER_CALLBACK_MEMBER(design_state::coinsel_update)
 	{
 	case COINSEL_VALIDATE:
 		m_coinsel_code = 0;
-		if (m_coinsel_accepted)
-		{
-			m_coinsel_state = COINSEL_TRAVEL;
-			m_coinsel_timer->adjust(attotime::from_msec(100));
-		}
-		else
-		{
-			LOGCOINSEL("coin rejected\n");
-			m_coinsel_state = COINSEL_IDLE;
-		}
+		m_coinsel_state = COINSEL_TRAVEL;
+		m_coinsel_timer->adjust(attotime::from_msec(100));
 		break;
 
 	case COINSEL_TRAVEL:
@@ -575,7 +571,7 @@ void design_state::machine_start()
 	save_item(NAME(m_coinsel_state));
 	save_item(NAME(m_coinsel_coin));
 	save_item(NAME(m_coinsel_code));
-	save_item(NAME(m_coinsel_accepted));
+	save_item(NAME(m_coinsel_enable));
 	save_item(NAME(m_recovery_motor));
 	save_item(NAME(m_recovery_pos));
 	save_item(NAME(m_extractors));
@@ -614,14 +610,14 @@ void design_state::design6(machine_config &config)
 	outlatch0.q_out_cb<0>().set(FUNC(design_state::hopper_motor_w<0>));
 	outlatch0.q_out_cb<1>().set(FUNC(design_state::hopper_motor_w<1>));
 	outlatch0.q_out_cb<2>().set(FUNC(design_state::hopper_motor_w<2>));
-	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; coin selector enable (assumption)
+	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; selector general inhibit (assumption)
 	outlatch0.q_out_cb<4>().set(FUNC(design_state::escrow_return_w)); // on during coin return; escrow (assumption)
 	outlatch0.q_out_cb<5>().set(FUNC(design_state::escrow_collect_w)); // on after a sale; escrow (assumption)
 	outlatch0.q_out_cb<6>().set(FUNC(design_state::recovery_motor_w)); // "AVERIA RECUP."
-	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_accept_w));
+	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_valid_w));
 
 	cd4099_device &outlatch1(CD4099(config, "outlatch1"));
-	outlatch1.q_out_cb<0>().set(FUNC(design_state::sorter_w<0>));
+	outlatch1.q_out_cb<0>().set(FUNC(design_state::sorter_w<0>)); // sorter coils, order relative to the manual's numbering unknown
 	outlatch1.q_out_cb<1>().set(FUNC(design_state::sorter_w<1>));
 	outlatch1.q_out_cb<2>().set(FUNC(design_state::sorter_w<2>));
 	outlatch1.q_out_cb<5>().set("vfd", FUNC(roc10937_device::data));
