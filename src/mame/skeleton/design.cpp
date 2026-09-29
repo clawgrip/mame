@@ -7,7 +7,7 @@
     * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
       presets selected in the CONFIGURACION menu.
 
-    Hardware (from the original notes, dump not specified):
+    Hardware:
     * Intel P8051, 27C256 EPROM, NEC D446C-2 2K SRAM (battery backed)
     * OKI M62X428 RTC
     * Rockwell 10937P-50 A8201-17 VFD controller, 16 characters
@@ -601,7 +601,7 @@ void design_state::machine_reset()
 
 void design_state::design6(machine_config &config)
 {
-	I8051(config, m_maincpu, 6_MHz_XTAL); // XTAL not documented, same as T61 board (assumption)
+	I8051(config, m_maincpu, 6_MHz_XTAL); // Unknown XTAL frequency
 	m_maincpu->set_addrmap(AS_PROGRAM, &design_state::program_map);
 	m_maincpu->set_addrmap(AS_DATA, &design_state::data_map);
 	m_maincpu->port_out_cb<1>().set(FUNC(design_state::port1_w));
