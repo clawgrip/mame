@@ -785,12 +785,12 @@ ROM_END
     System drivers
 **************************************************************************/
 
-//    YEAR   NAME         PARENT      COMPAT  MACHINE     INPUT     CLASS           INIT        COMPANY    FULLNAME                                       FLAGS
-SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                         MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
-SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, 43521600-5)",                   MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
+//    YEAR   NAME         PARENT      COMPAT  MACHINE     INPUT     CLASS           INIT        COMPANY    FULLNAME                              FLAGS
+SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
+SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, with 43521600-5 kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
 
-SYST( 19??,  azkoyent6,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T6",                    MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent8,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T8",                    MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent12,  0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T12",                   MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent61,  0,          0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 1)",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 19??,  azkoyent61a, azkoyent61, 0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 2)",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 19??,  azkoyent6,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T6",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 19??,  azkoyent8,   0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T8",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 19??,  azkoyent12,  0,          0,      azkoyent,   azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T12",          MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 19??,  azkoyent61,  0,          0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 1)",  MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 19??,  azkoyent61a, azkoyent61, 0,      azkoyent61, azkoyent, azkoyent_state, empty_init, "Azkoyen", "Vending machine model T61 (set 2)",  MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
