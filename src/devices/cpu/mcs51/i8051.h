@@ -290,7 +290,7 @@ protected:
 
 	void transmit(int state);
 	u8 p3_pins() const;
-	void set_mode0_pins(u8 rxd, u8 txd);
+	void set_serial_pins(u8 rxd, u8 txd);
 	void transmit_receive_mode0();
 
 	// Memory spaces

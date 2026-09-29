@@ -244,7 +244,7 @@ void mcs51_cpu_device::scon_w(u8 data)
 
 	// leaving mode 0 in the middle of a transmission releases RXD
 	if (BIT(m_scon, 6, 2) && !m_uart.rxd)
-		set_mode0_pins(1, m_uart.txd);
+		set_serial_pins(1, m_uart.txd);
 }
 
 u8 mcs51_cpu_device::sbuf_r()
@@ -492,19 +492,7 @@ offs_t mcs51_cpu_device::external_ram_iaddr(offs_t offset, offs_t mem_mask)
 
 void mcs51_cpu_device::transmit(int state)
 {
-	if (m_uart.txd != state)
-	{
-		m_uart.txd = state;
-
-		// P3.1 = SFR(P3) & TxD
-		if (BIT(m_p3, 1))
-		{
-			if (state)
-				m_port_out_cb[3](m_p3);
-			else
-				m_port_out_cb[3](m_p3 & ~0x02);
-		}
-	}
+	set_serial_pins(m_uart.rxd, state);
 }
 
 u8 mcs51_cpu_device::p3_pins() const
@@ -513,8 +501,9 @@ u8 mcs51_cpu_device::p3_pins() const
 	return m_p3 & (m_uart.rxd ? 0xff : 0xfe) & (m_uart.txd ? 0xff : 0xfd);
 }
 
-void mcs51_cpu_device::set_mode0_pins(u8 rxd, u8 txd)
+void mcs51_cpu_device::set_serial_pins(u8 rxd, u8 txd)
 {
+	// only notify the port when the pins really change
 	u8 const old = p3_pins();
 	m_uart.rxd = rxd;
 	m_uart.txd = txd;
@@ -534,7 +523,8 @@ void mcs51_cpu_device::transmit_receive_mode0()
 		break;
 
 	case SIO_START:
-		// SEND goes active a machine cycle after writing SBUF
+		// SEND goes active a machine cycle after writing SBUF, putting bit 0 on RXD
+		set_serial_pins(BIT(m_uart.data_out, 0), m_uart.txd);
 		m_uart.txbit = SIO_DATA0;
 		return;
 
@@ -543,20 +533,18 @@ void mcs51_cpu_device::transmit_receive_mode0()
 		{
 			unsigned const bit = m_uart.txbit - SIO_DATA0;
 			LOGMASKED(LOG_TX, "tx bit %u data %d (%s)\n", bit, BIT(m_uart.data_out, bit), machine().time().to_string());
-			if (!bit)
-				set_mode0_pins(BIT(m_uart.data_out, 0), m_uart.txd);
-			set_mode0_pins(m_uart.rxd, 0);
-			set_mode0_pins(m_uart.rxd, 1);
+			set_serial_pins(m_uart.rxd, 0);
+			set_serial_pins(m_uart.rxd, 1);
 
 			// the next bit is shifted out at S6P2, RXD is released after the last one
 			if (bit < 7)
 			{
-				set_mode0_pins(BIT(m_uart.data_out, bit + 1), 1);
+				set_serial_pins(BIT(m_uart.data_out, bit + 1), 1);
 				m_uart.txbit++;
 			}
 			else
 			{
-				set_mode0_pins(1, 1);
+				set_serial_pins(1, 1);
 				m_uart.txbit = SIO_STOP;
 			}
 		}
@@ -577,21 +565,19 @@ void mcs51_cpu_device::transmit_receive_mode0()
 	switch (m_uart.rxbit)
 	{
 	case SIO_IDLE:
-		// reception starts when REN is set with RI clear
+		// reception starts when REN is set with RI clear, RECEIVE goes active
+		// a machine cycle later, so RI is set at the same point as TI would be
 		if (BIT(m_scon, SCON_REN) && !BIT(m_scon, SCON_RI))
-			m_uart.rxbit = SIO_START;
-		break;
-
-	case SIO_START:
-		// RECEIVE goes active at the end of the next machine cycle
-		m_uart.data_in = 0;
-		m_uart.rxbit = SIO_DATA0;
+		{
+			m_uart.data_in = 0;
+			m_uart.rxbit = SIO_DATA0;
+		}
 		break;
 
 	case SIO_DATA0: case SIO_DATA1: case SIO_DATA2: case SIO_DATA3:
 	case SIO_DATA4: case SIO_DATA5: case SIO_DATA6: case SIO_DATA7:
 		{
-			set_mode0_pins(1, 0);
+			set_serial_pins(1, 0);
 
 			// RXD is sampled at S5P2, before the clock rises
 			int const data = BIT(m_port_in_cb[3](), 0);
@@ -599,7 +585,7 @@ void mcs51_cpu_device::transmit_receive_mode0()
 			if (data)
 				m_uart.data_in |= 1U << (m_uart.rxbit - SIO_DATA0);
 
-			set_mode0_pins(1, 1);
+			set_serial_pins(1, 1);
 			if (m_uart.rxbit == SIO_DATA7)
 				m_uart.rxbit = SIO_STOP;
 			else
@@ -1423,8 +1409,9 @@ void mcs51_cpu_device::device_reset()
 	m_tl1 = 0;
 	m_tl0 = 0;
 
-	// release RXD before driving the ports
+	// release RXD and TXD before driving the ports
 	m_uart.rxd = 1;
+	m_uart.txd = 1;
 
 	// set the port configurations to all 1's
 	p3_w(0xff);
@@ -1437,7 +1424,6 @@ void mcs51_cpu_device::device_reset()
 	m_uart.rx_clk = 0;
 	m_uart.tx_clk = 0;
 	m_uart.txbit = SIO_IDLE;
-	m_uart.txd = 1;
 	m_uart.rxbit = SIO_IDLE;
 	m_uart.rxb8 = 0;
 	m_uart.smod_div = 0;
