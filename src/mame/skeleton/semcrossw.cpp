@@ -200,7 +200,7 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 	cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
 	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
 	green (5 s) and red, and 3 s later the vehicles get green again. The pedestrian signal
-	is board 2 B in the "Relay Boards" view (Tab menu, Video Options).
+	is the smaller one, board 2 B in the "Relay Boards" view.
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
