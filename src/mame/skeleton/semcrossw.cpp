@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders: Tomás García-Merás Capote (ClawGrip)
+// copyright-holders:Tomás García-Merás Capote (ClawGrip)
 
 /***************************************************************************
 
@@ -103,26 +103,63 @@ Notes from one operator that used to work with this controller model:
  From 100 to 200 you'll find the first program, from 200 to 300 the second, and so on up to
  seven programs, with 100 for green, 101 for yellow, 102 for clear, and then repeat it again.
 
-Hardware details deduced from the firmware, not verified on real hardware:
- - 2000-23FF is assumed to be the battery backed RAM holding the programs. This firmware
-   only reads the lamp tables of the EEPROM (pointer at C625), mapped at C000. The rest of
-   the EEPROM has programs laid out for 2000 (17 and 3 steps) and tables at 400-611, never
-   read; with the EEPROM also at 2000 the controller wouldn't work: 103 s of steady amber
-   and 103 s of all red at start-up, no lamp phases for 11 of the 17 steps, no vehicle
-   amber in the 3 step program.
- - Up to ten relays PCBs (selected by A2-A11); the lamp tables in the EEPROM drive three.
-   Outputs: bits 0/4 red, 1/5 amber, 2/6 green. The lamp current sensors are compared with
-   the outputs using the mask at 160, three failed checks restart the flashing start-up.
+What the firmware does (facts from the disassembly):
+ - It only clears the MC6802 internal RAM (0000-007F) at reset.
+ - Programs and parameters are at 2000-23FF: decimal addresses 100-999 are 2064-23E7.
+ - The keyboard, display, switches and interrupts use a PIA at 8800. A PIA at 8400 is
+   initialized but never used (the main PCB has only one MC6821).
+ - The relay boards are at A000-AFFF, one per address line from A2 to A11 (the PIAs at
+   A004, A008, ... A800 are initialized). Port A drives the lamps, active low: FF at
+   start-up, and 77 for a board with no lamps lit in the tables. Port B is compared with
+   port A for the lamps in the mask at 160 (lamp current sensors).
+ - The lamp tables are reached through the pointer at C625, and the pointers stored there
+   (C65D-C695) only make sense with the EEPROM at C000. They have entries for three relay
+   boards (the third one only has an amber flashing in step 0). Lamp bits, going by these
+   tables: 0/4 red, 1/5 amber, 2/6 green; 2/6 can also use a second flashing rate (the
+   pedestrian green flashing); 3/7 aren't lamps (never checked with the sensors).
+ - The step durations are counted in units of 20 NMIs, the amber flashing toggles every 10
+   NMIs and the second flashing rate every 7.
+ - Each NMI enables either the CA1 interrupt (rising edge) or the CB1 one (falling edge)
+   of the 8800 PIA. The IRQ handler writes the lamps after CA1, or checks the sensors after
+   CB1, and disables both.
+ - PA0-PA2 select a display digit (0-5, 0 on the left), a key row (0-4) or a switch row
+   (5-7), PA3-PA4 the column, keys are read on PA5 and switches on PA6 (active low), PB
+   drives the segments (active low). PA7 goes high for about one step unit plus the value
+   at 163 on every synchronisation input, or once per cycle without them.
+ - The main loop pulses CA2 low. After checking the sensors of a relay board, the IRQ
+   handler pulses its CB2 low, except for a mismatch during the start-up flashing.
+ - Three sensor mismatches (the count is cleared every 128 step units) hold it in the
+   start-up flashing until the count is cleared.
+ - The rest of the EEPROM has programs laid out for 2000 (17 and 3 steps) and tables at
+   400-611 with pointers to 2xxx, never read by this firmware. With them, the controller
+   wouldn't work: 103 s of steady amber and 103 s of all red at start-up, no lamp tables
+   for 11 of the 17 steps, no vehicle amber in the 3 step program.
 
-Programs 1-4 at 100, 200, 300, 400:
+Assumptions, not verified on real hardware:
+ - 2000-23FF are the two UM6114, battery backed (there's no battery in the PCB drawing,
+   but the firmware never initializes them). The clear range command stops at 2800, and
+   the unused EEPROM data suggests that another firmware version had the EEPROM at 2000.
+ - The NMI is 20 Hz: step units of one second, as in the operator's notes, and the amber
+   flashing at 1 Hz. It would be the 100 Hz mains zero crossings divided by five (74LS90),
+   and CA1 and CB1 would get a 50 Hz square wave from the mains (so the lamps switch at
+   the zero crossings).
+ - PA7 is a synchronisation output, and the assignment of the switches and optocoupler
+   inputs (see the input ports).
+ - The 74LS122 of each PCB is a watchdog retriggered by the CA2 or CB2 pulses.
+
+Programs 1-4 at 100, 200, 300, 400 (only four, although the operator mentions seven):
  +0..+23   step durations in seconds, run from step N-1 down to step 0 (main green)
  +24       number of steps N
- +25, +26  start-up all red and steady amber durations (program 1 ones at power-up)
+ +25..+27  start-up all red, steady amber and flashing durations (always the ones of the
+           first program, the flashing one at 127: 0 = 256 s)
  +29       synchronisation offset
  +30..+53  non zero if the step also times out in manual mode
-Other parameters: 127 start-up flashing duration (0 = 255 s), 160 lamp monitor mask,
-161/162 synchronisation limits (maximum wait, shortening window), 164 step after which the
-lamps rest in step 0 until there is a pedestrian demand.
+Other parameters: 160 lamp monitor mask (lamp bits, 0 = no check), 161/162 synchronisation
+limits (maximum wait, shortening window), 163 synchronisation output pulse length, 164 step
+after which the lamps rest in step 0 until there is a pedestrian demand.
+The lamps lit in each step come from the lamp tables in the EEPROM, so the meaning of each
+duration depends on the installation (with the dumped tables 101 isn't amber, unlike in the
+operator's notes).
 
 How to program it, step by step (a crosswalk cycle for the lamp tables in the EEPROM):
 The display shows a 3 digit address, a dot and the 3 digit value stored there: [100.020]
@@ -132,8 +169,10 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 
  1. Leave the three toggle switches down (FLASHING, MANUAL and EXT. PROG. off) and start
 	the machine. With an empty memory the lamps flash amber and the display shows
-	[000.000]. If the program is not complete after about four minutes, the controller
-	stops (the display no longer reacts): reset it (F3) and go on, stored values are kept.
+	[000.000]. After about four minutes of flashing, if no step has a duration yet, the
+	firmware loops forever looking for one and the controller stops (the display no
+	longer reacts; the watchdog, not emulated, may restart it): reset it (F3) and go on,
+	stored values are kept.
  2. Press R. The display goes blank: [   .   ].
  3. Type 1 0 0. The display shows [100.000]: address 100, value 000.
  4. Type 0 2 0 (20 seconds of green for the vehicles). The display shows [100.020].
@@ -166,18 +205,25 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
  - After a mistake press R and start again from the address: a value is only stored when
-   exactly three digits are followed by K.
+   exactly three digits are followed by K. Values go from 000 to 255 (higher ones are
+   stored modulo 256).
  - M switches to hexadecimal: 4 address digits (any address, e.g. C625 for the lamp tables
    in the EEPROM) and 2 value digits. Press M again to go back.
  - N clears a range: R, the first address, the last address typed as the value, and N.
    For example R 2 0 0 2 9 9 N clears the second program.
- - Addresses 000-099 show the internal RAM. 091 selects the program (0 to 3 for the ones at
-   100 to 400) when EXT. PROG. is off; it goes back to 0 after every reset.
+ - Addresses 000-099 show the internal RAM, and only 086-095 can be changed. 091 selects
+   the program (0 to 3 for the ones at 100 to 400) when EXT. PROG. is off; it goes back to
+   0 after every reset. With EXT. PROG. on, PROG 0 and PROG 1 select it, and 3 selects the
+   flashing instead. A new program starts when the current cycle ends.
 
 TODO:
- - verify the memory map, the NMI source and the switch / input assignments
- - watchdogs (74LS122 on the main and relays PCBs, retriggered with CA2 and CB2)
+ - verify the memory map, the NMI and IRQ sources and the switch / input assignments
+ - watchdogs: what the 74LS122 on the main and relays PCBs do on timeout is unknown
  - the lamp current sensors always report working lamps
+ - the manual step input: the firmware advances when it goes inactive, so with a normally
+   open button (as emulated) the step changes on release, and switching to manual mode
+   skips the current step at once (unless it also times out in manual mode); maybe it's
+   a normally closed button
 
 ***************************************************************************/
 
@@ -185,10 +231,10 @@ TODO:
 
 #include "cpu/m6800/m6800.h"
 #include "machine/6821pia.h"
+#include "machine/clock.h"
 #include "machine/eeprompar.h"
 #include "machine/input_merger.h"
 #include "machine/nvram.h"
-#include "machine/timer.h"
 #include "video/pwm.h"
 
 #include "semcrossw.lh"
@@ -218,6 +264,7 @@ protected:
 	virtual void machine_start() override ATTR_COLD;
 
 private:
+	// the lamp tables in the EEPROM drive three relay boards, the firmware supports ten
 	static constexpr unsigned RELAY_BOARDS = 3;
 
 	required_device<m6802_cpu_device> m_maincpu;
@@ -232,7 +279,6 @@ private:
 	u8 m_pia_pa = 0xff;
 	u8 m_pia_pb = 0xff;
 	u8 m_relay_pa[RELAY_BOARDS];
-	u8 m_mains = 0;
 	u8 m_nmi_div = 0;
 
 	void mem_map(address_map &map) ATTR_COLD;
@@ -247,7 +293,7 @@ private:
 	template <unsigned N> void relay_pa_w(u8 data);
 	template <unsigned N> u8 relay_pb_r();
 
-	TIMER_DEVICE_CALLBACK_MEMBER(mains_tick);
+	void mains_w(int state);
 };
 
 
@@ -258,14 +304,14 @@ void semcrossw_state::machine_start()
 	save_item(NAME(m_pia_pa));
 	save_item(NAME(m_pia_pb));
 	save_item(NAME(m_relay_pa));
-	save_item(NAME(m_mains));
 	save_item(NAME(m_nmi_div));
 }
 
 
 u8 semcrossw_state::pia_pa_r()
 {
-	// rows through a 74LS155, columns through a 4052
+	// the firmware selects the rows with PA0-PA2 and the columns with PA3-PA4; the
+	// programmer PCB has a 74LS155 and a 4052 that would do it (not verified)
 	u8 const row = m_pia_pa & 0x07;
 	u8 const col = (m_pia_pa >> 3) & 0x03;
 	u8 data = 0xff;
@@ -333,20 +379,20 @@ void semcrossw_state::relay_pa_w(u8 data)
 template <unsigned N>
 u8 semcrossw_state::relay_pb_r()
 {
-	// lamp current sensors, they read like the outputs when the lamps work
+	// lamp current sensors: the firmware expects them to read like the outputs when the
+	// lamps work
 	return m_relay_pa[N];
 }
 
 
-TIMER_DEVICE_CALLBACK_MEMBER(semcrossw_state::mains_tick)
+void semcrossw_state::mains_w(int state)
 {
-	// mains zero crossings, the firmware uses both edges
-	m_mains ^= 1;
-	m_pia->ca1_w(m_mains);
-	m_pia->cb1_w(m_mains);
+	// assumed: CA1 and CB1 get the mains square wave (the firmware writes the lamps on a
+	// rising edge and checks the sensors on a falling one), and the NMI (20 Hz according
+	// to the firmware timings) is the zero crossings divided by five
+	m_pia->ca1_w(state);
+	m_pia->cb1_w(state);
 
-	// the step and flashing timings need a 20 Hz NMI: assumed to be the zero crossings
-	// divided by the 74LS90
 	if (++m_nmi_div == 5)
 	{
 		m_nmi_div = 0;
@@ -358,7 +404,7 @@ TIMER_DEVICE_CALLBACK_MEMBER(semcrossw_state::mains_tick)
 void semcrossw_state::mem_map(address_map &map)
 {
 	map(0x2000, 0x23ff).ram().share("nvram");
-	// 8400-8403: a PIA is initialized by the firmware but never used
+	// 8400-8403: the firmware initializes a PIA here, but never uses it
 	map(0x8800, 0x8803).rw(m_pia, FUNC(pia6821_device::read), FUNC(pia6821_device::write));
 	map(0xa000, 0xafff).rw(FUNC(semcrossw_state::relay_r), FUNC(semcrossw_state::relay_w));
 	map(0xc000, 0xc7ff).rw("eeprom", FUNC(eeprom_parallel_28xx_device::read), FUNC(eeprom_parallel_28xx_device::write));
@@ -366,7 +412,7 @@ void semcrossw_state::mem_map(address_map &map)
 }
 
 
-static INPUT_PORTS_START(semcrossw)
+INPUT_PORTS_START(semcrossw)
 	PORT_START("KEY0")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYPAD) PORT_NAME("C") PORT_CODE(KEYCODE_C)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYPAD) PORT_NAME("D") PORT_CODE(KEYCODE_D)
@@ -402,13 +448,15 @@ static INPUT_PORTS_START(semcrossw)
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYPAD) PORT_NAME("K (Store/Next)") PORT_CODE(KEYCODE_K)
 	PORT_BIT(0xf0, IP_ACTIVE_LOW, IPT_UNUSED)
 
+	// the names and the switch / optocoupler assignment come from what the firmware does
+	// with each input (not verified); the firmware sees a low input as active
 	PORT_START("SW0")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("External Program Select Bit 0") PORT_CODE(KEYCODE_G)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("External Program Select Bit 1") PORT_CODE(KEYCODE_H)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Pedestrian Request") PORT_CODE(KEYCODE_ENTER)
 	PORT_BIT(0xf8, IP_ACTIVE_LOW, IPT_UNUSED)
 
-	PORT_START("SW1") // flashing and manual modes are selected with the switch open
+	PORT_START("SW1") // flashing and manual modes are selected with the input inactive (high)
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_TOGGLE PORT_NAME("Flashing Mode") PORT_CODE(KEYCODE_L)
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_TOGGLE PORT_NAME("Manual Mode") PORT_CODE(KEYCODE_U)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("External Program Selection") PORT_CODE(KEYCODE_X)
@@ -416,7 +464,7 @@ static INPUT_PORTS_START(semcrossw)
 
 	PORT_START("SW2")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Synchronisation Input") PORT_CODE(KEYCODE_S)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Manual Step Advance") PORT_CODE(KEYCODE_SPACE) // advances on release
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Manual Step Advance") PORT_CODE(KEYCODE_SPACE) // the firmware advances when it goes inactive (see TODO)
 	PORT_BIT(0xfc, IP_ACTIVE_LOW, IPT_UNUSED)
 INPUT_PORTS_END
 
@@ -426,7 +474,7 @@ void semcrossw_state::semcrossw(machine_config &config)
 	M6802(config, m_maincpu, 4_MHz_XTAL);
 	m_maincpu->set_addrmap(AS_PROGRAM, &semcrossw_state::mem_map);
 
-	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // 2 x UM6114, battery backed
+	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // 2 x UM6114, assumed battery backed
 
 	EEPROM_2816(config, "eeprom");
 
@@ -434,22 +482,24 @@ void semcrossw_state::semcrossw(machine_config &config)
 	m_pia->readpa_handler().set(FUNC(semcrossw_state::pia_pa_r));
 	m_pia->writepa_handler().set(FUNC(semcrossw_state::pia_pa_w));
 	m_pia->writepb_handler().set(FUNC(semcrossw_state::pia_pb_w));
+	m_pia->ca2_handler().set_nop(); // pulsed low by the main loop, watchdog?
+	m_pia->cb2_handler().set_nop(); // left floating while CB1 is enabled, unknown use
 	m_pia->irqa_handler().set("mainirq", FUNC(input_merger_device::in_w<0>));
 	m_pia->irqb_handler().set("mainirq", FUNC(input_merger_device::in_w<1>));
 
 	INPUT_MERGER_ANY_HIGH(config, "mainirq").output_handler().set_inputline(m_maincpu, M6802_IRQ_LINE);
 
-	TIMER(config, "mains").configure_periodic(FUNC(semcrossw_state::mains_tick), attotime::from_hz(100));
+	CLOCK(config, "mains", 50).signal_handler().set(FUNC(semcrossw_state::mains_w));
 
-	PIA6821(config, m_relay_pia[0]);
+	for (auto &pia : m_relay_pia)
+	{
+		PIA6821(config, pia);
+		pia->cb2_handler().set_nop(); // pulsed low after checking the lamp sensors, watchdog?
+	}
 	m_relay_pia[0]->writepa_handler().set(FUNC(semcrossw_state::relay_pa_w<0>));
 	m_relay_pia[0]->readpb_handler().set(FUNC(semcrossw_state::relay_pb_r<0>));
-
-	PIA6821(config, m_relay_pia[1]);
 	m_relay_pia[1]->writepa_handler().set(FUNC(semcrossw_state::relay_pa_w<1>));
 	m_relay_pia[1]->readpb_handler().set(FUNC(semcrossw_state::relay_pb_r<1>));
-
-	PIA6821(config, m_relay_pia[2]);
 	m_relay_pia[2]->writepa_handler().set(FUNC(semcrossw_state::relay_pa_w<2>));
 	m_relay_pia[2]->readpb_handler().set(FUNC(semcrossw_state::relay_pb_r<2>));
 
@@ -465,7 +515,9 @@ ROM_START(semcrossw)
 	ROM_LOAD("at27c16.bin",    0x000, 0x800, CRC(2e7b10b1) SHA1(fba6465db1baa38ab79ed24a85de460f8be488b9))
 
 	ROM_REGION(0x800, "eeprom", 0)
-	ROM_LOAD("x2816cp-12.bin", 0x000, 0x800, CRC(c2ef2e80) SHA1(6c3c4215169c2941a37053888174fe0499301bac)) // Configured for 3 relay boards
+	// dumped from a configured machine: lamp tables for three relay boards at 0x625, and
+	// data for another firmware version that this one never reads
+	ROM_LOAD("x2816cp-12.bin", 0x000, 0x800, CRC(c2ef2e80) SHA1(6c3c4215169c2941a37053888174fe0499301bac))
 ROM_END
 
 } // anonymous namespace
