@@ -116,7 +116,9 @@ What the firmware does (facts from the disassembly):
    (C65D-C695) only make sense with the EEPROM at C000. They have entries for three relay
    boards (the third one only has an amber flashing in step 0). Lamp bits, going by these
    tables: 0/4 red, 1/5 amber, 2/6 green; 2/6 can also use a second flashing rate (the
-   pedestrian green flashing); 3/7 aren't lamps (never checked with the sensors).
+   pedestrian green flashing); 3/7 aren't lamps (never checked with the sensors). In board
+   2 B, red and green act as a walk / don't walk signal, and amber only flashes, alongside
+   the red or the green, so it must be a separate lamp.
  - The step durations are counted in units of 20 NMIs, the amber flashing toggles every 10
    NMIs and the second flashing rate every 7.
  - Each NMI enables either the CA1 interrupt (rising edge) or the CB1 one (falling edge)
@@ -200,7 +202,7 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 	cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
 	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
 	green (5 s) and red, and 3 s later the vehicles get green again. The pedestrian signal
-	is the smaller one, board 2 B in the "Relay Boards" view.
+	is the one with figures (board 2 B in the "Relay Boards" view).
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
