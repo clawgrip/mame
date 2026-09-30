@@ -149,6 +149,9 @@ Assumptions, not verified on real hardware:
  - PA7 is a synchronisation output, and the assignment of the switches and optocoupler
    inputs (see the input ports).
  - The 74LS122 of each PCB is a watchdog retriggered by the CA2 or CB2 pulses.
+ - The amber of 2 B and the one of 3 A are flashing amber arrows beside the heads of the
+   first and second vehicle phases, to turn with caution for the pedestrians while the
+   phase is red, as usual in Spain. The directions of the arrows are unknown.
 
 Programs 1-4 at 100, 200, 300, 400 (only four, although the operator mentions seven):
  +0..+23   step durations in seconds, run from step N-1 down to step 0 (main green)
@@ -204,7 +207,8 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
 	green (5 s) and red, and 3 s later the vehicles get green again. The first pole has the
 	first vehicle phase and the pedestrian signal, the second one the second vehicle phase,
-	which has green along with the pedestrians, and two lamps that only flash amber.
+	which has green along with the pedestrians; each vehicle head has a flashing amber
+	turn arrow beside it.
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
