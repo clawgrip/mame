@@ -116,6 +116,10 @@ license:CC0-1.0
 	<element name="t_syncout"><text string="SYNC OUT" align="1"><color red="0.85" green="0.85" blue="0.85" /></text></element>
 	<element name="t_push"><text string="PUSH"><color red="0.05" green="0.05" blue="0.05" /></text></element>
 	<element name="t_pedestrian"><text string="PEDESTRIAN"><color red="0.05" green="0.05" blue="0.05" /></text></element>
+	<element name="t_grp1a"><text string="1A"><color red="0.60" green="0.62" blue="0.66" /></text></element>
+	<element name="t_grp2a"><text string="2A"><color red="0.60" green="0.62" blue="0.66" /></text></element>
+	<element name="t_grp2b"><text string="2B"><color red="0.60" green="0.62" blue="0.66" /></text></element>
+	<element name="t_grp3a"><text string="3A"><color red="0.60" green="0.62" blue="0.66" /></text></element>
 	<repeat count="3">
 		<param name="b" start="1" increment="1" />
 		<element name="t_board~b~_0"><text string="BOARD ~b~ A"><color red="0.85" green="0.85" blue="0.85" /></text></element>
@@ -201,29 +205,52 @@ license:CC0-1.0
 	</group>
 
 	<view name="Controller">
-		<bounds left="0" top="0" right="810" bottom="620" />
+		<bounds left="0" top="0" right="840" bottom="700" />
 
-		<!-- traffic light driven by relay board 1 (A004), bits 0-2 -->
-		<element ref="pole"><bounds x="85" y="440" width="20" height="160" /></element>
-		<element ref="housing"><bounds x="20" y="20" width="150" height="420" /></element>
-		<element name="lamp1_0" ref="lamp_red"><bounds x="35" y="35" width="120" height="120" /></element>
-		<element name="lamp1_1" ref="lamp_amber"><bounds x="35" y="170" width="120" height="120" /></element>
-		<element name="lamp1_2" ref="lamp_green"><bounds x="35" y="305" width="120" height="120" /></element>
+		<!-- first pole: first vehicle phase, pedestrian signal and push button -->
+		<element ref="pole"><bounds x="85" y="332" width="20" height="368" /></element>
 
-		<!-- pedestrian signal driven by relay board 2 (A008), bits 4 and 6 (going by the lamp
-		     tables); bit 5 only flashes, alongside the red or the green, so it isn't shown here -->
-		<element ref="pole"><bounds x="240" y="440" width="20" height="160" /></element>
-		<element ref="housing"><bounds x="195" y="248" width="110" height="192" /></element>
-		<element name="lamp2_4" ref="ped_red"><bounds x="210" y="260" width="80" height="80" /></element>
-		<element name="lamp2_6" ref="ped_green"><bounds x="210" y="348" width="80" height="80" /></element>
+		<!-- relay board 1 (A004) group A, bits 0-2 (group B always shows the same) -->
+		<element ref="t_grp1a"><bounds x="4" y="30" width="32" height="20" /></element>
+		<element ref="housing"><bounds x="40" y="20" width="110" height="312" /></element>
+		<element name="lamp1_0" ref="lamp_red"><bounds x="50" y="32" width="90" height="90" /></element>
+		<element name="lamp1_1" ref="lamp_amber"><bounds x="50" y="131" width="90" height="90" /></element>
+		<element name="lamp1_2" ref="lamp_green"><bounds x="50" y="230" width="90" height="90" /></element>
 
-		<!-- pedestrian push button box -->
-		<element ref="pedbox"><bounds x="205" y="470" width="90" height="100" /></element>
-		<element ref="t_pedestrian"><bounds x="210" y="478" width="80" height="14" /></element>
-		<element ref="button" inputtag="SW0" inputmask="0x04"><bounds x="225" y="498" width="50" height="50" /></element>
-		<element ref="t_push"><bounds x="225" y="550" width="50" height="14" /></element>
+		<!-- relay board 2 (A008) group B, bits 4 and 6: going by the lamp tables, a walk /
+		     don't walk signal (bit 5 only flashes, alongside them, so it's a separate lamp) -->
+		<element ref="t_grp2b"><bounds x="4" y="358" width="32" height="20" /></element>
+		<element ref="housing"><bounds x="50" y="348" width="90" height="180" /></element>
+		<element name="lamp2_4" ref="ped_red"><bounds x="59" y="358" width="72" height="72" /></element>
+		<element name="lamp2_6" ref="ped_green"><bounds x="59" y="446" width="72" height="72" /></element>
 
-		<group ref="programmer"><bounds x="330" y="20" width="460" height="580" /></group>
+		<element ref="pedbox"><bounds x="50" y="555" width="90" height="100" /></element>
+		<element ref="t_pedestrian"><bounds x="55" y="563" width="80" height="14" /></element>
+		<element ref="button" inputtag="SW0" inputmask="0x04"><bounds x="70" y="583" width="50" height="50" /></element>
+		<element ref="t_push"><bounds x="70" y="635" width="50" height="14" /></element>
+
+		<!-- second pole: second vehicle phase (green along with the pedestrians) and the two
+		     lamps that only flash amber; what they are is unknown -->
+		<element ref="pole"><bounds x="235" y="332" width="20" height="368" /></element>
+
+		<!-- relay board 2 (A008) group A, bits 0-2 -->
+		<element ref="t_grp2a"><bounds x="304" y="30" width="32" height="20" /></element>
+		<element ref="housing"><bounds x="190" y="20" width="110" height="312" /></element>
+		<element name="lamp2_0" ref="lamp_red"><bounds x="200" y="32" width="90" height="90" /></element>
+		<element name="lamp2_1" ref="lamp_amber"><bounds x="200" y="131" width="90" height="90" /></element>
+		<element name="lamp2_2" ref="lamp_green"><bounds x="200" y="230" width="90" height="90" /></element>
+
+		<!-- relay board 2 (A008) group B, bit 5: flashes during the pedestrian phase -->
+		<element ref="t_grp2b"><bounds x="304" y="378" width="32" height="20" /></element>
+		<element ref="housing"><bounds x="205" y="348" width="80" height="80" /></element>
+		<element name="lamp2_5" ref="lamp_amber"><bounds x="213" y="356" width="64" height="64" /></element>
+
+		<!-- relay board 3 (A010) group A, bit 1: flashes in step 0 (bits 0 and 2 are never lit) -->
+		<element ref="t_grp3a"><bounds x="304" y="474" width="32" height="20" /></element>
+		<element ref="housing"><bounds x="205" y="444" width="80" height="80" /></element>
+		<element name="lamp3_1" ref="lamp_amber"><bounds x="213" y="452" width="64" height="64" /></element>
+
+		<group ref="programmer"><bounds x="360" y="60" width="460" height="580" /></group>
 	</view>
 
 	<view name="Relay Boards">

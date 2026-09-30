@@ -114,11 +114,12 @@ What the firmware does (facts from the disassembly):
    port A for the lamps in the mask at 160 (lamp current sensors).
  - The lamp tables are reached through the pointer at C625, and the pointers stored there
    (C65D-C695) only make sense with the EEPROM at C000. They have entries for three relay
-   boards (the third one only has an amber flashing in step 0). Lamp bits, going by these
-   tables: 0/4 red, 1/5 amber, 2/6 green; 2/6 can also use a second flashing rate (the
-   pedestrian green flashing); 3/7 aren't lamps (never checked with the sensors). In board
-   2 B, red and green act as a walk / don't walk signal, and amber only flashes, alongside
-   the red or the green, so it must be a separate lamp.
+   boards. Lamp bits, going by these tables: 0/4 red, 1/5 amber, 2/6 green; 2/6 can also
+   use a second flashing rate (the pedestrian green flashing); 3/7 aren't lamps (never
+   checked with the sensors). Groups 1 A and 1 B always match (first vehicle phase), 2 A
+   is a second vehicle phase with green along with the pedestrians, 2 B red and green act
+   as a walk / don't walk signal while its amber only flashes, alongside them (a separate
+   lamp), 3 A only flashes amber in step 0 and 3 B is never lit.
  - The step durations are counted in units of 20 NMIs, the amber flashing toggles every 10
    NMIs and the second flashing rate every 7.
  - Each NMI enables either the CA1 interrupt (rising edge) or the CB1 one (falling edge)
@@ -183,8 +184,8 @@ click them on the panel. The dot after the last digit is an indicator (see steps
  7. For each of these addresses type the value, press K to store it and K again to go to
 	the next one (all the times are in seconds):
 	  101  003  pedestrian clearance (all red)
-	  102  005  flashing pedestrian green
-	  103  010  pedestrian green
+	  102  005  flashing pedestrian green (amber for the second vehicle phase)
+	  103  010  pedestrian green (and green for the second vehicle phase)
 	  104  002  vehicle clearance (all red)
 	  105  003  vehicle amber (no need to press K twice after this one)
  8. Press R, type 1 2 4 ([124.000]) and enter these values the same way:
@@ -201,8 +202,9 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 	digit lights up to confirm it; if it doesn't, try again a bit later. When the current
 	cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
 	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
-	green (5 s) and red, and 3 s later the vehicles get green again. The pedestrian signal
-	is the one with figures (board 2 B in the "Relay Boards" view).
+	green (5 s) and red, and 3 s later the vehicles get green again. The first pole has the
+	first vehicle phase and the pedestrian signal, the second one the second vehicle phase,
+	which has green along with the pedestrians, and two lamps that only flash amber.
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
