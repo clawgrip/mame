@@ -196,7 +196,7 @@
 
   TODO:
 
-  - IRQ sources.
+  - IRQ sources (the frequencies are guessed from the software timings).
   - Master to video CPU link: after the boot handshake (FC30h-FC32h) the
     master sends the commands writing FC29h-FC2Ch and strobing FC28h,
     which aren't hooked up yet.
@@ -248,8 +248,6 @@ private:
 	void serial_w(offs_t offset, uint8_t data);
 	void serial_status_w(uint8_t data);
 	uint8_t hack_r();
-	INTERRUPT_GEN_MEMBER(_4enlinea_irq);
-	INTERRUPT_GEN_MEMBER(_4enlinea_audio_irq);
 
 	uint8_t eeprom_data_r();
 	void eeprom_data_w(uint8_t data);
@@ -260,7 +258,6 @@ private:
 	void k7_out0_w(uint8_t data);
 	void k7_out1_w(uint8_t data);
 
-	uint8_t m_irq_count = 0;
 	uint8_t m_serial_flags = 0;
 	uint8_t m_serial_data[2]{};
 
@@ -488,25 +485,6 @@ void _4enlinea_state::machine_reset()
 *         Machine Drivers          *
 ***********************************/
 
-// TODO: IRQ sources are unknown
-INTERRUPT_GEN_MEMBER(_4enlinea_state::_4enlinea_irq)
-{
-	if(m_irq_count == 0)
-	{
-		//device.execute().pulse_input_line(INPUT_LINE_NMI, attotime::zero);
-	}
-	else
-		device.execute().set_input_line(0, HOLD_LINE);
-
-	m_irq_count++;
-	m_irq_count&=3;
-}
-
-INTERRUPT_GEN_MEMBER(_4enlinea_state::_4enlinea_audio_irq)
-{
-	device.execute().set_input_line(0, HOLD_LINE);
-}
-
 void _4enlinea_state::hcga_config(machine_config &config)
 {
 	// 320x200 CGA timings as programmed by the games, the UM487F reconfigures the screen from its CRTC registers
@@ -524,12 +502,19 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	Z80(config, m_maincpu, PRG_CPU_CLOCK);
 	m_maincpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::main_map);
 	m_maincpu->set_addrmap(AS_IO, &_4enlinea_state::main_portmap);
-	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::_4enlinea_irq), attotime::from_hz(60)); //TODO
-//  m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(4*35));
+	/* TODO: IRQ sources are unknown.
+	   Both CPUs run their software tick every 20 (video) or 10 (master) IRQs,
+	   and the video CPU code expects a tick around 50 Hz: it shows the boot
+	   logo for 300 ticks, reprograms the UM487F every 50 ticks, cycles the
+	   background color every 8 ticks...
+	   So assume the CPU clocks divided by 8192 (48.8 Hz ticks for both CPUs),
+	   as a 14 stage ripple counter (like the HEF4020 found on the CM3080
+	   subboard of the K7 PCB) would do. */
+	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(PRG_CPU_CLOCK / 8192));
 
 	z80_device &audiocpu(Z80(config, "audiocpu", SND_CPU_CLOCK));
 	audiocpu.set_addrmap(AS_PROGRAM, &_4enlinea_state::audio_map);
-	audiocpu.set_periodic_int(FUNC(_4enlinea_state::_4enlinea_audio_irq), attotime::from_hz(60)); //TODO
+	audiocpu.set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(SND_CPU_CLOCK / 8192));
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
