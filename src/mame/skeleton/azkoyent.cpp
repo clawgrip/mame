@@ -98,9 +98,7 @@
     MAME remembers the position of the service switch: if F2 seems to do
     nothing, press it again.
 
-    Setting up a new machine (or let a recording do it: decode one with
-    "base64 -d inp/azkoyent6.inp.b64 > inp/azkoyent6.inp", delete
-    nvram/azkoyent6 and run "mame azkoyent6 -playback azkoyent6.inp"):
+    Setting up a new machine:
     1. Start the machine.  A new machine shows P.P.P.P.
     2. Press F2.  On the T61, also press any selection.  The display shows
        0000: the machine is in control mode.
@@ -157,7 +155,6 @@
     TODO:
     - Voice synthesizer (T6 and T8 write a message number to 0x70 and wait
       for INT1), watchdogs (P1.6 on the 8031 board, P2.7 on the T61)
-    - The T8 is said to have a 3-digit display, but its firmware drives four
 */
 
 #include "emu.h"
