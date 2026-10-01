@@ -153,8 +153,9 @@
     100, 25 and 200 pesetas).
 
     TODO:
-    - Voice synthesizer (T6 and T8 write a message number to 0x70 and wait
-      for INT1), watchdogs (P1.6 on the 8031 board, P2.7 on the T61)
+    - Voice synthesizer (ROM undumped, T6 and T8 write a message number to
+      0x70 and wait for INT1), watchdogs (P1.6 on the 8031 board, P2.7 on
+      the T61)
 */
 
 #include "emu.h"
