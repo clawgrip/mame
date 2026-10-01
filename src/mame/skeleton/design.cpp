@@ -329,17 +329,17 @@ static INPUT_PORTS_START( design6 )
 
 	// codes 2/5 are presumably the old 5/25 peseta coins and 8/9 the new ones (assumption)
 	PORT_START("COINS")
-	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
-	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
-	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas (code 9)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
-	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("50 Pesetas (code 6)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
-	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas (code 7)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
-	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas (code 4)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
-	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("500 Pesetas (code 1)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
-	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas (code 2)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 2)
-	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas (code 5)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 5)
-	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas (code 10)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 10)
-	PORT_BIT(0x400, IP_ACTIVE_HIGH, IPT_COIN11) PORT_NAME("200 Pesetas (code 11)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 11)
+	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
+	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("10 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
+	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
+	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("50 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
+	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
+	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
+	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("500 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
+	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 2)
+	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 5)
+	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 10)
+	PORT_BIT(0x400, IP_ACTIVE_HIGH, IPT_COIN11) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 11)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( designe )
@@ -717,6 +717,6 @@ ROM_END
     System drivers
 **************************************************************************/
 
-//    YEAR   NAME         PARENT      COMPAT  MACHINE     INPUT     CLASS           INIT        COMPANY    FULLNAME                              FLAGS
-SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, with 43521600-5 kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+//    YEAR   NAME     PARENT  COMPAT  MACHINE  INPUT    CLASS         INIT        COMPANY    FULLNAME                                FLAGS
+SYST( 1995?, design6, 0,      0,      design6, design6, design_state, empty_init, "Azkoyen", "Design D6 (pesetas)",                  MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 2006,  designe, 0,      0,      designe, designe, design_state, empty_init, "Azkoyen", "Design (euro, with adult remote kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING ) // Adult remote kit is P/N 43521600-5
