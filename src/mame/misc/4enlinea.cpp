@@ -10,8 +10,8 @@
 
 **************************************************************************
 
-  1x Z84C00HB6 CPU @ 8 MHz for program.
-  1x Z84C00AB6 CPU @ 4 MHz for sound.
+  1x Z84C00HB6 CPU @ 8 MHz for video.
+  1x Z84C00AB6 CPU @ 4 MHz for master/sound.
   1x AY-3-8910 A
   1x UMC UM487F (HCGA Controller)
 
@@ -47,25 +47,32 @@
 
   UM487F HCGA Controller notes...
 
-  The fact that there is a 14.318 MHz crystal tied to pin 65, just point
-  that the video controller is working in CGA mode. MGA mode needs a
-  16.257 MHz crystal instead, and tied to pin 64 (currently tied to GND).
+  The UM487F is a single chip MGA (Hercules) + CGA video controller with
+  an embedded UM6845R CRTC, driving 64 KB of DRAM (2x D41464C).
 
-  Also a signal of 8Mhz (shared with the program CPU is entering from the
-  pin 1 (CLK) needed for clock the UM6845 mode.
+  The 14.31818 MHz crystal is tied to pin 65 (OSC, CGA base clock), while
+  pin 64 (MOSC, the 16.257 MHz MGA base clock) is tied to GND, so the chip
+  can only work in CGA mode. The 8 MHz CPU clock entering pin 1 (CLOCK)
+  only generates the enable signal of the CPU interface of the embedded
+  6845, it isn't used for the video timing.
 
-  UM487F Access:
+  The video CPU sees the CGA video memory window (B8000h-BBFFFh on a PC,
+  where A15 = 1 selects it) at 8000h-BFFFh, and the registers at the usual
+  CGA I/O ports (the UM487F decodes only A0-A9 for I/O):
 
-  Offsets are for sure the CGA mode. MGA mode has different ones.
-
+  3BFh: -W  Configuration register.
   3D4h: -W  CRTC index register.
   3D5h: RW  CRTC data register.
   3D8h: -W  Mode control register.
   3D9h: -W  Color select register.
   3DAh: R-  Status register.
-  3BFh: -W  Config register.
 
-  Mode CTRL (3D8h): 0x6A / 0x62
+  All the games initialize the controller the same way:
+
+  Config Register (3BFh): 0x40
+  (bit 6 active means CGA Mode)
+
+  Mode CTRL (3D8h): 0x6A
   ----- bits -----
   7 6 5 4  3 2 1 0   For CGA Mode.
   - x x -  x - x -
@@ -73,31 +80,31 @@
   | | | |  | | | '-- 40*25 text.
   | | | |  | | '---- Graphics.
   | | | |  | '------ Color Mode.
-  | | | |  '-------- Enable Video.
+  | | | |  '-------- Enable Video (toggled while redrawing the screen).
   | | | '----------- 320x200 Graphics.
   | | '------------- Enable Blink.
   | '--------------- Enable Change Mode.
   '----------------- (not for CGA)
 
-  Color Sel (3D9h): 00
+  Color Sel (3D9h): bits 0-3 background color, bits 4-5 palette.
 
   Index register (3D4h): 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
   Data register (3D5h):  38 28 2D 0A 7F 06 64 70 02 01 06 07 10 00 00 00
 
-  Config Register (3BFh): 0x40
-  (bit 6 active means CGA Mode)
+  These are the standard CGA 320x200 (BIOS mode 4) parameters, apart from
+  the start address (1000h, but MA12 isn't used to address the memory in
+  graphics mode, so the picture starts at 0000h anyway):
 
+  CRTC clock is 14.31818 MHz / 16 = 894.886 kHz (8 pixels per character).
+  Horizontal: 57 characters total, 40 displayed -> 15.700 kHz.
+  Vertical: 128 rows of 2 raster lines + 6 adjust = 262 lines total,
+  100 rows (200 lines) displayed -> 59.923 Hz, non interlaced (R8 = 02h).
 
-  So... Screen size is set to 320x200.
-  but...
+  Even raster lines are fetched from 0000h-1F3Fh, and odd ones from
+  2000h-3F3Fh of the video memory.
 
-  The embedded CRT controller is set to:
-  Screen Total:   0x38+1 * 0x7F+1 = (57 * 128) chars.
-  Screen Visible: 0x28 * 0x64 = (40 * 100) chars.
-
-  NOTE: All (registers and offsets) match the CGA ISA card.
-  Maybe we can find a workaround to hook the controller
-  without the ISA bus.
+  The sprite blitting routines wait for the vertical retrace polling
+  bit 7 of the status register (documented only for MGA mode, active low).
 
 **************************************************************************
 
@@ -189,8 +196,10 @@
 
   TODO:
 
-  - Proper UM487F device emulation.
-  - Interlaced video mode.
+  - IRQ sources.
+  - Master to video CPU link: after the boot handshake (FC30h-FC32h) the
+    master sends the commands writing FC29h-FC2Ch and strobing FC28h,
+    which aren't hooked up yet.
   - Sound.
   - k7_olym accesses i2c device with an id of 0xeb. Device is unknown.
   - More work...
@@ -198,14 +207,14 @@
 *************************************************************************/
 
 #include "emu.h"
-#include "bus/isa/cga.h"
-#include "bus/isa/isa.h"
+
 #include "cpu/z80/z80.h"
 #include "machine/i2cmem.h"
 #include "machine/nvram.h"
 #include "sound/ay8910.h"
-#include "video/cgapal.h"
-#include "video/mc6845.h"
+#include "video/um487f.h"
+
+#include "screen.h"
 #include "speaker.h"
 
 
@@ -216,7 +225,6 @@
 #define PRG_CPU_CLOCK        MAIN_CLOCK /2      // 8 MHz. (measured)
 #define SND_CPU_CLOCK        SEC_CLOCK /2       // 4 MHz. (measured)
 #define SND_AY_CLOCK         SEC_CLOCK /4       // 2 MHz. (measured)
-#define CRTC_CLOCK           SEC_CLOCK /2       // 8 MHz. (measured)
 
 class _4enlinea_state : public driver_device
 {
@@ -225,7 +233,8 @@ public:
 		: driver_device(mconfig, type, tag),
 		m_ay(*this, "aysnd"),
 		m_maincpu(*this, "maincpu"),
-		m_eeprom(*this, "eeprom")
+		m_eeprom(*this, "eeprom"),
+		m_video(*this, "um487f")
 	{ }
 
 	void _4enlinea(machine_config &config);
@@ -259,6 +268,13 @@ private:
 	virtual void machine_reset() override ATTR_COLD;
 	required_device<cpu_device> m_maincpu;
 	required_device<i2cmem_device> m_eeprom;
+	required_device<um487f_device> m_video;
+
+	// A15 = 1 selects the CGA video memory window of the UM487F
+	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 | offset); }
+	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
+
+	void hcga_config(machine_config &config) ATTR_COLD;
 
 	void audio_map(address_map &map) ATTR_COLD;
 	void main_map(address_map &map) ATTR_COLD;
@@ -267,100 +283,6 @@ private:
 	void k7_mem_map(address_map &map) ATTR_COLD;
 	void k7_io_map(address_map &map) ATTR_COLD;
 };
-
-
-/***********************************
-*          Video Hardware          *
-***********************************/
-
-// TODO: this is actually UM487F
-class isa8_cga_4enlinea_device : public isa8_cga_device
-{
-public:
-	// construction/destruction
-	isa8_cga_4enlinea_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
-
-	uint8_t _4enlinea_io_read (offs_t offset);
-	void _4enlinea_mode_control_w(uint8_t data);
-
-protected:
-	virtual void device_start() override ATTR_COLD;
-	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
-};
-
-const tiny_rom_entry *isa8_cga_4enlinea_device::device_rom_region() const
-{
-	return nullptr;
-}
-
-DEFINE_DEVICE_TYPE(ISA8_CGA_4ENLINEA, isa8_cga_4enlinea_device, "4enlinea_cga", "ISA8 CGA - 4enlinea")
-
-isa8_cga_4enlinea_device::isa8_cga_4enlinea_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock) :
-	isa8_cga_device( mconfig, ISA8_CGA_4ENLINEA, tag, owner, clock)
-{
-}
-
-
-uint8_t isa8_cga_4enlinea_device::_4enlinea_io_read(offs_t offset)
-{
-	uint8_t data;
-
-	switch (offset)
-	{
-	case 0xa:
-		data = isa8_cga_device::io_read(offset);
-		data|= (data & 8) << 4;
-		break;
-
-	default:
-		data = isa8_cga_device::io_read(offset);
-		break;
-	}
-	return data;
-}
-
-void isa8_cga_4enlinea_device::_4enlinea_mode_control_w(uint8_t data)
-{
-	// TODO
-}
-
-void isa8_cga_4enlinea_device::device_start()
-{
-	if (m_palette != nullptr && !m_palette->started())
-		throw device_missing_dependencies();
-
-	set_isa_device();
-	m_vram_size = 0x4000;
-	m_vram.resize(m_vram_size);
-
-	//m_isa->install_device(0x3bf, 0x3bf, 0, 0, nullptr, write8_delegate(*this, FUNC(isa8_cga_4enlinea_device::_4enlinea_mode_control_w)));
-	m_isa->install_device(0x3d0, 0x3df, read8sm_delegate(*this, FUNC(isa8_cga_4enlinea_device::_4enlinea_io_read)), write8sm_delegate(*this, FUNC(isa8_cga_device::io_write)));
-	m_isa->install_bank(0x8000, 0xbfff, &m_vram[0]);
-
-	// Initialise the CGA palette
-	int i;
-
-	for (int i = 0; i < CGA_PALETTE_SETS * 16; i++ )
-	{
-		m_palette->set_pen_color( i, cga_palette[i][0], cga_palette[i][1], cga_palette[i][2] );
-	}
-
-	i = 0x8000;
-	for ( int r = 0; r < 32; r++ )
-	{
-		for ( int g = 0; g < 32; g++ )
-		{
-			for ( int b = 0; b < 32; b++ )
-			{
-				m_palette->set_pen_color( i, r << 3, g << 3, b << 3 );
-				i++;
-			}
-		}
-	}
-
-//  m_chr_gen_base = memregion(subtag("gfx1"))->base();
-//  m_chr_gen = m_chr_gen_base + m_chr_gen_offset[1];
-}
 
 
 uint8_t _4enlinea_state::serial_r(offs_t offset)
@@ -383,7 +305,7 @@ uint8_t _4enlinea_state::serial_r(offs_t offset)
 void _4enlinea_state::main_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom();
-//  map(0x8000, 0xbfff).ram(); // CGA VRAM
+	map(0x8000, 0xbfff).rw(FUNC(_4enlinea_state::vram_r), FUNC(_4enlinea_state::vram_w));
 	map(0xc000, 0xdfff).ram();
 
 	map(0xe000, 0xe001).r(FUNC(_4enlinea_state::serial_r));
@@ -393,8 +315,7 @@ void _4enlinea_state::main_portmap(address_map &map)
 {
 	map.global_mask(0x3ff);
 
-//  map(0x3d4, 0x3df) CGA regs
-	map(0x3bf, 0x3bf).nopw(); // CGA mode control, TODO
+	map(0x3b0, 0x3df).rw(m_video, FUNC(um487f_device::io_r), FUNC(um487f_device::io_w));
 }
 
 uint8_t _4enlinea_state::serial_status_r()
@@ -474,6 +395,7 @@ void _4enlinea_state::k7_out1_w(uint8_t data)
 void _4enlinea_state::k7_mem_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom().region("maincpu", 0);
+	map(0x8000, 0xbfff).rw(FUNC(_4enlinea_state::vram_r), FUNC(_4enlinea_state::vram_w));
 	map(0xc000, 0xdfff).rom().region("maincpu", 0x8000);
 	map(0xe000, 0xffff).ram().share("nvram");
 }
@@ -485,7 +407,7 @@ void _4enlinea_state::k7_io_map(address_map &map)
 	map(0x0100, 0x0100).w(m_ay, FUNC(ay8910_device::address_w));
 	map(0x0101, 0x0101).r(m_ay, FUNC(ay8910_device::data_r));
 	map(0x0102, 0x0102).w(m_ay, FUNC(ay8910_device::data_w));
-//  0x03bf W (0x40)
+	map(0x03b0, 0x03df).mirror(0xfc00).rw(m_video, FUNC(um487f_device::io_r), FUNC(um487f_device::io_w));
 }
 
 
@@ -518,10 +440,6 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(2)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
-
-
-	PORT_START( "pcvideo_cga_config" )
-	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -545,9 +463,6 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START( "pcvideo_cga_config" )
-	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -573,11 +488,6 @@ void _4enlinea_state::machine_reset()
 *         Machine Drivers          *
 ***********************************/
 
-void _4enlinea_isa8_cards(device_slot_interface &device)
-{
-	device.option_add_internal("4enlinea",  ISA8_CGA_4ENLINEA);
-}
-
 // TODO: IRQ sources are unknown
 INTERRUPT_GEN_MEMBER(_4enlinea_state::_4enlinea_irq)
 {
@@ -597,6 +507,17 @@ INTERRUPT_GEN_MEMBER(_4enlinea_state::_4enlinea_audio_irq)
 	device.execute().set_input_line(0, HOLD_LINE);
 }
 
+void _4enlinea_state::hcga_config(machine_config &config)
+{
+	// 320x200 CGA timings as programmed by the games, the UM487F reconfigures the screen from its CRTC registers
+	screen_device &screen(SCREEN(config, "screen"));
+	screen.set_raw(HCGA_CLOCK / 2, 456, 0, 320, 262, 0, 200);
+	screen.set_screen_update(m_video, FUNC(um487f_device::screen_update));
+
+	UM487F(config, m_video, HCGA_CLOCK); // MOSC (MGA clock) tied to GND
+	m_video->set_screen("screen");
+}
+
 void _4enlinea_state::_4enlinea(machine_config &config)
 {
 	// basic machine hardware
@@ -612,23 +533,8 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
-	// FIXME: determine ISA bus clock
-	isa8_device &isa(ISA8(config, "isa"));
-	isa.set_memspace("maincpu", AS_PROGRAM);
-	isa.set_iospace("maincpu", AS_IO);
-
-	// FIXME: determine ISA bus clock
-	ISA8_SLOT(config, "isa1", 0, "isa", _4enlinea_isa8_cards, "4enlinea", true);
-
-
-/*  6845 clock is a guess, since it's a UM6845R embedded in the UM487F.
-    CRTC_CLOCK is 8MHz, entering for pin 1 of UM487F. This clock is used
-    only for UM6845R embedded mode. The frequency divisor is unknown.
-
-    CRTC_CLOCK / 4.0 = 66.961296 Hz.
-    CRTC_CLOCK / 4.5 = 59.521093 Hz.
-    CRTC_CLOCK / 5.0 = 53.569037 Hz.
-*/
+	// video hardware
+	hcga_config(config);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -649,12 +555,7 @@ void _4enlinea_state::k7_olym(machine_config &config)
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
-	isa8_device &isa(ISA8(config, "isa"));
-	isa.set_memspace("maincpu", AS_PROGRAM);
-	isa.set_iospace("maincpu", AS_IO);
-
-	// FIXME: determine ISA bus clock
-	ISA8_SLOT(config, "isa1", 0, "isa", _4enlinea_isa8_cards, "4enlinea", true); // UM487F
+	hcga_config(config); // UM487F
 
 	SPEAKER(config, "mono").front_center();
 	AY8910(config, m_ay, 14.318181_MHz_XTAL / 8); // Winbond WF19054
