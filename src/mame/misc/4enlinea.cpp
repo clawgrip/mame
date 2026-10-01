@@ -194,6 +194,23 @@
 
 **************************************************************************
 
+  Compumatic dual CPU boards (Cuatro en Linea, Dardos):
+
+  The video CPU (8 MHz) only drives the UM487F, drawing the screens as
+  commanded by the master CPU (4 MHz), which runs the game logic and the
+  AY-3-8910 sound, and handles the inputs and the EEPROM through the ES2 9046
+  I/O ports. The master sends the commands to the video CPU through a link,
+  probably the 9046 shifting them to the 8952 CM 32, which drives the video
+  CPU data bus through IC9/IC10 (74HC244).
+
+  Cuatro en Linea has two joysticks with two buttons each, start buttons,
+  five coin inputs, a service credit button and a setup key switch. Dardos
+  reads the dart board matrix through the AY ports and the 9046, and has
+  game selection buttons, a setup key switch, a reset key, and the same
+  missed dart and player sensors as the K7 boards.
+
+**************************************************************************
+
   K7 / Sport Darts single CPU boards:
 
   Z84C00BB6 @ 7.159 MHz, UM487F, WF19054 (AY-3-8910), X24C16P, 6264 + battery
@@ -224,11 +241,11 @@
 
   - IRQ sources of the Compumatic and K7 boards (the frequencies are guessed
     from the software timings).
-  - Master to video CPU link: after the boot handshake (FC30h-FC32h) the
-    master sends the commands writing FC29h-FC2Ch and strobing FC28h,
-    which aren't hooked up yet.
-  - Sound.
-  - Olympic Darts v3.00 lamps.
+  - Master to video CPU link (guessed from the code of both CPUs, the
+    transfer time is unknown).
+  - Unknown inputs of the Compumatic boards (9046 port A and some port C/D
+    lines).
+  - Lamps of the Compumatic boards and Olympic Darts v3.00.
 
 *************************************************************************/
 
@@ -284,31 +301,55 @@ class _4enlinea_state : public sysi_state
 public:
 	_4enlinea_state(const machine_config &mconfig, device_type type, const char *tag)
 		: sysi_state(mconfig, type, tag)
+		, m_matrix(*this, "MATRIX%u", 0U)
+		, m_buttons(*this, "BUTTONS%u", 0U)
+		, m_in_pc(*this, "IN_PC")
+		, m_in_pd(*this, "IN_PD")
 	{ }
 
 	void _4enlinea(machine_config &config) ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
+	virtual void machine_reset() override ATTR_COLD;
 
 private:
-	uint8_t serial_r(offs_t offset);
-	uint8_t serial_status_r();
-	void serial_w(offs_t offset, uint8_t data);
-	void serial_status_w(uint8_t data);
-	uint8_t hack_r();
+	// master to video CPU link
+	uint8_t link_r(offs_t offset);
+	uint8_t handshake_status_r();
+	void handshake_w(offs_t offset, uint8_t data);
+	void handshake_status_w(uint8_t data);
+	uint8_t link_status_r();
+	void link_control_w(uint8_t data);
+	void link_data_w(offs_t offset, uint8_t data);
+	void send_to_video(uint8_t data0, uint8_t data1);
+	TIMER_CALLBACK_MEMBER(link_ready);
 
-	uint8_t eeprom_data_r();
-	void eeprom_data_w(uint8_t data);
-	void eeprom_control_w(uint8_t data);
-	void eeprom_clock_w(uint8_t data);
+	// ES2 9046 I/O ports
+	uint8_t port_r(offs_t offset);
+	void port_w(offs_t offset, uint8_t data);
+	uint8_t port_out(int port) const { return m_port_latch[port] | m_port_dir[port]; }
+	void update_outputs();
+	uint8_t ay_porta_r();
+	uint8_t ay_portb_r();
 
 	void audio_map(address_map &map) ATTR_COLD;
 	void main_map(address_map &map) ATTR_COLD;
 	void main_portmap(address_map &map) ATTR_COLD;
 
-	uint8_t m_serial_flags = 0;
-	uint8_t m_serial_data[2]{};
+	optional_ioport_array<4> m_matrix;
+	required_ioport_array<2> m_buttons;
+	required_ioport m_in_pc;
+	required_ioport m_in_pd;
+
+	emu_timer *m_link_timer = nullptr;
+
+	uint8_t m_handshake_status = 0;
+	uint8_t m_link_latch[2]{};
+	uint8_t m_link_data[4]{};
+	bool m_link_ready = true;
+	uint8_t m_port_latch[4]{};
+	uint8_t m_port_dir[4]{};
 };
 
 
@@ -339,6 +380,7 @@ private:
 	uint8_t selected_lines() const { return m_select_active_low ? ~m_out1 : m_out1; }
 	uint8_t ay_porta_r();
 	uint8_t ay_portb_r();
+	void hsync_w(int state);
 
 	void mem_map(address_map &map) ATTR_COLD;
 	void io_map(address_map &map) ATTR_COLD;
@@ -354,6 +396,7 @@ private:
 	bool m_select_active_low = false;
 	uint8_t m_out0 = 0;
 	uint8_t m_out1 = 0;
+	uint8_t m_hsync_count = 0;
 };
 
 
@@ -361,15 +404,166 @@ private:
 *      Memory Map Information      *
 ***********************************/
 
-uint8_t _4enlinea_state::serial_r(offs_t offset)
+/*
+  Master to video CPU link (ES2 9046 and 8952 CM 32?)
+
+  The video CPU gets a NMI and reads a word (command and parameter) at
+  E000h-E001h. The master sends the words through FC29h-FC2Ch (it writes
+  00h, 00h, parameter, command, twice) and then strobes FC28h, waiting
+  for FC28h bit 3 before sending the next one. At boot time, it also checks
+  the link writing FC30h/FC31h and waiting for FC32h bit 5, which gets set
+  when the video CPU reads the word.
+
+  FC28h bit 3 can't depend on the video CPU reading the word: Dardos keeps
+  sending null words while idle, and its video CPU stops reading them while
+  its command queue is full (during the boot delay).
+
+  TODO: guessed from the code of both CPUs, transfer time unknown.
+*/
+void _4enlinea_state::send_to_video(uint8_t data0, uint8_t data1)
 {
-	if(offset == 0)
+	m_link_latch[0] = data0;
+	m_link_latch[1] = data1;
+	m_maincpu->pulse_input_line(INPUT_LINE_NMI, attotime::zero);
+}
+
+TIMER_CALLBACK_MEMBER(_4enlinea_state::link_ready)
+{
+	m_link_ready = true;
+}
+
+uint8_t _4enlinea_state::link_r(offs_t offset)
+{
+	if (offset == 0 && !machine().side_effects_disabled())
+		m_handshake_status |= 0x20;
+
+	return m_link_latch[offset];
+}
+
+uint8_t _4enlinea_state::handshake_status_r()
+{
+	return m_handshake_status;
+}
+
+void _4enlinea_state::handshake_status_w(uint8_t data)
+{
+	m_handshake_status = data; // probably just clears
+}
+
+void _4enlinea_state::handshake_w(offs_t offset, uint8_t data)
+{
+	if (offset == 0)
+		send_to_video(data, 0);
+}
+
+uint8_t _4enlinea_state::link_status_r()
+{
+	// bit 3: ready to send the next word
+	return m_link_ready ? 0x08 : 0x00;
+}
+
+void _4enlinea_state::link_control_w(uint8_t data)
+{
+	// the master writes 0 and then 7 after loading a word
+	if (!BIT(data, 0))
 	{
-		m_maincpu->set_input_line(INPUT_LINE_NMI,CLEAR_LINE);
-		m_serial_flags |= 0x20;
+		// the video CPU expects the command (sent in the low byte) at E001h
+		m_link_ready = false;
+		m_link_timer->adjust(attotime::from_usec(100));
+		send_to_video(m_link_data[3], m_link_data[2]);
+	}
+}
+
+void _4enlinea_state::link_data_w(offs_t offset, uint8_t data)
+{
+	m_link_data[offset] = data;
+}
+
+
+/*
+  ES2 9046 I/O ports, with data (even) and direction (odd, 1 = input) registers:
+
+  FC20h-FC21h: port A, bits 1 and 3 are inputs (unknown)
+  FC22h-FC23h: port B, unused
+  FC24h-FC25h: port C
+               bit 0:    EEPROM SDA
+               bits 1-5: coins
+               bit 6:    sensor (Dardos)
+               bit 7:    dart board matrix column 0 (Dardos)
+  FC26h-FC27h: port D
+               bits 0-2: dart board matrix columns 1-3 (Dardos)
+               bit 4:    sensor (Dardos)
+               bit 6:    EEPROM SCL
+               bit 7:    buttons (read through the AY ports)
+*/
+uint8_t _4enlinea_state::port_r(offs_t offset)
+{
+	int const port = offset >> 1;
+
+	if (BIT(offset, 0))
+		return m_port_dir[port];
+
+	uint8_t in = 0xff;
+	switch (port)
+	{
+	case 2:
+		in = (m_in_pc->read() & 0xfe) | (m_eeprom->read_sda() ? 0x01 : 0x00);
+		break;
+	case 3:
+		in = m_in_pd->read();
+		break;
 	}
 
-	return m_serial_data[offset];
+	return (in & m_port_dir[port]) | (m_port_latch[port] & ~m_port_dir[port]);
+}
+
+void _4enlinea_state::port_w(offs_t offset, uint8_t data)
+{
+	int const port = offset >> 1;
+
+	if (BIT(offset, 0))
+		m_port_dir[port] = data;
+	else
+		m_port_latch[port] = data;
+
+	update_outputs();
+}
+
+void _4enlinea_state::update_outputs()
+{
+	// outputs are driven low through open collector/drain lines, released when set as inputs
+	m_eeprom->write_scl(BIT(port_out(3), 6));
+	m_eeprom->write_sda(BIT(port_out(2), 0));
+}
+
+uint8_t _4enlinea_state::ay_porta_r()
+{
+	uint8_t const columns = (BIT(port_out(2), 7) << 0) | ((port_out(3) & 0x07) << 1);
+	uint8_t data = 0xff;
+
+	for (int i = 0; i < 4; i++)
+		if (BIT(columns, i))
+			data &= m_matrix[i].read_safe(0xffff);
+
+	if (BIT(port_out(3), 7))
+		data &= m_buttons[0]->read();
+
+	return data;
+}
+
+uint8_t _4enlinea_state::ay_portb_r()
+{
+	uint8_t const columns = (BIT(port_out(2), 7) << 0) | ((port_out(3) & 0x07) << 1);
+	uint8_t data = 0xff;
+
+	for (int i = 0; i < 4; i++)
+		if (BIT(columns, i))
+			data &= m_matrix[i].read_safe(0xffff) >> 8;
+
+	if (BIT(port_out(3), 7))
+		data &= m_buttons[1]->read();
+
+	return data;
 }
 
 void _4enlinea_state::main_map(address_map &map)
@@ -378,7 +572,7 @@ void _4enlinea_state::main_map(address_map &map)
 	map(0x8000, 0xbfff).rw(FUNC(_4enlinea_state::vram_r), FUNC(_4enlinea_state::vram_w));
 	map(0xc000, 0xdfff).ram();
 
-	map(0xe000, 0xe001).r(FUNC(_4enlinea_state::serial_r));
+	map(0xe000, 0xe001).r(FUNC(_4enlinea_state::link_r));
 }
 
 void _4enlinea_state::main_portmap(address_map &map)
@@ -388,60 +582,15 @@ void _4enlinea_state::main_portmap(address_map &map)
 	map(0x3b0, 0x3df).rw(m_video, FUNC(um487f_device::io_r), FUNC(um487f_device::io_w));
 }
 
-uint8_t _4enlinea_state::serial_status_r()
-{
-	return m_serial_flags;
-}
-
-void _4enlinea_state::serial_status_w(uint8_t data)
-{
-	m_serial_flags = data; // probably just clears
-}
-
-// TODO: do this really routes to 0xe000-0xe001 of Main CPU?
-void _4enlinea_state::serial_w(offs_t offset, uint8_t data)
-{
-	m_serial_data[offset] = data;
-	if(offset == 0)
-		m_maincpu->set_input_line(INPUT_LINE_NMI,ASSERT_LINE);
-}
-
-uint8_t _4enlinea_state::eeprom_data_r()
-{
-	return m_eeprom->read_sda();
-}
-
-void _4enlinea_state::eeprom_data_w(uint8_t data)
-{
-	m_eeprom->write_sda(BIT(data, 0));
-}
-
-void _4enlinea_state::eeprom_control_w(uint8_t data)
-{
-	if (BIT(data, 0))
-		m_eeprom->write_sda(1);
-}
-
-void _4enlinea_state::eeprom_clock_w(uint8_t data)
-{
-	m_eeprom->write_scl(BIT(data, 6));
-}
-
-uint8_t _4enlinea_state::hack_r()
-{
-	return machine().rand();
-}
-
 void _4enlinea_state::audio_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom();
 	map(0xf800, 0xfbff).ram();
-	map(0xfc24, 0xfc24).rw(FUNC(_4enlinea_state::eeprom_data_r), FUNC(_4enlinea_state::eeprom_data_w));
-	map(0xfc25, 0xfc25).w(FUNC(_4enlinea_state::eeprom_control_w));
-	map(0xfc26, 0xfc26).w(FUNC(_4enlinea_state::eeprom_clock_w));
-	map(0xfc28, 0xfc28).r(FUNC(_4enlinea_state::hack_r));
-	map(0xfc30, 0xfc31).w(FUNC(_4enlinea_state::serial_w));
-	map(0xfc32, 0xfc32).rw(FUNC(_4enlinea_state::serial_status_r), FUNC(_4enlinea_state::serial_status_w));
+	map(0xfc20, 0xfc27).rw(FUNC(_4enlinea_state::port_r), FUNC(_4enlinea_state::port_w));
+	map(0xfc28, 0xfc28).rw(FUNC(_4enlinea_state::link_status_r), FUNC(_4enlinea_state::link_control_w));
+	map(0xfc29, 0xfc2c).w(FUNC(_4enlinea_state::link_data_w));
+	map(0xfc30, 0xfc31).w(FUNC(_4enlinea_state::handshake_w));
+	map(0xfc32, 0xfc32).rw(FUNC(_4enlinea_state::handshake_status_r), FUNC(_4enlinea_state::handshake_status_w));
 	map(0xfc48, 0xfc48).w(m_ay, FUNC(ay8910_device::address_w));
 	map(0xfc49, 0xfc49).r(m_ay, FUNC(ay8910_device::data_r));
 	map(0xfc4a, 0xfc4a).w(m_ay, FUNC(ay8910_device::data_w));
@@ -501,6 +650,12 @@ void k7_state::out1_w(uint8_t data)
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
+void k7_state::hsync_w(int state)
+{
+	if (state && !(++m_hsync_count & 0x07))
+		m_maincpu->set_input_line(0, HOLD_LINE);
+}
+
 uint8_t k7_state::ay_porta_r()
 {
 	uint8_t const sel = selected_lines();
@@ -555,22 +710,8 @@ void k7_state::io_map(address_map &map)
 ***********************************/
 
 static INPUT_PORTS_START( 4enlinea )
-
-/*  Player 1 & 2 ports are tied to both AY-3-8910 ports.
-    Coin 1 & 2 are tied to the big ES2 9046 CPLD/FPGA,
-    so... It's a mystery to figure out.
-*/
-	PORT_START("IN-P1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY  PORT_PLAYER(1)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_8WAY  PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_8WAY  PORT_PLAYER(1)
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY  PORT_PLAYER(1)
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(1)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(1)
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN-P2")
+	// read through the AY ports while port D bit 7 is set
+	PORT_START("BUTTONS0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY  PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_8WAY  PORT_PLAYER(2)
@@ -578,7 +719,33 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY  PORT_PLAYER(2)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(2)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(2)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Service Credit")
+
+	PORT_START("BUTTONS1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY  PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_8WAY  PORT_PLAYER(1)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_8WAY  PORT_PLAYER(1)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY  PORT_PLAYER(1)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(1)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(1)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+
+	// 9046 port C, each coin line adds a credit (with its own counter)
+	PORT_START("IN_PC")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	// 9046 port D
+	PORT_START("IN_PD")
+	PORT_BIT( 0x18, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xe7, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -684,6 +851,40 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( dardos )
+	PORT_INCLUDE( k7_matrix )
+
+	// read through AY port A while port D bit 7 is set, like on the K7 PCB
+	PORT_START("BUTTONS0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Next Game")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Previous Game")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Player")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("BUTTONS1")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	// 9046 port C, coin values in 25 Pts units
+	PORT_START("IN_PC")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin 1 (500 Pts)")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_NAME("Coin 3 (50 Pts)")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_NAME("Coin 4 (200 Pts)")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_NAME("Coin 5 (32 units)")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	// 9046 port D
+	PORT_START("IN_PD")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
+	PORT_BIT( 0xe7, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
 // Olympic Darts v3.00 PCB, with a button (and lamp) for each game and number of players
 static INPUT_PORTS_START( k7_olym30 )
 	PORT_INCLUDE( k7_olym )
@@ -724,8 +925,24 @@ INPUT_PORTS_END
 
 void _4enlinea_state::machine_start()
 {
-	save_item(NAME(m_serial_flags));
-	save_item(NAME(m_serial_data));
+	m_link_timer = timer_alloc(FUNC(_4enlinea_state::link_ready), this);
+
+	save_item(NAME(m_handshake_status));
+	save_item(NAME(m_link_latch));
+	save_item(NAME(m_link_data));
+	save_item(NAME(m_link_ready));
+	save_item(NAME(m_port_latch));
+	save_item(NAME(m_port_dir));
+}
+
+void _4enlinea_state::machine_reset()
+{
+	// all the ports are inputs after reset
+	std::fill(std::begin(m_port_dir), std::end(m_port_dir), 0xff);
+	update_outputs();
+
+	m_link_ready = true;
+	m_link_timer->adjust(attotime::never);
 }
 
 void k7_state::machine_start()
@@ -735,6 +952,7 @@ void k7_state::machine_start()
 
 	save_item(NAME(m_out0));
 	save_item(NAME(m_out1));
+	save_item(NAME(m_hsync_count));
 }
 
 
@@ -760,18 +978,20 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::main_map);
 	m_maincpu->set_addrmap(AS_IO, &_4enlinea_state::main_portmap);
 	/* TODO: IRQ sources are unknown.
-	   Both CPUs run their software tick every 20 (video) or 10 (master) IRQs,
-	   and the video CPU code expects a tick around 50 Hz: it shows the boot
-	   logo for 300 ticks, reprograms the UM487F every 50 ticks, cycles the
-	   background color every 8 ticks...
-	   So assume the CPU clocks divided by 8192 (48.8 Hz ticks for both CPUs),
-	   as a 14 stage ripple counter (like the HEF4020 found on the CM3080
-	   subboard of the K7 PCB) would do. */
-	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(PRG_CPU_CLOCK / 8192));
+	   All these boards run their main IRQ routine around 1 kHz:
+	   - The video CPU runs its software tick every 20 IRQs, and expects it
+	     around 50 Hz: it shows the boot logo for 300 ticks, reprograms the
+	     UM487F every 50 ticks...
+	   - The master CPU runs its tick every 10 IRQs, and counts the game time
+	     seconds every 100 ticks.
+	   - Sport Darts runs its IRQ routine every 16 horizontal syncs.
+	   So assume the 16 MHz clock divided by 16384 for both CPUs (the CM3080
+	   gets the 16 MHz crystal and drives the video CPU /INT). */
+	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(MAIN_CLOCK / 16384));
 
 	z80_device &audiocpu(Z80(config, "audiocpu", SND_CPU_CLOCK));
 	audiocpu.set_addrmap(AS_PROGRAM, &_4enlinea_state::audio_map);
-	audiocpu.set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(SND_CPU_CLOCK / 8192));
+	audiocpu.set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(MAIN_CLOCK / 16384));
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
@@ -781,8 +1001,8 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 	AY8910(config, m_ay, SND_AY_CLOCK);
-	m_ay->port_a_read_callback().set_ioport("IN-P2");
-	m_ay->port_b_read_callback().set_ioport("IN-P1");
+	m_ay->port_a_read_callback().set(FUNC(_4enlinea_state::ay_porta_r));
+	m_ay->port_b_read_callback().set(FUNC(_4enlinea_state::ay_portb_r));
 	m_ay->add_route(ALL_OUTPUTS, "mono", 0.50);
 }
 
@@ -792,14 +1012,20 @@ void k7_state::k7_olym(machine_config &config)
 	Z80(config, m_maincpu, HCGA_CLOCK / 2); // Z84C00BB6
 	m_maincpu->set_addrmap(AS_PROGRAM, &k7_state::mem_map);
 	m_maincpu->set_addrmap(AS_IO, &k7_state::io_map);
-	// TODO: IRQ source is unknown, the game runs its tick every 20 IRQs (same guess as 4enlinea)
-	m_maincpu->set_periodic_int(FUNC(k7_state::irq0_line_hold), attotime::from_hz(HCGA_CLOCK / 2 / 8192));
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // D4464C-15L (6264) + battery
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
 	hcga_config(config); // UM487F
+
+	/* TODO: IRQ source is unknown.
+	   The game runs its IRQ routine every 2 IRQs and its tick every 10 of
+	   them, with the same timings as Sport Darts (IRQ routine every 16
+	   horizontal syncs) and the Compumatic master CPU (100 ticks per second),
+	   so assume the horizontal sync divided by 8 (the CM3080 subboard has two
+	   HEF4020 ripple counters). */
+	m_video->hsync_callback().set(FUNC(k7_state::hsync_w));
 
 	SPEAKER(config, "mono").front_center();
 	AY8910(config, m_ay, HCGA_CLOCK / 8); // Winbond WF19054
@@ -815,7 +1041,6 @@ void k7_state::sprtdart(machine_config &config)
 	/* The IRQ handler counts the IRQs and resyncs with the vertical retrace to
 	   change the background color at a given raster line, so the IRQ comes from
 	   the UM487F horizontal sync (the main IRQ routine runs every 16 IRQs). */
-	m_maincpu->remove_periodic_int();
 	m_video->hsync_callback().set_inputline(m_maincpu, 0, HOLD_LINE); // TODO: polarity
 
 	m_select_active_low = true;
@@ -944,10 +1169,10 @@ ROM_END
 *           Game Drivers           *
 ***********************************/
 
-//    YEAR  NAME       PARENT    MACHINE    INPUT     CLASS            INIT        ROT    COMPANY                                      FULLNAME                            FLAGS
-GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
-GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
-GAME( 1992, dardos,    0,        _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1994, k7_olym,   0,        k7_olym,   k7_olym,  k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+//    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT    COMPANY                                      FULLNAME                            FLAGS
+GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
+GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
+GAME( 1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAME( 1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
 GAME( 1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1993, sprtdart,  0,        sprtdart,  k7_olym,  k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAME( 1993, sprtdart,  0,        sprtdart,  k7_olym,   k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
