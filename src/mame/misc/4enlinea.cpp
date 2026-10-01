@@ -194,15 +194,41 @@
 
 **************************************************************************
 
+  K7 / Sport Darts single CPU boards:
+
+  Z84C00BB6 @ 7.159 MHz, UM487F, WF19054 (AY-3-8910), X24C16P, 6264 + battery
+  and a 64 KB EPROM. The upper half of the EPROM is banked in 4 pages of
+  8 KB at C000h-DFFFh.
+
+  The AY ports read the dart board matrix (4 columns of 16 targets, selected
+  through port 1 bits 0-3) and the panel buttons (selected through port 1
+  bit 4). The Sport Darts PCB uses active low select lines instead.
+
+  The Olympic Darts v3.11 panel has Up, Down, NP (start / next player) and
+  Player buttons, plus a setup key switch and a reset key. The v3.00 PCB has
+  a button (and lamp) for each game and number of players instead.
+
+  The game registers missed darts through a sensor (only while no sound is
+  being played) and, at the end of a turn, waits for the player to cross
+  another sensor before continuing on its own.
+
+  The EEPROM holds the settings, high scores and accounting. The games
+  initialize it when it's blank.
+
+  Sport Darts uses the UM487F horizontal sync as IRQ, counting the lines
+  from the vertical retrace to split the screen in two palettes.
+
+**************************************************************************
+
   TODO:
 
-  - IRQ sources (the frequencies are guessed from the software timings).
+  - IRQ sources of the Compumatic and K7 boards (the frequencies are guessed
+    from the software timings).
   - Master to video CPU link: after the boot handshake (FC30h-FC32h) the
     master sends the commands writing FC29h-FC2Ch and strobing FC28h,
     which aren't hooked up yet.
   - Sound.
-  - k7_olym accesses i2c device with an id of 0xeb. Device is unknown.
-  - More work...
+  - Olympic Darts v3.00 lamps.
 
 *************************************************************************/
 
@@ -226,23 +252,46 @@
 #define SND_CPU_CLOCK        SEC_CLOCK /2       // 4 MHz. (measured)
 #define SND_AY_CLOCK         SEC_CLOCK /4       // 2 MHz. (measured)
 
-class _4enlinea_state : public driver_device
+
+namespace {
+
+class sysi_state : public driver_device
+{
+protected:
+	sysi_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag)
+		, m_maincpu(*this, "maincpu")
+		, m_video(*this, "um487f")
+		, m_ay(*this, "aysnd")
+		, m_eeprom(*this, "eeprom")
+	{ }
+
+	// A15 = 1 selects the CGA video memory window of the UM487F
+	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 | offset); }
+	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
+
+	void hcga_config(machine_config &config) ATTR_COLD;
+
+	required_device<cpu_device> m_maincpu;
+	required_device<um487f_device> m_video;
+	required_device<ay8910_device> m_ay;
+	required_device<i2cmem_device> m_eeprom;
+};
+
+
+class _4enlinea_state : public sysi_state
 {
 public:
 	_4enlinea_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		m_ay(*this, "aysnd"),
-		m_maincpu(*this, "maincpu"),
-		m_eeprom(*this, "eeprom"),
-		m_video(*this, "um487f")
+		: sysi_state(mconfig, type, tag)
 	{ }
 
-	void _4enlinea(machine_config &config);
-	void k7_olym(machine_config &config);
+	void _4enlinea(machine_config &config) ATTR_COLD;
+
+protected:
+	virtual void machine_start() override ATTR_COLD;
 
 private:
-	required_device<ay8910_device> m_ay;
-
 	uint8_t serial_r(offs_t offset);
 	uint8_t serial_status_r();
 	void serial_w(offs_t offset, uint8_t data);
@@ -254,33 +303,63 @@ private:
 	void eeprom_control_w(uint8_t data);
 	void eeprom_clock_w(uint8_t data);
 
-	uint8_t k7_in_r();
-	void k7_out0_w(uint8_t data);
-	void k7_out1_w(uint8_t data);
-
-	uint8_t m_serial_flags = 0;
-	uint8_t m_serial_data[2]{};
-
-	virtual void machine_start() override ATTR_COLD;
-	virtual void machine_reset() override ATTR_COLD;
-	required_device<cpu_device> m_maincpu;
-	required_device<i2cmem_device> m_eeprom;
-	required_device<um487f_device> m_video;
-
-	// A15 = 1 selects the CGA video memory window of the UM487F
-	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 | offset); }
-	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
-
-	void hcga_config(machine_config &config) ATTR_COLD;
-
 	void audio_map(address_map &map) ATTR_COLD;
 	void main_map(address_map &map) ATTR_COLD;
 	void main_portmap(address_map &map) ATTR_COLD;
 
-	void k7_mem_map(address_map &map) ATTR_COLD;
-	void k7_io_map(address_map &map) ATTR_COLD;
+	uint8_t m_serial_flags = 0;
+	uint8_t m_serial_data[2]{};
 };
 
+
+class k7_state : public sysi_state
+{
+public:
+	k7_state(const machine_config &mconfig, device_type type, const char *tag)
+		: sysi_state(mconfig, type, tag)
+		, m_rombank(*this, "rombank")
+		, m_matrix(*this, "MATRIX%u", 0U)
+		, m_buttons(*this, "BUTTONS%u", 0U)
+		, m_in1(*this, "IN1")
+		, m_in1_col(*this, "IN1_COL")
+		, m_in1_alt(*this, "IN1_ALT")
+		, m_lamp(*this, "lamp0")
+	{ }
+
+	void k7_olym(machine_config &config) ATTR_COLD;
+	void sprtdart(machine_config &config) ATTR_COLD;
+
+protected:
+	virtual void machine_start() override ATTR_COLD;
+
+private:
+	uint8_t in1_r();
+	void out0_w(uint8_t data);
+	void out1_w(uint8_t data);
+	uint8_t selected_lines() const { return m_select_active_low ? ~m_out1 : m_out1; }
+	uint8_t ay_porta_r();
+	uint8_t ay_portb_r();
+
+	void mem_map(address_map &map) ATTR_COLD;
+	void io_map(address_map &map) ATTR_COLD;
+
+	required_memory_bank m_rombank;
+	required_ioport_array<4> m_matrix;
+	optional_ioport_array<2> m_buttons;
+	required_ioport m_in1;
+	optional_ioport m_in1_col;
+	optional_ioport m_in1_alt;
+	output_finder<> m_lamp;
+
+	bool m_select_active_low = false;
+	uint8_t m_out0 = 0;
+	uint8_t m_out1 = 0;
+};
+
+
+/***********************************
+*      Memory Map Information      *
+***********************************/
 
 uint8_t _4enlinea_state::serial_r(offs_t offset)
 {
@@ -292,12 +371,6 @@ uint8_t _4enlinea_state::serial_r(offs_t offset)
 
 	return m_serial_data[offset];
 }
-
-
-
-/***********************************
-*      Memory Map Information      *
-***********************************/
 
 void _4enlinea_state::main_map(address_map &map)
 {
@@ -374,33 +447,102 @@ void _4enlinea_state::audio_map(address_map &map)
 	map(0xfc4a, 0xfc4a).w(m_ay, FUNC(ay8910_device::data_w));
 }
 
-uint8_t _4enlinea_state::k7_in_r()
+
+/*
+  K7 port 1 (read):
+  bits 0-1: coins
+  bit 4:    EEPROM SDA
+  bits 6-7: sensors
+
+  On the Olympic Darts v3.00 PCB, some lines carry other inputs while the
+  buttons are selected (port 1 bit 4) or while port 0 bit 7 is set.
+*/
+uint8_t k7_state::in1_r()
 {
-	return m_eeprom->read_sda() << 4;
+	if (BIT(m_out0, 7) && m_in1_alt)
+		return m_in1_alt->read();
+
+	uint8_t data = m_in1->read();
+	if (BIT(selected_lines(), 4) && m_in1_col)
+		data = (data & ~0x0c) | (m_in1_col->read() & 0x0c);
+
+	return data;
 }
 
-void _4enlinea_state::k7_out0_w(uint8_t data)
+/*
+  K7 port 0 (write):
+  bits 0-1: ROM bank at C000h-DFFFh
+  bit 2:    EEPROM SCL
+  bit 3:    EEPROM SDA (inverted)
+  bit 7:    input bank select (Olympic Darts v3.00 PCB)
+*/
+void k7_state::out0_w(uint8_t data)
 {
-	m_eeprom->write_sda(!BIT(data, 3));
+	m_out0 = data;
+	m_rombank->set_entry(data & 0x03);
 	m_eeprom->write_scl(BIT(data, 2));
+	m_eeprom->write_sda(!BIT(data, 3));
 }
 
-void _4enlinea_state::k7_out1_w(uint8_t data)
+/*
+  K7 port 1 (write):
+  bits 0-3: dart board matrix columns (read through AY ports A and B)
+  bit 4:    buttons (read through AY ports A and B)
+  (the Sport Darts PCB selects them with active low lines instead)
+  bit 5:    lamp (blinks while waiting for a player to start)
+  bit 6:    coin counter
+  bit 7:    pulsed low at boot
+*/
+void k7_state::out1_w(uint8_t data)
 {
+	m_out1 = data;
+
+	m_lamp = BIT(data, 5);
+	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
-void _4enlinea_state::k7_mem_map(address_map &map)
+uint8_t k7_state::ay_porta_r()
+{
+	uint8_t const sel = selected_lines();
+	uint8_t data = 0xff;
+
+	for (int i = 0; i < 4; i++)
+		if (BIT(sel, i))
+			data &= m_matrix[i]->read();
+
+	if (BIT(sel, 4))
+		data &= m_buttons[0].read_safe(0xff);
+
+	return data;
+}
+
+uint8_t k7_state::ay_portb_r()
+{
+	uint8_t const sel = selected_lines();
+	uint8_t data = 0xff;
+
+	for (int i = 0; i < 4; i++)
+		if (BIT(sel, i))
+			data &= m_matrix[i]->read() >> 8;
+
+	if (BIT(sel, 4))
+		data &= m_buttons[1].read_safe(0xff);
+
+	return data;
+}
+
+void k7_state::mem_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom().region("maincpu", 0);
-	map(0x8000, 0xbfff).rw(FUNC(_4enlinea_state::vram_r), FUNC(_4enlinea_state::vram_w));
-	map(0xc000, 0xdfff).rom().region("maincpu", 0x8000);
+	map(0x8000, 0xbfff).rw(FUNC(k7_state::vram_r), FUNC(k7_state::vram_w));
+	map(0xc000, 0xdfff).bankr(m_rombank);
 	map(0xe000, 0xffff).ram().share("nvram");
 }
 
-void _4enlinea_state::k7_io_map(address_map &map)
+void k7_state::io_map(address_map &map)
 {
-	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(_4enlinea_state::k7_out0_w));
-	map(0x0001, 0x0001).mirror(0xfc00).rw(FUNC(_4enlinea_state::k7_in_r), FUNC(_4enlinea_state::k7_out1_w));
+	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(k7_state::out0_w));
+	map(0x0001, 0x0001).mirror(0xfc00).rw(FUNC(k7_state::in1_r), FUNC(k7_state::out1_w));
 	map(0x0100, 0x0100).w(m_ay, FUNC(ay8910_device::address_w));
 	map(0x0101, 0x0101).r(m_ay, FUNC(ay8910_device::data_r));
 	map(0x0102, 0x0102).w(m_ay, FUNC(ay8910_device::data_w));
@@ -440,33 +582,140 @@ static INPUT_PORTS_START( 4enlinea )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( k7_olym )
-	PORT_START("IN-P1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+/*  K7 dart board matrix, 4 columns selected through port 1 bits 0-3,
+    rows read through AY port A (bits 0-7) and port B (bits 8-15).
+*/
+#define K7_DART(mask, name) \
+	PORT_BIT( mask, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME(name)
 
-	PORT_START("IN-P2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+static INPUT_PORTS_START( k7_matrix )
+	PORT_START("MATRIX0")
+	K7_DART( 0x0001, "Single 3" )
+	K7_DART( 0x0002, "Double 3" )
+	K7_DART( 0x0004, "Single 19" )
+	K7_DART( 0x0008, "Double 19" )
+	K7_DART( 0x0010, "Single 7" )
+	K7_DART( 0x0020, "Double 7" )
+	K7_DART( 0x0040, "Single 16" )
+	K7_DART( 0x0080, "Double 16" )
+	K7_DART( 0x0100, "Double 17" )
+	K7_DART( 0x0200, "Single 17" )
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNUSED )
+	K7_DART( 0x0800, "Triple 16" )
+	K7_DART( 0x1000, "Triple 7" )
+	K7_DART( 0x2000, "Triple 19" )
+	K7_DART( 0x4000, "Triple 3" )
+	K7_DART( 0x8000, "Triple 17" )
+
+	PORT_START("MATRIX1")
+	K7_DART( 0x0001, "Single 6" )
+	K7_DART( 0x0002, "Double 6" )
+	K7_DART( 0x0004, "Single 10" )
+	K7_DART( 0x0008, "Double 10" )
+	K7_DART( 0x0010, "Single 15" )
+	K7_DART( 0x0020, "Double 15" )
+	K7_DART( 0x0040, "Single 2" )
+	K7_DART( 0x0080, "Double 2" )
+	K7_DART( 0x0100, "Double 13" )
+	K7_DART( 0x0200, "Single 13" )
+	K7_DART( 0x0400, "Bull's Eye (50)" )
+	K7_DART( 0x0800, "Triple 2" )
+	K7_DART( 0x1000, "Triple 15" )
+	K7_DART( 0x2000, "Triple 10" )
+	K7_DART( 0x4000, "Triple 6" )
+	K7_DART( 0x8000, "Triple 13" )
+
+	PORT_START("MATRIX2")
+	K7_DART( 0x0001, "Single 20" )
+	K7_DART( 0x0002, "Double 20" )
+	K7_DART( 0x0004, "Single 1" )
+	K7_DART( 0x0008, "Double 1" )
+	K7_DART( 0x0010, "Single 18" )
+	K7_DART( 0x0020, "Double 18" )
+	K7_DART( 0x0040, "Single 4" )
+	K7_DART( 0x0080, "Double 4" )
+	K7_DART( 0x0100, "Double 5" )
+	K7_DART( 0x0200, "Single 5" )
+	K7_DART( 0x0400, "Bull (25)" )
+	K7_DART( 0x0800, "Triple 4" )
+	K7_DART( 0x1000, "Triple 18" )
+	K7_DART( 0x2000, "Triple 1" )
+	K7_DART( 0x4000, "Triple 20" )
+	K7_DART( 0x8000, "Triple 5" )
+
+	PORT_START("MATRIX3")
+	K7_DART( 0x0001, "Single 11" )
+	K7_DART( 0x0002, "Double 11" )
+	K7_DART( 0x0004, "Single 14" )
+	K7_DART( 0x0008, "Double 14" )
+	K7_DART( 0x0010, "Single 9" )
+	K7_DART( 0x0020, "Double 9" )
+	K7_DART( 0x0040, "Single 12" )
+	K7_DART( 0x0080, "Double 12" )
+	K7_DART( 0x0100, "Double 8" )
+	K7_DART( 0x0200, "Single 8" )
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNUSED )
+	K7_DART( 0x0800, "Triple 12" )
+	K7_DART( 0x1000, "Triple 9" )
+	K7_DART( 0x2000, "Triple 14" )
+	K7_DART( 0x4000, "Triple 11" )
+	K7_DART( 0x8000, "Triple 8" )
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( k7_olym )
+	PORT_INCLUDE( k7_matrix )
 
-/***********************************
-*         Graphics Layouts         *
-***********************************/
+	PORT_START("IN1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin 1 (500 Pts)")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
+	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) // must be low at boot
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor")
 
+	PORT_START("BUTTONS0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Up")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Player")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
+// Olympic Darts v3.00 PCB, with a button (and lamp) for each game and number of players
+static INPUT_PORTS_START( k7_olym30 )
+	PORT_INCLUDE( k7_olym )
+
+	PORT_MODIFY("BUTTONS0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("High Score / Down")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Shanghai / Up")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Scram / Player")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Roulette")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Tres en Raya")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Cricket")
+
+	PORT_START("BUTTONS1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("301")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("501")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("Double In / Cut Throat")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("Double Out / Team")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("1 Player") PORT_CODE(KEYCODE_1_PAD)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("2 Players") PORT_CODE(KEYCODE_2_PAD)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("3 Players") PORT_CODE(KEYCODE_3_PAD)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("4 Players") PORT_CODE(KEYCODE_4_PAD)
+
+	PORT_START("IN1_COL")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("5 Players") PORT_CODE(KEYCODE_5_PAD)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("6 Players") PORT_CODE(KEYCODE_6_PAD)
+	PORT_BIT( 0xf3, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("IN1_ALT")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON11 ) PORT_NAME("Ahorcado")
+	PORT_BIT( 0xfb, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
 
 
 /****************************************
@@ -475,17 +724,25 @@ INPUT_PORTS_END
 
 void _4enlinea_state::machine_start()
 {
+	save_item(NAME(m_serial_flags));
+	save_item(NAME(m_serial_data));
 }
 
-void _4enlinea_state::machine_reset()
+void k7_state::machine_start()
 {
+	m_rombank->configure_entries(0, 4, memregion("maincpu")->base() + 0x8000, 0x2000);
+	m_rombank->set_entry(0);
+
+	save_item(NAME(m_out0));
+	save_item(NAME(m_out1));
 }
+
 
 /***********************************
 *         Machine Drivers          *
 ***********************************/
 
-void _4enlinea_state::hcga_config(machine_config &config)
+void sysi_state::hcga_config(machine_config &config)
 {
 	// 320x200 CGA timings as programmed by the games, the UM487F reconfigures the screen from its CRTC registers
 	screen_device &screen(SCREEN(config, "screen"));
@@ -530,11 +787,13 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 }
 
 
-void _4enlinea_state::k7_olym(machine_config &config)
+void k7_state::k7_olym(machine_config &config)
 {
-	Z80(config, m_maincpu, 14.318181_MHz_XTAL / 2); // Z84C00BB6
-	m_maincpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::k7_mem_map);
-	m_maincpu->set_addrmap(AS_IO, &_4enlinea_state::k7_io_map);
+	Z80(config, m_maincpu, HCGA_CLOCK / 2); // Z84C00BB6
+	m_maincpu->set_addrmap(AS_PROGRAM, &k7_state::mem_map);
+	m_maincpu->set_addrmap(AS_IO, &k7_state::io_map);
+	// TODO: IRQ source is unknown, the game runs its tick every 20 IRQs (same guess as 4enlinea)
+	m_maincpu->set_periodic_int(FUNC(k7_state::irq0_line_hold), attotime::from_hz(HCGA_CLOCK / 2 / 8192));
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // D4464C-15L (6264) + battery
 
@@ -543,10 +802,23 @@ void _4enlinea_state::k7_olym(machine_config &config)
 	hcga_config(config); // UM487F
 
 	SPEAKER(config, "mono").front_center();
-	AY8910(config, m_ay, 14.318181_MHz_XTAL / 8); // Winbond WF19054
-	m_ay->port_a_read_callback().set_ioport("IN-P2");
-	m_ay->port_b_read_callback().set_ioport("IN-P1");
+	AY8910(config, m_ay, HCGA_CLOCK / 8); // Winbond WF19054
+	m_ay->port_a_read_callback().set(FUNC(k7_state::ay_porta_r));
+	m_ay->port_b_read_callback().set(FUNC(k7_state::ay_portb_r));
 	m_ay->add_route(ALL_OUTPUTS, "mono", 0.50);
+}
+
+void k7_state::sprtdart(machine_config &config)
+{
+	k7_olym(config);
+
+	/* The IRQ handler counts the IRQs and resyncs with the vertical retrace to
+	   change the background color at a given raster line, so the IRQ comes from
+	   the UM487F horizontal sync (the main IRQ routine runs every 16 IRQs). */
+	m_maincpu->remove_periodic_int();
+	m_video->hsync_callback().set_inputline(m_maincpu, 0, HOLD_LINE); // TODO: polarity
+
+	m_select_active_low = true;
 }
 
 
@@ -665,6 +937,9 @@ ROM_START( sprtdart )
 ROM_END
 
 
+} // anonymous namespace
+
+
 /***********************************
 *           Game Drivers           *
 ***********************************/
@@ -673,6 +948,6 @@ ROM_END
 GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
 GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
 GAME( 1992, dardos,    0,        _4enlinea, 4enlinea, _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1994, k7_olym,   0,        k7_olym,   k7_olym,  _4enlinea_state, empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1994, k7_olym30, k7_olym,  k7_olym,   k7_olym,  _4enlinea_state, empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1993, sprtdart,  0,        k7_olym,   k7_olym,  _4enlinea_state, empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAME( 1994, k7_olym,   0,        k7_olym,   k7_olym,  k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAME( 1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAME( 1993, sprtdart,  0,        sprtdart,  k7_olym,  k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
