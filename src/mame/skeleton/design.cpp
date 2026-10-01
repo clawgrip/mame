@@ -4,9 +4,6 @@
     Azkoyen "Design" tobacco vending machines (D6, D8, D10, D12, D14, D21...)
 
     * design6: pesetas firmware, only has tables for a six channel machine.
-      Byte 0x0e39 is 0x7b where the same routine in designe has 0xfb; with
-      it every sale corrupts VENTA TOTAL (patching it gives the right total),
-      so it is most likely a bad bit in the dump.
     * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
       presets selected in the CONFIGURACION menu.
 
@@ -85,7 +82,7 @@
       coins; V stops.
     - PROGRAMACION PRECIOS: see step 5.
     - PRODUCTO VENDIDO POR CANAL: a selection shows its sales, Z clears.
-    - VENTA TOTAL: money taken (wrong on design6, see above).
+    - VENTA TOTAL: money taken.
     - BORRADO TOTAL PRODUCTO VENDIDO: Z clears all the sales.
     - HORAS / MIN: the clock.  MAME keeps it at the computer's time, so
       changing it here has no effect.
@@ -696,7 +693,7 @@ void design_state::designe(machine_config &config)
 
 ROM_START( design6 )
 	ROM_REGION(0x8000, "maincpu", 0)
-	ROM_LOAD("1.bin", 0x0000, 0x8000, BAD_DUMP CRC(1155999c) SHA1(2896af89011c496f905ed0e57d7035a3b612c718)) // see the notes at the top
+	ROM_LOAD("1.bin", 0x0000, 0x8000, CRC(d3823da8) SHA1(bc1661727643c63e2ed94841f2e7c0a305333a10))
 
 	ROM_REGION(0x4000, "coinsel", 0)
 	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4000, NO_DUMP)
