@@ -4,6 +4,9 @@
     Azkoyen "Design" tobacco vending machines (D6, D8, D10, D12, D14, D21...)
 
     * design6: pesetas firmware, only has tables for a six channel machine.
+      Byte 0x0e39 is 0x7b where the same routine in designe has 0xfb; with
+      it every sale corrupts VENTA TOTAL (patching it gives the right total),
+      so it is most likely a bad bit in the dump.
     * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
       presets selected in the CONFIGURACION menu.
 
@@ -26,12 +29,73 @@
     assembly connects to the machine with 4 coin outputs, a general inhibit
     input and drivers for three sorter coils; there is no accept input.
 
-    Usage: the service switch (CS) enters control mode, the coin return
-    button steps through the menus and keypad A-D programs (the first key
-    after choosing a selection clears its price).  A fresh machine needs
-    prices and, on designe, a model preset (D, then B to step, then D four
-    times).  designe refuses coins until the adult access remote is
-    pressed, unless "ACCESO ADULTO" is changed.
+    How to use
+    ----------
+    Use the keyboard or click the buttons drawn on screen:
+
+      F2                    CS switch: SERVICIO (selling) or CONTROL
+      Q W E R T Y           selections 1 to 6 (design6)
+      Q W E R T Y U I O     selections 1 to 9 (designe)
+      A S D F G H J K L :   selections 10 to 19 (designe)
+      B                     coin return; in control mode, next menu
+      Z X C V               keypad A, B, C and D (inside the machine)
+      M                     adult access remote (designe)
+      1 2 3 4 5 6 7         coins: 5, 10, 25, 50, 100, 200 and 500 pesetas
+                            (design6); 0.05, 0.10, 0.20, 0.50, 1 and 2 euro
+                            and a token (designe)
+
+    The steps below name keyboard keys.  On screen, Z X C V are the keypad
+    buttons A B C D and B is the round RECUPERACION button.  MAME remembers
+    the position of the CS switch: if F2 seems to do nothing, press it
+    again.  In control mode the display first repeats any
+    problem found while selling; then each press of B moves to the next
+    menu and the keypad works inside it.  Long menu names scroll by.
+
+    Setting up a new machine:
+    1. Start the machine.  The display shows FUERA SERVICIO.
+    2. Press F2.  It shows DESPROGRAMADA (designe: also DESCONFIGURADA).
+    3. designe only, choose the model: press B (CONFIGURACION), then V (it
+       shows D6), X five times (D8, D10 RODE, D10/D12, D14, D21) and V
+       four times (ORDEN EJECUTADA).  For the D6, D8 and D10/D12 models
+       also set Hopper Exit Sensors to Active High in the Machine
+       Configuration menu (Tab key).
+    4. Press B until PROGRAMACION PRECIOS scrolls by and PULSE CANAL shows.
+    5. Press a selection.  The display shows CANAL, its number and its
+       price.  Press Z once to set the price to 0, then add to it with Z
+       (1), X (10), C (100) and V (1000); designe counts in cents (0.01,
+       0.10, 1.00 and 10.00 euro).  For 150 pesetas: Z, C, X five times.
+       For 1.30 euro: Z, C, X three times.  Pressing the selection again
+       starts it over.  Do this for every selection.
+    6. designe only, so coins are accepted without the adult remote: press
+       B until ACCESO ADULTO, then V, X (MANDO ADULTO ON), Z (OFF) and V
+       four times.
+    7. Press F2.  The display shows VERIFICANDO, then *** AZKOYEN *** and
+       the time: the machine is ready.
+
+    Selling:
+    1. Insert coins.  The display shows the money inserted.  (designe: if
+       it shows SOLO ADULTOS, press M first.)
+    2. Press a selection.  The product falls and the change is paid.
+    3. Or press B to get the coins back.
+    Leave the sensor switches on screen off.
+
+    The menus, in the order B shows them.  Once the machine is set up,
+    control mode starts at the first one.
+    - DESCARGA DEVOLVEDORES: Z, X or C empties a hopper, counting the
+      coins; V stops.
+    - PROGRAMACION PRECIOS: see step 5.
+    - PRODUCTO VENDIDO POR CANAL: a selection shows its sales, Z clears.
+    - VENTA TOTAL: money taken (wrong on design6, see above).
+    - BORRADO TOTAL PRODUCTO VENDIDO: Z clears all the sales.
+    - HORAS / MIN: the clock.  MAME keeps it at the computer's time, so
+      changing it here has no effect.
+    - PROGRAM. MENSAJE: the message shown while idle.
+    - TEST VENTA: Z switches it on; then, back in SERVICIO, every selection
+      vends without money.  Switch it off again here.
+    - designe: ACCESO ADULTO (step 6), CONFIGURACION (step 3), MONEDAS
+      CAMBIO and INHIBICION.
+    A fault (AVERIA ..., VACIO DEVOL.) shows when entering control mode and
+    is cleared by leaving it with F2.
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
@@ -267,13 +331,13 @@ static INPUT_PORTS_START( design6 )
 
 	// codes 2/5 are presumably the old 5/25 peseta coins and 8/9 the new ones (assumption)
 	PORT_START("COINS")
-	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
-	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
-	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("25 Pesetas (code 9)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
-	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("50 Pesetas (code 6)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
-	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_NAME("100 Pesetas (code 7)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
-	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("200 Pesetas (code 4)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
-	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("500 Pesetas (code 1)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
+	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
+	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
+	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas (code 9)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
+	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("50 Pesetas (code 6)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
+	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas (code 7)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
+	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas (code 4)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
+	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("500 Pesetas (code 1)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
 	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas (code 2)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 2)
 	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas (code 5)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 5)
 	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas (code 10)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 10)
@@ -315,13 +379,13 @@ static INPUT_PORTS_START( designe )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_M) PORT_NAME("Adult Access Remote") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::remote_pressed), 0)
 
 	PORT_START("COINS")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("0.05 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x13)
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("0.10 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x14)
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("0.20 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x15)
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("0.50 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x16)
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_COIN5) PORT_NAME("1 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x17)
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("2 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x18)
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("Token") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x0c)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("0.05 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x13)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("0.10 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x14)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("0.20 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x15)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("0.50 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x16)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("1 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x17)
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("2 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x18)
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("Token") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x0c)
 
 	// the firmware takes the hopper exit sensor polarity from the model preset
 	PORT_START("CONF")
@@ -632,7 +696,7 @@ void design_state::designe(machine_config &config)
 
 ROM_START( design6 )
 	ROM_REGION(0x8000, "maincpu", 0)
-	ROM_LOAD("1.bin", 0x0000, 0x8000, CRC(1155999c) SHA1(2896af89011c496f905ed0e57d7035a3b612c718))
+	ROM_LOAD("1.bin", 0x0000, 0x8000, BAD_DUMP CRC(1155999c) SHA1(2896af89011c496f905ed0e57d7035a3b612c718)) // see the notes at the top
 
 	ROM_REGION(0x4000, "coinsel", 0)
 	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4000, NO_DUMP)

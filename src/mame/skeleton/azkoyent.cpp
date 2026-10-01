@@ -72,31 +72,65 @@
     The I/O maps and signal meanings come from the firmware.  "(assumption)"
     marks interpretations not verified on hardware and "(simulated)" marks
     machine mechanics modelled with made-up timings.  All the firmwares
-    share one design:
+    share one design.  A vend switches on one motor and waits for a common
+    cam switch to leave its rest position and come back.  Hoppers 1, 2 and
+    3 pay 5, 25 and 100 pesetas (the T61 has the first two); each has a
+    coin sensor and a level switch, and the T8 and T12 read the hopper 1
+    and 2 sensors with the opposite polarity to the T6.
 
-    - Keys: 0 coin return, 1-8 (1-17 on the T12) selections, 0x18-0x1a
-      +1/+10/+100, 0x1b and 0x1c (0x0c, 0x12 on the T12) run hoppers 1 and 2
-      (3), 0x1d-0x1f see below.
-    - The service switch selects control mode.  There a selection shows its
-      price and the first +1/+10/+100 key clears it; a line priced 0 doesn't
-      sell.  Key 0 sets the clock from 00:00, the +1/+10/+100 keys then add
-      a minute, ten minutes and an hour, and switching control mode off
-      stores it ("HorA", 8031 board only).  Key 0x1d clears faults and
-      hopper alarms ("rEAr."), 0x1e followed by a selection shows its sales
-      counter ("cont."), and 0x1f ("borr.") clears the counters when control
-      mode is then switched off (any other key cancels).
-    - A blank machine shows "P.P.P.P." until control mode is entered (and a
-      key is pressed, on the T61).
-    - A vend switches on one motor and waits for a common cam switch to
-      leave its rest position and come back.
-    - Hoppers 1, 2 and 3 pay 5, 25 and 100 pesetas (the T61 has the first
-      two).  Each has a coin sensor and a level switch; the T8 and T12 read
-      the hopper 1 and 2 sensors with the opposite polarity to the T6.  A
-      hopper that runs out while paying raises an alarm shown when control
-      mode is entered ("A_05", "A_25", "A100").
-    - Faults stop the machine until cleared with key 0x1d: "F_01" hopper
-      sensor stuck or no coin paid, "F_02" cam switch not back at rest,
-      "F_03" coin lines stuck.
+    How to use
+    ----------
+    Use the keyboard or click the buttons drawn on screen:
+
+      F2                  service switch: NORMAL (selling) or CONTROL
+      Q W E R T Y U I     selections 1 to 8
+      O P J K L N M , .   selections 9 to 17 (T12)
+      B                   coin return
+      1 2 3 4 5 6 7       coins of 5, 10, 25, 50, 100, 200 and 500 pesetas
+                          (the first T61 set only takes 5, 25, 100 and 200)
+    and in control mode:
+      A S D               add 1, 10 or 100 to a price (+1 +10 +100)
+      F G H               empty hopper 1, 2 or 3 (H1 H2 H3)
+      Z                   clear a fault (RESET)
+      X                   sales counters (COUNT)
+      C                   clear the sales counters (CLEAR)
+
+    MAME remembers the position of the service switch: if F2 seems to do
+    nothing, press it again.
+
+    Setting up a new machine (or let a recording do it: decode one with
+    "base64 -d inp/azkoyent6.inp.b64 > inp/azkoyent6.inp", delete
+    nvram/azkoyent6 and run "mame azkoyent6 -playback azkoyent6.inp"):
+    1. Start the machine.  A new machine shows P.P.P.P.
+    2. Press F2.  On the T61, also press any selection.  The display shows
+       0000: the machine is in control mode.
+    3. Press the selection key of a line.  The display shows its price.
+    4. Type the price with D (+100), S (+10) and A (+1); the first press
+       starts it from zero.  For 175 pesetas: D, S seven times and A five
+       times.  If you make a mistake, press the selection again.
+    5. Repeat steps 3 and 4 for every line.  Lines left at 0 don't sell.
+    6. Press F2.  The display shows the time (0000 on the T61): the machine
+       is ready.
+
+    Selling:
+    1. Insert coins.  The display shows the money inserted.
+    2. Press a selection.  The product comes out and the change is paid.
+    3. Or press B to get the coins back.
+    Leave the HOPPER EMPTY switches on screen off, or no change is given.
+
+    More in control mode (F2 to enter, F2 again to leave):
+    - X, then a selection: how many it has sold ("cont.").
+    - C, then F2: clears all the sales counters ("borr."); any other key
+      cancels.
+    - B: set the clock ("HorA", not on the T61).  It starts from 00:00; A,
+      S and D add a minute, ten minutes and an hour; F2 saves it.
+    - F, G or H: empties hopper 1, 2 or 3, counting the coins; the same key
+      stops it.
+
+    Faults: "F_01" (hopper), "F_02" (vend motor) or "F_03" (coin mech)
+    stop the machine.  Press F2, Z ("rEAr.") and F2 again.  "A_05", "A_25"
+    or "A100" on entering control mode means that hopper ran out while
+    paying; Z clears it too.
 
     Outputs, as the firmware drives them (8031 board latch 0 Q0-Q7 and
     latch 1, T61 latch Q outputs in brackets):
@@ -615,20 +649,20 @@ static INPUT_PORTS_START( keys )
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_D) PORT_NAME("Price +100")
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_F) PORT_NAME("Run Hopper 1")
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_G) PORT_NAME("Run Hopper 2")
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_Z) PORT_NAME("Key 0x1d")
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_X) PORT_NAME("Key 0x1e")
-	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_C) PORT_NAME("Key 0x1f")
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_Z) PORT_NAME("Clear Faults")
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_X) PORT_NAME("Sales Counters")
+	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_C) PORT_NAME("Clear Sales Counters")
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( coins11 )
 	PORT_START("COINS")
-	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 8)
-	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 3)
-	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("25 Pesetas (code 9)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 9)
-	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("50 Pesetas (code 6)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 6)
-	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_NAME("100 Pesetas (code 7)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 7)
-	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("200 Pesetas (code 4)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 4)
-	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("500 Pesetas (code 1)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 1)
+	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas (code 8)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 8)
+	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("10 Pesetas (code 3)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 3)
+	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas (code 9)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 9)
+	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("50 Pesetas (code 6)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 6)
+	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas (code 7)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 7)
+	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas (code 4)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 4)
+	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("500 Pesetas (code 1)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 1)
 	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas (code 2)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 2)
 	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas (code 5)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 5)
 	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas (code 10)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 10)
@@ -695,10 +729,10 @@ static INPUT_PORTS_START( t61 )
 
 	// one line per coin
 	PORT_START("COINS")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 1)
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("100 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 2)
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 4)
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 8)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 1)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 2)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 4)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(azkoyent_state::coin_inserted), 8)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( t61a )
