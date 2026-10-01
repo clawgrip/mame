@@ -74,17 +74,29 @@
     machine mechanics modelled with made-up timings.  All the firmwares
     share one design:
 
-    - Keys: 0 coin return, 1-8 (1-17 on the T12) selections, 0x18-0x1a add
-      1/10/100 to a price in control mode, 0x1b and 0x1c run hoppers 1 and 2
-      (0x0c, 0x12 on the T12, runs hopper 3), 0x1d-0x1f other control mode
-      functions.
+    - Keys: 0 coin return, 1-8 (1-17 on the T12) selections, 0x18-0x1a
+      +1/+10/+100, 0x1b and 0x1c (0x0c, 0x12 on the T12) run hoppers 1 and 2
+      (3), 0x1d-0x1f see below.
+    - The service switch selects control mode.  There a selection shows its
+      price and the first +1/+10/+100 key clears it; a line priced 0 doesn't
+      sell.  Key 0 sets the clock from 00:00, the +1/+10/+100 keys then add
+      a minute, ten minutes and an hour, and switching control mode off
+      stores it ("HorA", 8031 board only).  Key 0x1d clears faults and
+      hopper alarms ("rEAr."), 0x1e followed by a selection shows its sales
+      counter ("cont."), and 0x1f ("borr.") clears the counters when control
+      mode is then switched off (any other key cancels).
+    - A blank machine shows "P.P.P.P." until control mode is entered (and a
+      key is pressed, on the T61).
     - A vend switches on one motor and waits for a common cam switch to
       leave its rest position and come back.
-    - Each hopper has a coin sensor and a level switch.  The T8 and T12 read
-      the hopper 1 and 2 sensors with the opposite polarity to the T6.
-    - Faults stop the machine until cleared with key 0x1d: F_01 hopper
-      sensor stuck or no coin paid, F_02 cam switch not back at rest, F_03
-      coin lines stuck.
+    - Hoppers 1, 2 and 3 pay 5, 25 and 100 pesetas (the T61 has the first
+      two).  Each has a coin sensor and a level switch; the T8 and T12 read
+      the hopper 1 and 2 sensors with the opposite polarity to the T6.  A
+      hopper that runs out while paying raises an alarm shown when control
+      mode is entered ("A_05", "A_25", "A100").
+    - Faults stop the machine until cleared with key 0x1d: "F_01" hopper
+      sensor stuck or no coin paid, "F_02" cam switch not back at rest,
+      "F_03" coin lines stuck.
 
     Outputs, as the firmware drives them (8031 board latch 0 Q0-Q7 and
     latch 1, T61 latch Q outputs in brackets):
@@ -106,8 +118,7 @@
     Coin mechs: the 8031 board and the second T61 set read a 4-bit coin code
     with codes 1-11 being 500, 5, 10, 200, 25, 50, 100, 5, 25, 50 and 200
     pesetas, as in the Design.  The first T61 set has one line per coin (5,
-    100, 25 and 200 pesetas).  Hoppers 1 and 2 pay 5 and 25 pesetas on the
-    T61 (ROM tables).
+    100, 25 and 200 pesetas).
 
     TODO:
     - Voice synthesizer (T6 and T8 write a message number to 0x70 and wait
