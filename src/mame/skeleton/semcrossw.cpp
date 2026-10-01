@@ -98,11 +98,6 @@ SCL4052BE || C |  | D |  | E |  | F |       |    ___  ___ |
    |                              |  CONN   |             |
    |______________________________________________________|
 
-Notes from one operator that used to work with this controller model:
- For programming the semaphore controller, you just put the memory values with the keyboard.
- From 100 to 200 you'll find the first program, from 200 to 300 the second, and so on up to
- seven programs, with 100 for green, 101 for yellow, 102 for clear, and then repeat it again.
-
 What the firmware does (facts from the disassembly):
  - It only clears the MC6802 internal RAM (0000-007F) at reset.
  - Programs and parameters are at 2000-23FF: decimal addresses 100-999 are 2064-23E7.
@@ -151,7 +146,7 @@ Assumptions, not verified on real hardware:
  - The 74LS122 of each PCB is a watchdog retriggered by the CA2 or CB2 pulses.
  - The amber of 2 B and the one of 3 A are flashing amber arrows beside the heads of the
    first and second vehicle phases, to turn with caution for the pedestrians while the
-   phase is red, as usual in Spain. The directions of the arrows are unknown.
+   phase is red.
 
 Programs 1-4 at 100, 200, 300, 400 (only four, although the operator mentions seven):
  +0..+23   step durations in seconds, run from step N-1 down to step 0 (main green)
@@ -164,8 +159,7 @@ Other parameters: 160 lamp monitor mask (lamp bits, 0 = no check), 161/162 synch
 limits (maximum wait, shortening window), 163 synchronisation output pulse length, 164 step
 after which the lamps rest in step 0 until there is a pedestrian demand.
 The lamps lit in each step come from the lamp tables in the EEPROM, so the meaning of each
-duration depends on the installation (with the dumped tables 101 isn't amber, unlike in the
-operator's notes).
+duration depends on the installation.
 
 How to program it, step by step (a crosswalk cycle for the lamp tables in the EEPROM):
 The display shows a 3 digit address, a dot and the 3 digit value stored there: [100.020]
@@ -482,7 +476,7 @@ void semcrossw_state::semcrossw(machine_config &config)
 	M6802(config, m_maincpu, 4_MHz_XTAL);
 	m_maincpu->set_addrmap(AS_PROGRAM, &semcrossw_state::mem_map);
 
-	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // 2 x UM6114, assumed battery backed
+	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // 2 x UM6114, battery backed
 
 	EEPROM_2816(config, "eeprom");
 
