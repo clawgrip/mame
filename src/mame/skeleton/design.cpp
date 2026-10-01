@@ -1,11 +1,11 @@
 // license:BSD-3-Clause
-// copyright-holders:Dirk Best
+// copyright-holders:Dirk Best, Tomás García-Merás (ClawGrip)
 /*
     Azkoyen "Design" tobacco vending machines (D6, D8, D10, D12, D14, D21...)
 
     * design6: pesetas firmware, only has tables for a six channel machine.
     * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
-      presets selected in the CONFIGURACION menu.
+      presetas selected in the CONFIGURACION menu.
 
     Hardware:
     * Intel P8051, 27C256 EPROM, NEC D446C-2 2K SRAM (battery backed)
@@ -96,7 +96,8 @@
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
-    - Function of latch 0 bit 7 and P3.3, voice synthesizer kit, watchdog
+    - Function of latch 0 bit 7 and P3.3, dump optional voice synthesizer 
+      kit, watchdog
     - Verify the assumptions on real hardware
 */
 
@@ -635,7 +636,7 @@ void design_state::machine_reset()
 
 void design_state::design6(machine_config &config)
 {
-	I8051(config, m_maincpu, 6_MHz_XTAL); // Unknown XTAL frequency
+	I8051(config, m_maincpu, 6'000'000); // Unknown XTAL frequency
 	m_maincpu->set_addrmap(AS_PROGRAM, &design_state::program_map);
 	m_maincpu->set_addrmap(AS_DATA, &design_state::data_map);
 	m_maincpu->port_out_cb<1>().set(FUNC(design_state::port1_w));
@@ -717,5 +718,5 @@ ROM_END
 **************************************************************************/
 
 //    YEAR   NAME         PARENT      COMPAT  MACHINE     INPUT     CLASS           INIT        COMPANY    FULLNAME                              FLAGS
-SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
-SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, with 43521600-5 kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND_HW | MACHINE_NOT_WORKING )
+SYST( 1995?, design6,     0,          0,      design6,    design6,  design_state,   empty_init, "Azkoyen", "Design D6 (pesetas)",                MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+SYST( 2006,  designe,     0,          0,      designe,    designe,  design_state,   empty_init, "Azkoyen", "Design (euro, with 43521600-5 kit)", MACHINE_SUPPORTS_SAVE | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
