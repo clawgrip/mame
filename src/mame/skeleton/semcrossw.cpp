@@ -157,7 +157,8 @@ Programs 1-4 at 100, 200, 300, 400 (only four, although the operator mentions se
  +30..+53  non zero if the step also times out in manual mode
 Other parameters: 160 lamp monitor mask (lamp bits, 0 = no check), 161/162 synchronisation
 limits (maximum wait, shortening window), 163 synchronisation output pulse length, 164 step
-after which the lamps rest in step 0 until there is a pedestrian demand.
+after which the lamps rest in step 0 until there is a pedestrian demand (a step that never
+comes, such as 255, gives fixed time cycles).
 The lamps lit in each step come from the lamp tables in the EEPROM, so the meaning of each
 duration depends on the installation.
 

@@ -204,7 +204,7 @@ license:CC0-1.0
 		<element ref="toggle" inputtag="SW1" inputmask="0x04"><bounds x="538" y="412" width="28" height="56" /></element>
 		<element ref="t_extprg"><bounds x="580" y="432" width="72" height="16" /></element>
 
-		<!-- optocoupler inputs and synchronisation output -->
+		<!-- optocoupler inputs and synchronisation output (which input is which is not verified) -->
 		<element ref="panel"><bounds x="200" y="500" width="460" height="100" /></element>
 		<element ref="t_inputs"><bounds x="212" y="508" width="300" height="14" /></element>
 		<element ref="button" inputtag="SW2" inputmask="0x01"><bounds x="214" y="536" width="44" height="44" /></element>
