@@ -230,6 +230,8 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include "sysi_darts.lh"
+
 
 #define MAIN_CLOCK           XTAL(16'000'000)
 #define SEC_CLOCK            XTAL(8'000'000)
@@ -1134,7 +1136,7 @@ ROM_END
 //    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT    COMPANY                                      FULLNAME                            FLAGS
 GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
 GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
-GAME( 1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
-GAME( 1993, sprtdart,  0,        sprtdart,  sprtdart,  k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL )
+GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_sysi_darts )
+GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_sysi_darts )
+GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_sysi_darts )
+GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_sysi_darts )
