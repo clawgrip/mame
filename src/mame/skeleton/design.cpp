@@ -4,8 +4,9 @@
     Azkoyen "Design" tobacco vending machines (D6, D8, D10, D12, D14, D21...)
 
     * design6: pesetas firmware, only has tables for a six channel machine.
-    * designe: euro firmware 43521600-5 dated 05-10-06, with 16 model
-      presetas selected in the CONFIGURACION menu.
+    * designe: euro firmware dated 05-10-06, for machines with the adult
+      access remote kit (43521600-5, shown at power on), with 16 model
+      presets selected in the CONFIGURACION menu.
 
     Hardware:
     * Intel P8051, 27C256 EPROM, NEC D446C-2 2K SRAM (battery backed)
@@ -33,7 +34,8 @@
       F2                    CS switch: SERVICIO (selling) or CONTROL
       Q W E R T Y           selections 1 to 6 (design6)
       Q W E R T Y U I O     selections 1 to 9 (designe)
-      A S D F G H J K L :   selections 10 to 19 (designe)
+      A S D F G H J K L     selections 10 to 18 (designe)
+      the key right of L    selection 19 (designe)
       B                     coin return; in control mode, next menu
       Z X C V               keypad A, B, C and D (inside the machine)
       M                     adult access remote (designe)
@@ -44,9 +46,9 @@
     The steps below name keyboard keys.  On screen, Z X C V are the keypad
     buttons A B C D and B is the round RECUPERACION button.  MAME remembers
     the position of the CS switch: if F2 seems to do nothing, press it
-    again.  In control mode the display first repeats any
-    problem found while selling; then each press of B moves to the next
-    menu and the keypad works inside it.  Long menu names scroll by.
+    again.  In control mode the display first repeats any problem found
+    while selling; then each press of B moves to the next menu and the
+    keypad works inside it.  Long menu names scroll by.
 
     Setting up a new machine:
     1. Start the machine.  The display shows FUERA SERVICIO.
@@ -96,7 +98,7 @@
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
-    - Function of latch 0 bit 7 and P3.3, dump optional voice synthesizer 
+    - Function of latch 0 bit 7 and P3.3, dump optional voice synthesizer
       kit, watchdog
     - Verify the assumptions on real hardware
 */
