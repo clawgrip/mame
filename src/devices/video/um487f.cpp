@@ -111,6 +111,7 @@ um487f_device::um487f_device(const machine_config &mconfig, const char *tag, dev
 	, m_chargen(*this, finder_base::DUMMY_TAG)
 	, m_hsync_cb(*this)
 	, m_vsync_cb(*this)
+	, m_rgbi_cb(*this)
 	, m_mga_clock(0)
 	, m_strap_mga(false)
 	, m_strap_change_enable(true)
@@ -149,8 +150,16 @@ void um487f_device::device_start()
 	std::fill_n(m_vram.get(), 0x10000, 0);
 
 	// RGBI output, as shown by an IBM 5153 compatible monitor (dark yellow shown as brown)
+	// unless the board converts it on its own
+	m_rgbi_cb.resolve();
 	for (int i = 0; i < 16; i++)
 	{
+		if (!m_rgbi_cb.isnull())
+		{
+			set_pen_color(i, m_rgbi_cb(i));
+			continue;
+		}
+
 		uint8_t const inten = BIT(i, 3) ? 0x55 : 0x00;
 		uint8_t const r = (BIT(i, 2) ? 0xaa : 0x00) + inten;
 		uint8_t g = (BIT(i, 1) ? 0xaa : 0x00) + inten;

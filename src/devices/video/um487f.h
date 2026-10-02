@@ -63,6 +63,10 @@ public:
 	void set_mode_change_enable(bool enable) { m_strap_change_enable = enable; }
 	// external character generator ROM (8 KiB, 2764 style) fed through CD0-CD7
 	template <typename T> void set_chargen(T &&tag) { m_chargen.set_tag(std::forward<T>(tag)); }
+	// conversion of the RGBI outputs (bit 3 = IOUT ... bit 0 = BOUT) done by the board
+	// and monitor, an IBM 5153 compatible monitor by default
+	typedef device_delegate<rgb_t (uint8_t rgbi)> rgbi_delegate;
+	template <typename... T> void set_rgbi_callback(T &&... args) { m_rgbi_cb.set(std::forward<T>(args)...); }
 
 	auto hsync_callback() { return m_hsync_cb.bind(); }
 	auto vsync_callback() { return m_vsync_cb.bind(); }
@@ -148,6 +152,7 @@ private:
 
 	devcb_write_line m_hsync_cb;
 	devcb_write_line m_vsync_cb;
+	rgbi_delegate m_rgbi_cb;
 
 	// configuration
 	uint32_t m_mga_clock;

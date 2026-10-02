@@ -282,9 +282,9 @@
     accesses (not emulated).
   - Each UM487F color output goes to the monitor through a 100 ohm resistor,
     and a 2N2369 switched by IOUT loads it with another 100 ohm resistor, so
-    the intensity scales the colors instead of adding a gray level (not
-    emulated, the polarity of IOUT isn't clear from the datasheet and the
-    later schematics, which label it -IOUT).
+    the intensity scales the colors instead of adding a gray level (see
+    rgbi_to_rgb, the later schematics label the pin -IOUT, but the games
+    never set the intensity and the real screens show bright colors).
   - The AY outputs are mixed through resistors to a TDA2003 amplifier with a
     volume trimmer.
 
@@ -302,8 +302,7 @@
     lines).
   - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts
     v3.00 lamps.
-  - UM487F IORDY wait states and the RGB output circuit of the K7 / Sport
-    Darts boards.
+  - UM487F IORDY wait states.
 
 *************************************************************************/
 
@@ -346,6 +345,7 @@ protected:
 	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
 
 	void hcga_config(machine_config &config) ATTR_COLD;
+	rgb_t rgbi_to_rgb(uint8_t rgbi);
 
 	required_device<cpu_device> m_maincpu;
 	required_device<um487f_device> m_video;
@@ -1079,6 +1079,24 @@ void sysi_state::hcga_config(machine_config &config)
 
 	UM487F(config, m_video, HCGA_CLOCK); // MOSC (MGA clock) tied to GND
 	m_video->set_screen("screen");
+	m_video->set_rgbi_callback(FUNC(sysi_state::rgbi_to_rgb));
+}
+
+/*
+  RGB output stage (Sport Darts and K7 schematics): each UM487F color output
+  goes to the monitor analog input through a 100 ohm resistor, and a 2N2369
+  switched by IOUT loads it with another 100 ohm resistor. So the colors are
+  shown at full level without intensity (none of the games set the intensity
+  bits), at about half level with it, there's no gray level added by the
+  intensity and no dark yellow to brown fix up (real Sport Darts screens show
+  yellow, not brown).
+  TODO: the dual CPU boards have transistor footprints bypassed by jumpers,
+  assume the same levels.
+*/
+rgb_t sysi_state::rgbi_to_rgb(uint8_t rgbi)
+{
+	uint8_t const level = BIT(rgbi, 3) ? 0x80 : 0xff;
+	return rgb_t(BIT(rgbi, 2) ? level : 0, BIT(rgbi, 1) ? level : 0, BIT(rgbi, 0) ? level : 0);
 }
 
 void _4enlinea_state::_4enlinea(machine_config &config)
