@@ -265,6 +265,8 @@
     from the software timings).
   - Master to video CPU link (guessed from the code of both CPUs, the
     transfer time is unknown).
+  - Master CPU wait states (one per memory access, guessed from the Dardos
+    stuck sector detection, see machine_start).
   - Unknown inputs of the Compumatic boards (9046 port A and some port C/D
     lines).
   - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts
@@ -324,6 +326,7 @@ class _4enlinea_state : public sysi_state
 public:
 	_4enlinea_state(const machine_config &mconfig, device_type type, const char *tag)
 		: sysi_state(mconfig, type, tag)
+		, m_audiocpu(*this, "audiocpu")
 		, m_matrix(*this, "MATRIX%u", 0U)
 		, m_buttons(*this, "BUTTONS%u", 0U)
 		, m_in_pc(*this, "IN_PC")
@@ -360,6 +363,7 @@ private:
 	void main_map(address_map &map) ATTR_COLD;
 	void main_portmap(address_map &map) ATTR_COLD;
 
+	required_device<cpu_device> m_audiocpu;
 	optional_ioport_array<4> m_matrix;
 	required_ioport_array<2> m_buttons;
 	required_ioport m_in_pc;
@@ -881,12 +885,13 @@ static INPUT_PORTS_START( dardos )
 	PORT_INCLUDE( k7_matrix )
 
 	// read through AY port A while port D bit 7 is set, like on the K7 PCB
+	// the game calls the buttons FLECHA ARRIBA, FLECHA ABAJO, OK and PLAY
 	PORT_START("BUTTONS0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Next Game")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Previous Game")
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Player")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Up")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("OK")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Play")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2) // only read at power on
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -953,6 +958,28 @@ void _4enlinea_state::machine_start()
 {
 	m_link_timer = timer_alloc(FUNC(_4enlinea_state::link_ready), this);
 
+	/* TODO: guessed one wait state for every memory access of the master
+	   CPU (opcode fetches included, there's no separate opcodes space).
+	   Without it, Dardos registers a dart every few milliseconds while a
+	   dart board sector is held down, instead of showing "SECTOR PISADO"
+	   (stuck sector) after half a second as the real board does: the main
+	   loop discards the sector when it doesn't get a new matrix scan (done
+	   by the IRQ handler) since the previous pass, so it must be slower
+	   than the IRQ period. */
+	address_space &space = m_audiocpu->space(AS_PROGRAM);
+	space.install_read_tap(0x0000, 0xffff, "master_wait_r",
+			[this] (offs_t offset, u8 &data, u8 mem_mask)
+			{
+				if (!machine().side_effects_disabled())
+					m_audiocpu->adjust_icount(-1);
+			});
+	space.install_write_tap(0x0000, 0xffff, "master_wait_w",
+			[this] (offs_t offset, u8 &data, u8 mem_mask)
+			{
+				if (!machine().side_effects_disabled())
+					m_audiocpu->adjust_icount(-1);
+			});
+
 	save_item(NAME(m_handshake_status));
 	save_item(NAME(m_link_latch));
 	save_item(NAME(m_link_data));
@@ -1017,9 +1044,9 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	   9046, which sits next to it). */
 	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(MAIN_CLOCK / 16384));
 
-	z80_device &audiocpu(Z80(config, "audiocpu", SND_CPU_CLOCK));
-	audiocpu.set_addrmap(AS_PROGRAM, &_4enlinea_state::audio_map);
-	audiocpu.set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(SEC_CLOCK / 8192));
+	Z80(config, m_audiocpu, SND_CPU_CLOCK); // wait states added in machine_start()
+	m_audiocpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::audio_map);
+	m_audiocpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(SEC_CLOCK / 8192));
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
