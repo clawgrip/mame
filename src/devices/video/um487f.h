@@ -63,8 +63,7 @@ public:
 	void set_mode_change_enable(bool enable) { m_strap_change_enable = enable; }
 	// external character generator ROM (8 KiB, 2764 style) fed through CD0-CD7
 	template <typename T> void set_chargen(T &&tag) { m_chargen.set_tag(std::forward<T>(tag)); }
-	// conversion of the RGBI outputs (bit 3 = IOUT ... bit 0 = BOUT) done by the board
-	// and monitor, an IBM 5153 compatible monitor by default
+	// RGBI (bit 3 = IOUT ... bit 0 = BOUT) to monitor color conversion done by the board
 	typedef device_delegate<rgb_t (uint8_t rgbi)> rgbi_delegate;
 	template <typename... T> void set_rgbi_callback(T &&... args) { m_rgbi_cb.set(std::forward<T>(args)...); }
 
@@ -161,14 +160,14 @@ private:
 
 	// internal state
 	std::unique_ptr<uint8_t[]> m_vram;
-	bool m_mga;             // current display mode (false = CGA, true = MGA)
-	uint8_t m_mode;         // mode control register
-	uint8_t m_color;        // color select register
-	uint8_t m_config;       // configuration register
-	bool m_lpen_latched;    // light pen latch
+	bool m_mga;             // current display mode
+	uint8_t m_mode;
+	uint8_t m_color;
+	uint8_t m_config;
+	bool m_lpen_latched;
 	uint8_t m_video_dot;    // fake MGA video dot stream
-	uint8_t m_framecnt;     // vertical sync counter for cursor and character blinking
-	int m_vsync_on_pos;     // raster line where the vertical sync pulse begins
+	uint8_t m_framecnt;     // for cursor and character blinking
+	int m_vsync_on_pos;
 	uint8_t m_palette_lut_2bpp[4];
 };
 

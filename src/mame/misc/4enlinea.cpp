@@ -50,64 +50,12 @@
 
   UM487F HCGA Controller notes...
 
-  The UM487F is a single chip MGA (Hercules) + CGA video controller with
-  an embedded UM6845R CRTC, driving 64 KB of DRAM (2x D41464C).
+  The 14.31818 MHz crystal is tied to pin 65 (OSC), while pin 64 (MOSC, the
+  16.257 MHz MGA clock) is tied to GND, so the chip can only work in CGA mode.
 
-  The 14.31818 MHz crystal is tied to pin 65 (OSC, CGA base clock), while
-  pin 64 (MOSC, the 16.257 MHz MGA base clock) is tied to GND, so the chip
-  can only work in CGA mode. The 8 MHz CPU clock entering pin 1 (CLOCK)
-  only generates the enable signal of the CPU interface of the embedded
-  6845, it isn't used for the video timing.
-
-  The video CPU sees the CGA video memory window (B8000h-BBFFFh on a PC,
-  where A15 = 1 selects it) at 8000h-BFFFh, and the registers at the usual
-  CGA I/O ports (the UM487F decodes only A0-A9 for I/O):
-
-  3BFh: -W  Configuration register.
-  3D4h: -W  CRTC index register.
-  3D5h: RW  CRTC data register.
-  3D8h: -W  Mode control register.
-  3D9h: -W  Color select register.
-  3DAh: R-  Status register.
-
-  All the games initialize the controller the same way:
-
-  Config Register (3BFh): 0x40
-  (bit 6 active means CGA Mode)
-
-  Mode CTRL (3D8h): 0x6A
-  ----- bits -----
-  7 6 5 4  3 2 1 0   For CGA Mode.
-  - x x -  x - x -
-  | | | |  | | | |
-  | | | |  | | | '-- 40*25 text.
-  | | | |  | | '---- Graphics.
-  | | | |  | '------ Color Mode.
-  | | | |  '-------- Enable Video (toggled while redrawing the screen).
-  | | | '----------- 320x200 Graphics.
-  | | '------------- Enable Blink.
-  | '--------------- Enable Change Mode.
-  '----------------- (not for CGA)
-
-  Color Sel (3D9h): bits 0-3 background color, bits 4-5 palette.
-
-  Index register (3D4h): 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
-  Data register (3D5h):  38 28 2D 0A 7F 06 64 70 02 01 06 07 10 00 00 00
-
-  These are the standard CGA 320x200 (BIOS mode 4) parameters, apart from
-  the start address (1000h, but MA12 isn't used to address the memory in
-  graphics mode, so the picture starts at 0000h anyway):
-
-  CRTC clock is 14.31818 MHz / 16 = 894.886 kHz (8 pixels per character).
-  Horizontal: 57 characters total, 40 displayed -> 15.700 kHz.
-  Vertical: 128 rows of 2 raster lines + 6 adjust = 262 lines total,
-  100 rows (200 lines) displayed -> 59.923 Hz, non interlaced (R8 = 02h).
-
-  Even raster lines are fetched from 0000h-1F3Fh, and odd ones from
-  2000h-3F3Fh of the video memory.
-
-  The sprite blitting routines wait for the vertical retrace polling
-  bit 7 of the status register (documented only for MGA mode, active low).
+  All the games set the CGA 320x200 graphics mode with the standard BIOS
+  mode 4 CRTC parameters (38 28 2D 0A 7F 06 64 70 02 01 06 07 10 00 00 00),
+  and toggle the video enable bit while redrawing the screen.
 
 **************************************************************************
 
@@ -188,16 +136,13 @@
      video parts (IC6 EPROM, 6264, CM3080, GAL, the 74HC245 and the IC9/IC10
      link buffers), and the Z84C00HB6 along with the master ones (IC19 EPROM,
      9046, AY-3-8910 and the 8 MHz crystal). So the 4 MHz rated Z80A would be
-     the one running at 8 MHz. Previous versions of this driver had them the
-     other way around.
+     the one running at 8 MHz.
   - The 8952 CM 32 looks like a 32-bit serial input latched driver: it gets
      the master to video CPU link words from the 9046 (pins 17 & 18), and
-     drives 16 bits to the video CPU data bus through IC9/IC10 (read at
-     E000h-E001h) and the other 16 bits to CN1/CN2 through IC14/IC15 (DIP-18
-     footprints, probably for ULN2803 style drivers). That's why the master
-     sends 32-bit words: Cuatro en Linea and Dardos always send 0 in the
-     CN1/CN2 half (Dardos has an unused routine that builds 9 lamp bits
-     there).
+     drives 16 bits to the video CPU data bus through IC9/IC10 and the other
+     16 bits to CN1/CN2 through IC14/IC15 (DIP-18 footprints, probably for
+     ULN2803 style drivers). Dardos has an unused routine that builds 9 lamp
+     bits for that half.
   - BT1 (battery) is unpopulated, the settings are kept in the EEPROM.
   - The photographed PCB has some rework: wires around the 74LS04/74LS32 and
      the COMP pads next to CN10, a capacitor and a resistor on the solder
@@ -220,71 +165,42 @@
 
   Compumatic dual CPU boards (Cuatro en Linea, Dardos):
 
-  The video CPU (8 MHz) only drives the UM487F, drawing the screens as
-  commanded by the master CPU (4 MHz), which runs the game logic and the
-  AY-3-8910 sound, and handles the inputs and the EEPROM through the ES2 9046
-  I/O ports. The master sends the commands to the video CPU through a link,
-  probably the 9046 shifting them to the 8952 CM 32, which drives the video
-  CPU data bus through IC9/IC10 (74HC244).
-
-  Cuatro en Linea has two joysticks with two buttons each, start buttons,
-  five coin inputs, a service credit button and a setup key switch. Dardos
-  reads the dart board matrix through the AY ports and the 9046, and has
-  game selection buttons, a setup key switch, a reset key, and the same
-  missed dart and player sensors as the K7 boards.
+  The video CPU only draws the screens as commanded by the master CPU, which
+  runs the game logic and the sound, and handles the inputs and the EEPROM
+  through the ES2 9046 I/O ports.
 
 **************************************************************************
 
   K7 / Sport Darts single CPU boards:
 
   Z84C00BB6 @ 7.159 MHz, UM487F, WF19054 (AY-3-8910), X24C16P, 6264 + battery
-  and a 64 KB EPROM. The upper half of the EPROM is banked in 4 pages of
-  8 KB at C000h-DFFFh.
+  and a 64 KB EPROM.
 
-  The AY ports read the dart board matrix (4 columns of 16 targets, selected
-  through port 1 bits 0-3) and the panel buttons (selected through port 1
-  bit 4). The Sport Darts PCB uses active low select lines instead.
-
-  The Olympic Darts v3.11 panel has Up, Down, NP (start / next player) and
-  Player buttons, plus a setup key switch and a reset key. The v3.00 PCB has
-  a button (and lamp) for each game and number of players instead.
-
-  The game registers missed darts through an impact detector microphone
-  (only while no sound is being played) and, at the end of a turn, waits for
-  the player to cross an ultrasonic detector (40 kHz emitter and receiver on
-  their own board) before continuing on its own.
+  The darts games (Dardos too) register missed darts through an impact
+  detector microphone (MICINT, ignored while a sound is playing) and, at the
+  end of a turn, wait for the player to cross an ultrasonic detector (ULTRAS,
+  40 kHz emitter and receiver on their own board) before continuing on their
+  own.
 
   The EEPROM holds the settings, high scores and accounting. The games
   initialize it when it's blank.
 
-  Sport Darts counts the IRQs from the vertical retrace to split the screen
-  in two palettes, so the driver uses the UM487F horizontal sync as IRQ.
-
   Sport Darts T.V. schematics (Compumatic "YDESUS" CPU board, 1992):
 
-  - The CM3080 gets the 14.31818 MHz clock of the 74LS04 oscillator (which
-     also feeds the UM487F) on XTAL1, and outputs the 7.16 MHz CPU clock, an
-     H/2 clock (divided by 2 by a 4020 to get the 1.79 MHz AY clock), the
-     Z80 /INT (acknowledged with /M1 and /IORQ), and the /NMI and /RESET
-     power supervisor signals. It has no horizontal sync input (pins 3 and 5
-     go to an RC network), so its IRQ rate comes from an internal divider.
-     The later K7 "YDESUS/PLUS" board replaces it with a 74HC74 dividing the
-     clock and setting /INT on every UM487 horizontal retrace (HRET), and
-     4011 gates for /NMI and /RESET.
-  - Port 0 and port 1 outputs are 74LS273 latches, port 1 inputs a 74LS541
-    (see the I/O handlers). The dart board columns and the buttons common are
-    driven through MOSFETs, the coin counter and inhibit lines through BDX33
-    transistors and the lamps through ULN2003 drivers.
-  - The AY ports read the IX0-IX15 lines through diodes: the dart board rows
-    and, while MPXIN is selected, the edge connector buttons (IX0 up, IX1
-    down, IX2 O.K., IX3 player, IX4 key, IX5 reset).
+  - The CM3080 gets the UM487F clock on XTAL1, and outputs the CPU clock, an
+     H/2 clock (divided by a 4020 for the AY), the Z80 /INT (acknowledged
+     with /M1 and /IORQ), and the /NMI and /RESET power supervisor signals.
+     It has no horizontal sync input (pins 3 and 5 go to an RC network), so
+     its IRQ rate comes from an internal divider. The later K7 "YDESUS/PLUS"
+     board replaces it with a 74HC74 dividing the clock and setting /INT on
+     every UM487 horizontal retrace (HRET), and 4011 gates for /NMI and
+     /RESET.
+  - Port 0 and port 1 outputs are 74LS273 latches, port 1 inputs a 74LS541.
+    The dart board columns and the buttons common are driven through MOSFETs,
+    the coin counter and inhibit lines through BDX33 transistors and the
+    lamps through ULN2003 drivers.
   - A GAL drives the Z80 /WAIT from the UM487F IORDY on video memory
-    accesses (not emulated).
-  - Each UM487F color output goes to the monitor through a 100 ohm resistor,
-    and a 2N2369 switched by IOUT loads it with another 100 ohm resistor, so
-    the intensity scales the colors instead of adding a gray level (see
-    rgbi_to_rgb, the later schematics label the pin -IOUT, but the games
-    never set the intensity and the real screens show bright colors).
+    accesses.
   - The AY outputs are mixed through resistors to a TDA2003 amplifier with a
     volume trimmer.
 
@@ -292,12 +208,9 @@
 
   TODO:
 
-  - IRQ sources of the Compumatic and K7 boards (the frequencies are guessed
-    from the software timings, the CM3080 internal divider is unknown).
-  - Master to video CPU link (guessed from the code of both CPUs, the
-    transfer time is unknown).
-  - Master CPU wait states (one per memory access, guessed from the Dardos
-    stuck sector detection, see machine_start).
+  - IRQ sources (see the machine configurations).
+  - Master to video CPU link timing.
+  - Master CPU wait states (see machine_start).
   - Unknown inputs of the Compumatic boards (9046 port A and some port C/D
     lines).
   - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts
@@ -387,7 +300,7 @@ private:
 	// ES2 9046 I/O ports
 	uint8_t port_r(offs_t offset);
 	void port_w(offs_t offset, uint8_t data);
-	uint8_t port_out(int port) const { return m_port_latch[port] | m_port_dir[port]; }
+	uint8_t port_out(int port) const { return m_port_latch[port] | m_port_dir[port]; } // pulled up when set as inputs
 	void update_outputs();
 	uint8_t ay_porta_r();
 	uint8_t ay_portb_r();
@@ -455,7 +368,7 @@ private:
 	output_finder<> m_lamp;
 	output_finder<4> m_lamps;
 
-	bool m_sport_darts = false; // Compumatic Sport Darts T.V. PCB
+	bool m_sport_darts = false;
 	uint8_t m_out0 = 0;
 	uint8_t m_out1 = 0;
 	uint8_t m_hsync_count = 0;
@@ -469,15 +382,9 @@ private:
 /*
   Master to video CPU link (ES2 9046 and 8952 CM 32?)
 
-  The video CPU gets a NMI and reads a word (command and parameter) at
-  E000h-E001h. The master sends the words through FC29h-FC2Ch (it writes
-  00h, 00h, parameter, command, twice) and then strobes FC28h, waiting
-  for FC28h bit 3 before sending the next one. At boot time, it also checks
-  the link writing FC30h/FC31h and waiting for FC32h bit 5, which gets set
-  when the video CPU reads the word.
-
-  The 9046 probably shifts the 32 bits to the 8952 CM 32, whose outputs are
-  read by the video CPU (FC2Bh-FC2Ch) or go to CN1/CN2 (FC29h-FC2Ah, unused).
+  The master writes each word twice to FC29h-FC2Ch (CN1/CN2 half, always 0,
+  then command and parameter), strobes FC28h and waits for FC28h bit 3 before
+  sending the next one. The video CPU gets a NMI for each word.
 
   FC28h bit 3 can't depend on the video CPU reading the word: Dardos keeps
   sending null words while idle, and its video CPU stops reading them while
@@ -523,7 +430,6 @@ void _4enlinea_state::handshake_w(offs_t offset, uint8_t data)
 
 uint8_t _4enlinea_state::link_status_r()
 {
-	// bit 3: ready to send the next word
 	return m_link_ready ? 0x08 : 0x00;
 }
 
@@ -532,7 +438,6 @@ void _4enlinea_state::link_control_w(uint8_t data)
 	// the master writes 0 and then 7 after loading a word
 	if (!BIT(data, 0))
 	{
-		// the video CPU expects the command (sent in the low byte) at E001h
 		m_link_ready = false;
 		m_link_timer->adjust(attotime::from_usec(100));
 		send_to_video(m_link_data[3], m_link_data[2]);
@@ -545,22 +450,7 @@ void _4enlinea_state::link_data_w(offs_t offset, uint8_t data)
 }
 
 
-/*
-  ES2 9046 I/O ports, with data (even) and direction (odd, 1 = input) registers:
-
-  FC20h-FC21h: port A, bits 1 and 3 are inputs (unknown)
-  FC22h-FC23h: port B, unused
-  FC24h-FC25h: port C
-               bit 0:    EEPROM SDA
-               bits 1-5: coins
-               bit 6:    sensor (Dardos)
-               bit 7:    dart board matrix column 0 (Dardos)
-  FC26h-FC27h: port D
-               bits 0-2: dart board matrix columns 1-3 (Dardos)
-               bit 4:    sensor (Dardos)
-               bit 6:    EEPROM SCL
-               bit 7:    buttons (read through the AY ports)
-*/
+// ES2 9046 I/O ports A-D, port A bits 1 and 3 are unknown inputs and port B is unused
 uint8_t _4enlinea_state::port_r(offs_t offset)
 {
 	int const port = offset >> 1;
@@ -596,7 +486,6 @@ void _4enlinea_state::port_w(offs_t offset, uint8_t data)
 
 void _4enlinea_state::update_outputs()
 {
-	// outputs are driven low through open collector/drain lines, released when set as inputs
 	m_eeprom->write_scl(BIT(port_out(3), 6));
 	m_eeprom->write_sda(BIT(port_out(2), 0));
 }
@@ -662,19 +551,6 @@ void _4enlinea_state::audio_map(address_map &map)
 }
 
 
-/*
-  K7 port 1 (read, 74LS541 IC7 on the Sport Darts schematics):
-  bits 0-3: coin selector lines SELECTOR0-3 (coin 1 and 2 on the edge
-            connector, the electronic selector can drive all of them; the
-            games give 500 and 100 Pts for lines 0 and 1, nothing for 2 and 3)
-  bit 4:    EEPROM SDA
-  bit 5:    unknown (labeled ROUT?), the games wait for it to be low at boot
-  bit 6:    MICINT, impact detector microphone (missed darts)
-  bit 7:    ULTRAS, ultrasonic player detector
-
-  On the Olympic Darts v3.00 PCB, some lines carry other inputs while the
-  buttons are selected (port 1 bit 4) or while port 0 bit 7 is set.
-*/
 uint8_t k7_state::in1_r()
 {
 	if (BIT(m_out0, 7) && m_in1_alt)
@@ -687,37 +563,19 @@ uint8_t k7_state::in1_r()
 	return data;
 }
 
-/*
-  K7 port 0 (write, 74LS273 IC1 on the Sport Darts schematics):
-  bits 0-1: ROM bank at C000h-DFFFh (EP0/EP1, decoded by a GAL)
-  bit 2:    EEPROM SCL
-  bit 3:    EEPROM SDA (through an open collector transistor, so inverted)
-  bits 4-7: lamps L1-L4 through ULN2003 drivers (Sport Darts)
-  bit 7:    input bank select (Olympic Darts v3.00 PCB)
-*/
 void k7_state::out0_w(uint8_t data)
 {
 	m_out0 = data;
 	m_rombank->set_entry(data & 0x03);
 	m_eeprom->write_scl(BIT(data, 2));
-	m_eeprom->write_sda(!BIT(data, 3));
+	m_eeprom->write_sda(!BIT(data, 3)); // through an open collector transistor
 
 	if (m_sport_darts)
 		for (int i = 0; i < 4; i++)
-			m_lamps[i] = BIT(data, 4 + i); // L1 blinks while waiting for OK
+			m_lamps[i] = BIT(data, 4 + i);
 }
 
-/*
-  K7 port 1 (write, 74LS273 IC8 on the Sport Darts schematics):
-  bits 0-3: dart board matrix columns DIANA1-4 (read through AY ports A and B)
-  bit 4:    buttons common MPXIN (read through AY port A)
-  (the Sport Darts PCB selects them with active low lines instead)
-  bit 5:    K7: lamp (blinks while waiting for a player to start)
-            Sport Darts: coin selector inhibit line (BDX33 driver), set
-            while coins are accepted
-  bit 6:    coin counter (BDX33 driver)
-  bit 7:    pulsed low at boot
-*/
+// bit 7 is pulsed low at boot (unknown)
 void k7_state::out1_w(uint8_t data)
 {
 	m_out1 = data;
@@ -725,7 +583,7 @@ void k7_state::out1_w(uint8_t data)
 	if (m_sport_darts)
 		machine().bookkeeping().coin_lockout_global_w(!BIT(data, 5));
 	else
-		m_lamp = BIT(data, 5);
+		m_lamp = BIT(data, 5); // blinks while waiting for a player to start
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
@@ -789,7 +647,6 @@ void k7_state::io_map(address_map &map)
 ***********************************/
 
 static INPUT_PORTS_START( 4enlinea )
-	// read through the AY ports while port D bit 7 is set
 	PORT_START("BUTTONS0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY  PORT_PLAYER(2)
@@ -810,7 +667,7 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
 
-	// 9046 port C, each coin line adds a credit (with its own counter)
+	// each coin line adds a credit (with its own counter)
 	PORT_START("IN_PC")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -821,16 +678,12 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	// 9046 port D
 	PORT_START("IN_PD")
 	PORT_BIT( 0x18, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0xe7, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
-/*  K7 dart board matrix, 4 columns selected through port 1 bits 0-3,
-    rows read through AY port A (bits 0-7) and port B (bits 8-15).
-*/
 #define K7_DART(mask, name) \
 	PORT_BIT( mask, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME(name)
 
@@ -914,7 +767,7 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin 1 (500 Pts)")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
-	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED ) // coin selector lines 2-3, ignored by the games
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) // must be low at boot
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
@@ -933,7 +786,6 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( dardos )
 	PORT_INCLUDE( k7_matrix )
 
-	// read through AY port A while port D bit 7 is set, like on the K7 PCB
 	// the game calls the buttons FLECHA ARRIBA, FLECHA ABAJO, OK and PLAY
 	PORT_START("BUTTONS0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Up")
@@ -947,7 +799,6 @@ static INPUT_PORTS_START( dardos )
 	PORT_START("BUTTONS1")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	// 9046 port C, coin values in 25 Pts units
 	PORT_START("IN_PC")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin 1 (500 Pts)")
@@ -958,14 +809,13 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	// 9046 port D
 	PORT_START("IN_PD")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
 	PORT_BIT( 0xe7, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-// Sport Darts T.V. edge connector buttons (IX0-IX5): arriba, abajo, O.K., player, key and reset
+// named as on the edge connector
 static INPUT_PORTS_START( sprtdart )
 	PORT_INCLUDE( k7_olym )
 
@@ -1015,14 +865,13 @@ void _4enlinea_state::machine_start()
 {
 	m_link_timer = timer_alloc(FUNC(_4enlinea_state::link_ready), this);
 
-	/* TODO: guessed one wait state for every memory access of the master
-	   CPU (opcode fetches included, there's no separate opcodes space).
+	/* TODO: guessed wait state for every memory access of the master CPU.
 	   Without it, Dardos registers a dart every few milliseconds while a
 	   dart board sector is held down, instead of showing "SECTOR PISADO"
 	   (stuck sector) after half a second as the real board does: the main
-	   loop discards the sector when it doesn't get a new matrix scan (done
-	   by the IRQ handler) since the previous pass, so it must be slower
-	   than the IRQ period. */
+	   loop discards the sector when it doesn't get a new matrix scan from
+	   the IRQ handler since the previous pass, so it must be slower than the
+	   IRQ period. */
 	address_space &space = m_audiocpu->space(AS_PROGRAM);
 	space.install_read_tap(0x0000, 0xffff, "master_wait_r",
 			[this] (offs_t offset, u8 &data, u8 mem_mask)
@@ -1047,7 +896,6 @@ void _4enlinea_state::machine_start()
 
 void _4enlinea_state::machine_reset()
 {
-	// all the ports are inputs after reset
 	std::fill(std::begin(m_port_dir), std::end(m_port_dir), 0xff);
 	update_outputs();
 
@@ -1072,7 +920,7 @@ void k7_state::machine_start()
 
 void sysi_state::hcga_config(machine_config &config)
 {
-	// 320x200 CGA timings as programmed by the games, the UM487F reconfigures the screen from its CRTC registers
+	// the UM487F reconfigures it from its CRTC registers
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_raw(HCGA_CLOCK / 2, 456, 0, 320, 262, 0, 200);
 	screen.set_screen_update(m_video, FUNC(um487f_device::screen_update));
@@ -1084,14 +932,11 @@ void sysi_state::hcga_config(machine_config &config)
 
 /*
   RGB output stage (Sport Darts and K7 schematics): each UM487F color output
-  goes to the monitor analog input through a 100 ohm resistor, and a 2N2369
-  switched by IOUT loads it with another 100 ohm resistor. So the colors are
-  shown at full level without intensity (none of the games set the intensity
-  bits), at about half level with it, there's no gray level added by the
-  intensity and no dark yellow to brown fix up (real Sport Darts screens show
-  yellow, not brown).
-  TODO: the dual CPU boards have transistor footprints bypassed by jumpers,
-  assume the same levels.
+  drives the monitor through a 100 ohm resistor, loaded with another 100 ohm
+  resistor by a 2N2369 switched by IOUT. None of the games set the intensity,
+  and real Sport Darts screens show yellow instead of the CGA brown.
+  TODO: the dual CPU boards have the transistor footprints bypassed by
+  jumpers, assume the same levels.
 */
 rgb_t sysi_state::rgbi_to_rgb(uint8_t rgbi)
 {
@@ -1113,10 +958,8 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	   - The master CPU runs its tick every 10 IRQs, and counts the game time
 	     seconds every 100 ticks.
 	   - Sport Darts runs its IRQ routine every 16 horizontal syncs.
-	   So assume the 16 MHz clock divided by 16384 for the video CPU (the
-	   CM3080 gets the 16 MHz crystal and drives its /INT), and the same rate
-	   from the 8 MHz crystal for the master CPU (probably generated by the
-	   9046, which sits next to it). */
+	   The CM3080 gets the 16 MHz crystal and drives the video CPU /INT, the
+	   master one probably comes from the 9046. */
 	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(MAIN_CLOCK / 16384));
 
 	Z80(config, m_audiocpu, SND_CPU_CLOCK); // wait states added in machine_start()
@@ -1147,14 +990,13 @@ void k7_state::k7_olym(machine_config &config)
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
-	hcga_config(config); // UM487F
+	hcga_config(config);
 
 	/* TODO: IRQ source is unknown.
 	   The game runs its IRQ routine every 2 IRQs and its tick every 10 of
 	   them, with the same timings as Sport Darts (IRQ routine every 16
-	   horizontal syncs) and the Compumatic master CPU (100 ticks per second),
-	   so assume the horizontal sync divided by 8 (the CM3080 subboard has two
-	   HEF4020 ripple counters). */
+	   horizontal syncs) and the Compumatic master CPU (100 ticks per second).
+	   The CM3080 subboard has two HEF4020 ripple counters. */
 	m_video->hsync_callback().set(FUNC(k7_state::hsync_w));
 
 	SPEAKER(config, "mono").front_center();
@@ -1168,9 +1010,8 @@ void k7_state::sprtdart(machine_config &config)
 {
 	k7_olym(config);
 
-	/* The IRQ handler counts the IRQs and resyncs with the vertical retrace to
-	   change the background color at a given raster line, so the IRQ comes from
-	   the UM487F horizontal sync (the main IRQ routine runs every 16 IRQs). */
+	/* The IRQ handler counts the IRQs from the vertical retrace to change the
+	   background color at a given raster line. */
 	m_video->hsync_callback().set_inputline(m_maincpu, 0, HOLD_LINE); // TODO: polarity
 
 	m_sport_darts = true;

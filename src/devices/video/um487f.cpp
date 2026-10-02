@@ -14,67 +14,21 @@
     signal of the CPU interface of the embedded 6845, it doesn't take part
     in the video timing.
 
-    Register map (from the datasheet):
+    The printer port registers (3BC-3BE) belong to an external UM82C11, the
+    UM487F only decodes its chip select.
 
-      MGA   CGA   R/W
-      3B4   3D4   W     6845 index register
-      3B5   3D5   R/W   6845 data register
-      3B8   3D8   W     mode control register
-      ---   3D9   W     color select register
-      3BA   3DA   R     status register
-      3BB   3DB   W     light pen reset (clear latch)
-      3B9   3DC   W     light pen set (latch)
-         3BF      W     configuration register
-         3BC      R/W   primary printer data register    (external UM82C11)
-         3BD      R     primary printer status register  (external UM82C11)
-         3BE      R/W   primary printer control register (external UM82C11)
-
-    Mode control register (3D8 / 3B8):
-
-      bit   MGA                       CGA
-       0    ---                       0 = 40x25 text, 1 = 80x25 text
-       1    1 = graphics (3BF bit 0)  0 = text, 1 = graphics
-       2    ---                       0 = color, 1 = black/white
-       3    video enable              video enable
-       4    ---                       0 = 320x200, 1 = 640x200 graphics
-       5    blink enable              blink enable
-       6    enable change mode        enable change mode
-       7    page 1 (3BF bit 1)        ---
-
-    Status register (3DA / 3BA):
-
-      bit   MGA                       CGA
-       0    1 = horizontal sync       0 = display active, 1 = non-display
-       1    light pen set             light pen set
-       2    light pen switch on       light pen switch on
-       3    video dot                 1 = vertical sync
-       7    0 = vertical sync         ---
-
-    Bit 7 is documented only for MGA mode, but all the known CGA mode games
-    wait on it for the vertical retrace, so the same (active low) vertical
-    sync flag is returned in both modes.
-
-    Configuration register (3BF):
-
-      bit 0: enable MGA graphics
-      bit 1: enable MGA page 1
-      bit 6: 0 = MGA mode (while 3D8 bit 6 = 1), 1 = CGA mode (while 3B8 bit 6 = 1)
+    Status register bit 7 (vertical sync, active low) is documented only for
+    MGA mode, but all the known CGA mode games wait on it for the vertical
+    retrace.
 
     The display mode is selected at power on with the SWS (CGA) / SWR (MGA)
     inputs. When allowed by SW3, software can switch it setting the "enable
     change mode" bit of the mode control register first, and then writing
     the new mode to bit 6 of the configuration register.
 
-    Video memory is mapped into the B0000-BFFFF window (MEMSELB input):
-    CGA mode uses 16 KiB mirrored twice at B8000-BFFFF; MGA mode uses the
-    whole 64 KiB as two 32 KiB pages at B0000-B7FFF and B8000-BFFFF (the
-    second one only when enabled in the configuration register).
-
-    Text modes fetch the character patterns from an external character
-    generator ROM. The datasheet application circuit wires a 2764 as:
-      A0-A2 = CRA0-CRA2 (row), A3-A10 = character code (latched by CGLAT),
-      A11 = CRA3, A12 = JMPO (0 = MGA font, 1 = CGA font)
-    which matches the layout of the usual PC MDA/CGA font ROMs.
+    The character generator ROM is addressed as in the datasheet application
+    circuit (a 2764 with A11 = CRA3 and A12 = JMPO), which matches the layout
+    of the usual PC MDA/CGA font ROMs.
 
     TODO:
     - The status register video dot (MGA) is faked.
@@ -149,8 +103,7 @@ void um487f_device::device_start()
 	m_vram = std::make_unique<uint8_t[]>(0x10000);
 	std::fill_n(m_vram.get(), 0x10000, 0);
 
-	// RGBI output, as shown by an IBM 5153 compatible monitor (dark yellow shown as brown)
-	// unless the board converts it on its own
+	// default: IBM 5153 compatible monitor (dark yellow shown as brown)
 	m_rgbi_cb.resolve();
 	for (int i = 0; i < 16; i++)
 	{
@@ -300,7 +253,6 @@ uint32_t um487f_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 {
 	bitmap.fill(rgb_t::black(), cliprect);
 
-	// no dot clock, no picture
 	if (m_mga && !m_mga_clock)
 		return 0;
 
@@ -346,7 +298,6 @@ MC6845_UPDATE_ROW(um487f_device::crtc_update_row)
 }
 
 
-// CGA 40x25 / 80x25 text, 8 pixels per character
 void um487f_device::cga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, uint16_t y, uint8_t x_count, int8_t cursor_x)
 {
 	uint32_t *p = &bitmap.pix(y);
@@ -364,13 +315,11 @@ void um487f_device::cga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, 
 
 		if (blink)
 		{
-			// attribute bit 7 blinks the character every 16 frames
 			bg &= 0x07;
 			if (BIT(attr, 7) && BIT(m_framecnt, 4))
 				data = 0x00;
 		}
 
-		// the cursor blinks every 8 frames
 		if ((i == cursor_x) && BIT(m_framecnt, 3))
 			data = 0xff;
 
@@ -380,7 +329,6 @@ void um487f_device::cga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, 
 }
 
 
-// CGA 320x200 graphics, 2 bits per pixel, even lines at 0x0000 and odd lines at 0x2000
 void um487f_device::cga_gfx_2bpp_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, uint16_t y, uint8_t x_count)
 {
 	uint32_t *p = &bitmap.pix(y);
@@ -403,7 +351,6 @@ void um487f_device::cga_gfx_2bpp_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t 
 }
 
 
-// CGA 640x200 graphics, 1 bit per pixel, even lines at 0x0000 and odd lines at 0x2000
 void um487f_device::cga_gfx_1bpp_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, uint16_t y, uint8_t x_count)
 {
 	uint32_t *p = &bitmap.pix(y);
@@ -425,7 +372,6 @@ void um487f_device::cga_gfx_1bpp_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t 
 }
 
 
-// MGA (MDA compatible) 80x25 text, 9 pixels per character
 void um487f_device::mga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, uint16_t y, uint8_t x_count, int8_t cursor_x)
 {
 	uint32_t *p = &bitmap.pix(y);
@@ -471,11 +417,9 @@ void um487f_device::mga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, 
 			dup = true;
 		}
 
-		// attribute bit 7 blinks the character every 16 frames
 		if (blink && BIT(attr, 7) && BIT(m_framecnt, 4))
 			data = 0x00;
 
-		// the cursor blinks every 8 frames
 		if ((i == cursor_x) && BIT(m_framecnt, 3))
 		{
 			data = 0xff;
@@ -490,7 +434,6 @@ void um487f_device::mga_text_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, 
 }
 
 
-// MGA (Hercules compatible) 720x348 graphics, 4 interleaved banks of 8 KiB per page
 void um487f_device::mga_gfx_row(bitmap_rgb32 &bitmap, uint16_t ma, uint8_t ra, uint16_t y, uint8_t x_count)
 {
 	uint32_t *p = &bitmap.pix(y);
@@ -620,7 +563,6 @@ void um487f_device::config_w(uint8_t data)
 
 	screen().update_partial(screen().vpos());
 
-	// the display mode can be changed only when allowed by SW3, after setting the "enable change mode" bit
 	bool const mga = !(data & CONFIG_CGA);
 	if ((mga != m_mga) && m_strap_change_enable && (m_mode & MODE_CHANGE))
 	{
@@ -662,14 +604,12 @@ uint8_t um487f_device::io_r(offs_t offset)
 
 void um487f_device::io_w(offs_t offset, uint8_t data)
 {
-	// configuration register, decoded in both modes
 	if (offset == 0x0f)
 	{
 		config_w(data);
 		return;
 	}
 
-	// 0x00-0x0f: 0x3b0-0x3bf (MGA), 0x20-0x2f: 0x3d0-0x3df (CGA)
 	if ((offset & 0x30) != (m_mga ? 0x00 : 0x20))
 		return;
 
