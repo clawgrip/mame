@@ -31,7 +31,7 @@
     ----------
     Use the keyboard or click the buttons drawn on screen:
 
-      F2                    CS switch: SERVICIO (selling) or CONTROL
+      F2                    service switch (CS): NORMAL (selling) or CONTROL
       Q W E R T Y           selections 1 to 6 (design6)
       Q W E R T Y U I O     selections 1 to 9 (designe)
       A S D F G H J K L     selections 10 to 18 (designe)
@@ -44,9 +44,9 @@
                             and a token (designe)
 
     The steps below name keyboard keys.  On screen, Z X C V are the keypad
-    buttons A B C D and B is the round RECUPERACION button.  MAME remembers
-    the position of the CS switch: if F2 seems to do nothing, press it
-    again.  In control mode the display first repeats any problem found
+    buttons A B C D and B is the round COIN RETURN button.  MAME remembers
+    the position of the service switch: if F2 seems to do nothing, press
+    it again.  In control mode the display first repeats any problem found
     while selling; then each press of B moves to the next menu and the
     keypad works inside it.  Long menu names scroll by.
 
@@ -89,8 +89,8 @@
     - HORAS / MIN: the clock.  MAME keeps it at the computer's time, so
       changing it here has no effect.
     - PROGRAM. MENSAJE: the message shown while idle.
-    - TEST VENTA: Z switches it on; then, back in SERVICIO, every selection
-      vends without money.  Switch it off again here.
+    - TEST VENTA: Z switches it on; then, back in normal mode, every
+      selection vends without money.  Switch it off again here.
     - designe: ACCESO ADULTO (step 6), CONFIGURACION (step 3), MONEDAS
       CAMBIO and INHIBICION.
     A fault (AVERIA ..., VACIO DEVOL.) shows when entering control mode and
