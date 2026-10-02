@@ -182,7 +182,7 @@
   40 kHz emitter and receiver on their own board) before continuing on their
   own.
 
-  The EEPROM holds the settings, high scores and accounting. The games
+  The EEPROM holds the settings, high scores and accounting. The darts games
   initialize it when it's blank.
 
   Sport Darts T.V. schematics (Compumatic "YDESUS" CPU board, 1992):
@@ -1029,8 +1029,9 @@ ROM_START( 4enlinea )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_27c256__cicplay-1.ic19", 0x0000, 0x8000, CRC(307a57a3) SHA1(241329d919ec43d0eeb1dad0a4db6cf6de06e7e1) )
 
-	ROM_REGION( 0x0800, "eeprom", 0 ) // default serial EEPROM
-	ROM_LOAD( "cuatro_en_linea_x24c16p__nosticker.ic17", 0x0000, 0x0800, CRC(21f81f5a) SHA1(00b10eee5af1ca79ced2878f4be4cac2bb8d26a0) )
+	// the game only reads the settings (game time and accounting) and doesn't initialize them
+	ROM_REGION( 0x0800, "eeprom", 0 )
+	ROM_LOAD( "cuatro_en_linea_x24c16p_handcrafted.ic17", 0x0000, 0x0800, BAD_DUMP CRC(f07b9347) SHA1(4653793216fdb10d5cc8657e7f1b1479949c58e5) ) // handcrafted: 2:00 game time, counters cleared
 
 	ROM_REGION( 0x0200, "plds", 0 )
 	ROM_LOAD( "cuatro_en_linea_gal16v8as__nosticker.ic04", 0x0000, 0x0117, CRC(094edf29) SHA1(428a2f6568ac1032833ee0c65fa8304967a58607) )
@@ -1043,8 +1044,9 @@ ROM_START( 4enlineb )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_1_a06.ic19", 0x0000, 0x8000, CRC(993d0581) SHA1(d6e366dd827543508037d2071c4b6e638c2cf87b) )
 
-	ROM_REGION( 0x0800, "eeprom", 0 ) // From an operated PCB, a clean one for default need to be created...
-	ROM_LOAD( "cuatro_en_linea_24c16.ic17", 0x0000, 0x0800, CRC(56722dd4) SHA1(f818d882b3070f9b1fac486987a044ab1d418985) )
+	// the game only reads the settings (game time and accounting) and doesn't initialize them
+	ROM_REGION( 0x0800, "eeprom", 0 )
+	ROM_LOAD( "cuatro_en_linea_x24c16p_handcrafted.ic17", 0x0000, 0x0800, BAD_DUMP CRC(f07b9347) SHA1(4653793216fdb10d5cc8657e7f1b1479949c58e5) ) // handcrafted: 2:00 game time, counters cleared
 
 	ROM_REGION( 0x0200, "plds", 0 )
 	ROM_LOAD( "cuatro_en_linea_gal16v8a.ic04", 0x0000, 0x0117, CRC(1edaf06c) SHA1(51e44c2e6b54991330d6ef945e98fa2c8a49408d) )
@@ -1097,11 +1099,6 @@ ROM_START( k7_olym )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "odk7_v3.11_27c512.ic18", 0x00000, 0x10000, CRC(063d24fe) SHA1(ad4509438d2028ede779f5aa9a918d1020c1db41) )
 
-	// The EEPROM contains a custom message (operators can set on-screen messages).
-	// A clean one for default need to be created...
-	ROM_REGION( 0x0800, "eeprom", 0 )
-	ROM_LOAD( "x24c16p.bin", 0x0000, 0x0800, CRC(4c6685b2) SHA1(38c4f64f038d7ce185d6fd0b6eec4c9818f64e8e) )
-
 	ROM_REGION( 0x0300, "plds", 0 )
 	ROM_LOAD( "a1_gal16v8a.ic11", 0x0000, 0x0117, NO_DUMP ) // protected
 	ROM_LOAD( "b1_gal16v8a.ic4",  0x0117, 0x0117, NO_DUMP ) // protected
@@ -1110,9 +1107,6 @@ ROM_END
 ROM_START( k7_olym30 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "dardos_k7_3.0_21-11-94_27c512.ic19", 0x00000, 0x10000,  CRC(87af55a6) SHA1(7d12ce7afe8a50ba895f05029c1bd05a3641f7fd) )
-
-	ROM_REGION( 0x0800, "eeprom", 0 )
-	ROM_LOAD( "x24c16p.bin", 0x0000, 0x0800, NO_DUMP )
 
 	ROM_REGION( 0x0300, "plds", 0 )
 	ROM_LOAD( "a1_gal16v8a.ic11", 0x0000, 0x0117, NO_DUMP ) // protected
@@ -1123,9 +1117,6 @@ ROM_END
 ROM_START( sprtdart )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "sport_dart_27c512.ic19", 0x00000, 0x10000, CRC(6c9ae27f) SHA1(92fbdef7747a9096daf4714f45b119ad8f3a1436) )
-
-	ROM_REGION( 0x0800, "eeprom", 0 )
-	ROM_LOAD( "24c16.ic17", 0x0000, 0x0800, NO_DUMP ) // Undumped
 
 	ROM_REGION( 0x0300, "plds", 0 )
 	ROM_LOAD( "gal16v8a.ic11", 0x0000, 0x0117, NO_DUMP ) // protected
