@@ -232,7 +232,7 @@ license:CC0-1.0
 		<element name="lamp1_2" ref="lamp_green"><bounds x="140" y="250" width="90" height="90" /></element>
 
 		<!-- relay board 2 (A008) group B, bit 5: flashes while the first vehicle phase is red
-		     during the pedestrian phase; the direction of the arrow is illustrative -->
+		     during the pedestrian phase -->
 		<element ref="t_grp2b"><bounds x="20" y="214" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="20" y="238" width="110" height="114" /></element>
 		<element name="lamp2_5" ref="arrow_left"><bounds x="30" y="250" width="90" height="90" /></element>
@@ -261,8 +261,7 @@ license:CC0-1.0
 		<element name="lamp2_2" ref="lamp_green"><bounds x="290" y="250" width="90" height="90" /></element>
 
 		<!-- relay board 3 (A010) group A, bit 1: flashes in step 0, while the second vehicle
-		     phase is red (bits 0 and 2 are never lit); the direction of the arrow is
-		     illustrative -->
+		     phase is red (bits 0 and 2 are never lit) -->
 		<element ref="t_grp3a"><bounds x="390" y="214" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="390" y="238" width="110" height="114" /></element>
 		<element name="lamp3_1" ref="arrow_right"><bounds x="400" y="250" width="90" height="90" /></element>

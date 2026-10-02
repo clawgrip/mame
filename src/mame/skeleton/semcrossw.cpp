@@ -137,10 +137,9 @@ Assumptions, not verified on real hardware:
  - 2000-23FF are the two UM6114, battery backed (there's no battery in the PCB drawing,
    but the firmware never initializes them). The clear range command stops at 2800, and
    the unused EEPROM data suggests that another firmware version had the EEPROM at 2000.
- - The NMI is 20 Hz: step units of one second, as in the operator's notes, and the amber
-   flashing at 1 Hz. It would be the 100 Hz mains zero crossings divided by five (74LS90),
-   and CA1 and CB1 would get a 50 Hz square wave from the mains (so the lamps switch at
-   the zero crossings).
+ - The NMI is 20 Hz: step units of one second and the amber flashing at 1 Hz. It would be
+   the 100 Hz mains zero crossings divided by five (74LS90), and CA1 and CB1 would get a
+   50 Hz square wave from the mains (so the lamps switch at the zero crossings).
  - PA7 is a synchronisation output, and the assignment of the switches and optocoupler
    inputs (see the input ports).
  - The 74LS122 of each PCB is a watchdog retriggered by the CA2 or CB2 pulses.
@@ -148,7 +147,7 @@ Assumptions, not verified on real hardware:
    first and second vehicle phases, to turn with caution for the pedestrians while the
    phase is red.
 
-Programs 1-4 at 100, 200, 300, 400 (only four, although the operator mentions seven):
+Programs 1-4 at 100, 200, 300, 400 (the firmware has no more):
  +0..+23   step durations in seconds, run from step N-1 down to step 0 (main green)
  +24       number of steps N
  +25..+27  start-up all red, steady amber and flashing durations (always the ones of the
