@@ -62,6 +62,13 @@ void ds5002fp_device::device_start()
 	save_item(NAME(m_ta_window));
 	save_item(NAME(m_range));
 	save_item(NAME(m_rnr_delay));
+	save_item(NAME(m_crc));
+	save_item(NAME(m_crcr));
+	save_item(NAME(m_mcon));
+	save_item(NAME(m_ta));
+	save_item(NAME(m_rnr));
+	save_item(NAME(m_rpctl));
+	save_item(NAME(m_rps));
 }
 
 void ds5002fp_device::device_reset()
@@ -121,7 +128,7 @@ offs_t ds5002fp_device::external_ram_iaddr(offs_t offset, offs_t mem_mask)
 	{
 		if (!BIT(m_rpctl, RPCTL_EXBS))
 		{
-			if ((offset >= ds5002fp_partitions[BIT(m_mcon, MCON_PA)]) && (offset <= ds5002fp_ranges[m_range]))
+			if ((offset >= ds5002fp_partitions[m_mcon >> MCON_PA]) && (offset <= ds5002fp_ranges[m_range]))
 				offset += 0x10000;
 		}
 	}
@@ -184,9 +191,13 @@ void ds5002fp_device::handle_irq(int irqline, int state, u32 new_state, u32 tr_s
 	{
 		// Power Fail Interrupt
 		case DS5002FP_PFI_LINE:
-			// Need cleared->active line transition? (Logical 1-0 Pulse on the line) - CLEAR->ASSERT Transition since INT1 active lo!
-			if (BIT(tr_state, MCS51_INT1_LINE))
+			// Need cleared->active line transition? (Logical 1-0 Pulse on the line)
+			if (BIT(tr_state, DS5002FP_PFI_LINE))
 				set_pfw(1);
+			break;
+
+		default:
+			mcs51_cpu_device::handle_irq(irqline, state, new_state, tr_state);
 			break;
 	}
 }
@@ -275,14 +286,15 @@ void ds5002fp_device::rnr_w(u8 data)
 
 u8 ds5002fp_device::rpctl_r()
 {
-	logerror("rpctl read (%s)\n", machine().describe_context());
-	return m_rnr_delay <= 0 ? 0x80 : 0x00;
+	// bit 7 (RNR) is the read-only random number ready flag, the other bits read back as written
+	// (goldart saves and restores RPCTL with PUSH/POP in its interrupt handlers and relies on EXBS being preserved)
+	return (m_rpctl & 0x7f) | ((m_rnr_delay <= 0) ? 0x80 : 0x00);
 }
 
 void ds5002fp_device::rpctl_w(u8 data)
 {
-	ds_protected(m_rpctl, data, 0xef, 0xfe);
-	logerror("rpctl write %02x -> %02x (%s)\n", data, m_rpctl, machine().describe_context());
+	ds_protected(m_rpctl, data, 0xef, 0x7e);
+	LOG("rpctl write %02x -> %02x (%s)\n", data, m_rpctl, machine().describe_context());
 }
 
 
