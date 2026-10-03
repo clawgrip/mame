@@ -3,8 +3,9 @@
 license:CC0-1.0
 copyright-holders:ClawGrip
 
-Compumatic / K7 dart games: clickable dart board and control panel.
-The dart board targets are found by the names of the MATRIX0-3 port fields.
+Compumatic / K7 dart games: clickable dart board.
+The targets are found by the names of the MATRIX0-3 port fields, the black outer ring
+triggers the missed dart sensor.
 -->
 <mamelayout version="2">
 
@@ -12,8 +13,6 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 		<rect state="1"><color red="0.15" green="0.15" blue="0.15" /></rect>
 		<text state="1" string="This view requires the layout plugin."><color red="1" green="0.4" blue="0.4" /></text>
 	</element>
-
-	<element name="panel_bg"><rect><color red="0.12" green="0.12" blue="0.12" /></rect></element>
 
 	<element name="board">
 		<image><data><![CDATA[<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="2.5" height="2.5" viewBox="-1.25 -1.25 2.5 2.5"><circle cx="0" cy="0" r="1.25" fill="#101010"/><circle cx="0" cy="0" r="1.24" fill="none" stroke="#707070" stroke-width="0.02"/><path d="M-0.089 -0.563A0.57 0.57 0 0 1 0.089 -0.563L0.025 -0.158A0.16 0.16 0 0 0 -0.025 -0.158Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.105 -0.662A0.67 0.67 0 0 1 0.105 -0.662L0.089 -0.563A0.57 0.57 0 0 0 -0.089 -0.563Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.139 -0.879A0.89 0.89 0 0 1 0.139 -0.879L0.105 -0.662A0.67 0.67 0 0 0 -0.105 -0.662Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.156 -0.988A1 1 0 0 1 0.156 -0.988L0.139 -0.879A0.89 0.89 0 0 0 -0.139 -0.879Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.089 -0.563A0.57 0.57 0 0 1 0.259 -0.508L0.073 -0.143A0.16 0.16 0 0 0 0.025 -0.158Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.105 -0.662A0.67 0.67 0 0 1 0.304 -0.597L0.259 -0.508A0.57 0.57 0 0 0 0.089 -0.563Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.139 -0.879A0.89 0.89 0 0 1 0.404 -0.793L0.304 -0.597A0.67 0.67 0 0 0 0.105 -0.662Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.156 -0.988A1 1 0 0 1 0.454 -0.891L0.404 -0.793A0.89 0.89 0 0 0 0.139 -0.879Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.259 -0.508A0.57 0.57 0 0 1 0.403 -0.403L0.113 -0.113A0.16 0.16 0 0 0 0.073 -0.143Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.304 -0.597A0.67 0.67 0 0 1 0.474 -0.474L0.403 -0.403A0.57 0.57 0 0 0 0.259 -0.508Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.404 -0.793A0.89 0.89 0 0 1 0.629 -0.629L0.474 -0.474A0.67 0.67 0 0 0 0.304 -0.597Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.454 -0.891A1 1 0 0 1 0.707 -0.707L0.629 -0.629A0.89 0.89 0 0 0 0.404 -0.793Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.403 -0.403A0.57 0.57 0 0 1 0.508 -0.259L0.143 -0.073A0.16 0.16 0 0 0 0.113 -0.113Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.474 -0.474A0.67 0.67 0 0 1 0.597 -0.304L0.508 -0.259A0.57 0.57 0 0 0 0.403 -0.403Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.629 -0.629A0.89 0.89 0 0 1 0.793 -0.404L0.597 -0.304A0.67 0.67 0 0 0 0.474 -0.474Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.707 -0.707A1 1 0 0 1 0.891 -0.454L0.793 -0.404A0.89 0.89 0 0 0 0.629 -0.629Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.508 -0.259A0.57 0.57 0 0 1 0.563 -0.089L0.158 -0.025A0.16 0.16 0 0 0 0.143 -0.073Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.597 -0.304A0.67 0.67 0 0 1 0.662 -0.105L0.563 -0.089A0.57 0.57 0 0 0 0.508 -0.259Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.793 -0.404A0.89 0.89 0 0 1 0.879 -0.139L0.662 -0.105A0.67 0.67 0 0 0 0.597 -0.304Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.891 -0.454A1 1 0 0 1 0.988 -0.156L0.879 -0.139A0.89 0.89 0 0 0 0.793 -0.404Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.563 -0.089A0.57 0.57 0 0 1 0.563 0.089L0.158 0.025A0.16 0.16 0 0 0 0.158 -0.025Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.662 -0.105A0.67 0.67 0 0 1 0.662 0.105L0.563 0.089A0.57 0.57 0 0 0 0.563 -0.089Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.879 -0.139A0.89 0.89 0 0 1 0.879 0.139L0.662 0.105A0.67 0.67 0 0 0 0.662 -0.105Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.988 -0.156A1 1 0 0 1 0.988 0.156L0.879 0.139A0.89 0.89 0 0 0 0.879 -0.139Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.563 0.089A0.57 0.57 0 0 1 0.508 0.259L0.143 0.073A0.16 0.16 0 0 0 0.158 0.025Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.662 0.105A0.67 0.67 0 0 1 0.597 0.304L0.508 0.259A0.57 0.57 0 0 0 0.563 0.089Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.879 0.139A0.89 0.89 0 0 1 0.793 0.404L0.597 0.304A0.67 0.67 0 0 0 0.662 0.105Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.988 0.156A1 1 0 0 1 0.891 0.454L0.793 0.404A0.89 0.89 0 0 0 0.879 0.139Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.508 0.259A0.57 0.57 0 0 1 0.403 0.403L0.113 0.113A0.16 0.16 0 0 0 0.143 0.073Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.597 0.304A0.67 0.67 0 0 1 0.474 0.474L0.403 0.403A0.57 0.57 0 0 0 0.508 0.259Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.793 0.404A0.89 0.89 0 0 1 0.629 0.629L0.474 0.474A0.67 0.67 0 0 0 0.597 0.304Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.891 0.454A1 1 0 0 1 0.707 0.707L0.629 0.629A0.89 0.89 0 0 0 0.793 0.404Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.403 0.403A0.57 0.57 0 0 1 0.259 0.508L0.073 0.143A0.16 0.16 0 0 0 0.113 0.113Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.474 0.474A0.67 0.67 0 0 1 0.304 0.597L0.259 0.508A0.57 0.57 0 0 0 0.403 0.403Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.629 0.629A0.89 0.89 0 0 1 0.404 0.793L0.304 0.597A0.67 0.67 0 0 0 0.474 0.474Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.707 0.707A1 1 0 0 1 0.454 0.891L0.404 0.793A0.89 0.89 0 0 0 0.629 0.629Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.259 0.508A0.57 0.57 0 0 1 0.089 0.563L0.025 0.158A0.16 0.16 0 0 0 0.073 0.143Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.304 0.597A0.67 0.67 0 0 1 0.105 0.662L0.089 0.563A0.57 0.57 0 0 0 0.259 0.508Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.404 0.793A0.89 0.89 0 0 1 0.139 0.879L0.105 0.662A0.67 0.67 0 0 0 0.304 0.597Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.454 0.891A1 1 0 0 1 0.156 0.988L0.139 0.879A0.89 0.89 0 0 0 0.404 0.793Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.089 0.563A0.57 0.57 0 0 1 -0.089 0.563L-0.025 0.158A0.16 0.16 0 0 0 0.025 0.158Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.105 0.662A0.67 0.67 0 0 1 -0.105 0.662L-0.089 0.563A0.57 0.57 0 0 0 0.089 0.563Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.139 0.879A0.89 0.89 0 0 1 -0.139 0.879L-0.105 0.662A0.67 0.67 0 0 0 0.105 0.662Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M0.156 0.988A1 1 0 0 1 -0.156 0.988L-0.139 0.879A0.89 0.89 0 0 0 0.139 0.879Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.089 0.563A0.57 0.57 0 0 1 -0.259 0.508L-0.073 0.143A0.16 0.16 0 0 0 -0.025 0.158Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.105 0.662A0.67 0.67 0 0 1 -0.304 0.597L-0.259 0.508A0.57 0.57 0 0 0 -0.089 0.563Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.139 0.879A0.89 0.89 0 0 1 -0.404 0.793L-0.304 0.597A0.67 0.67 0 0 0 -0.105 0.662Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.156 0.988A1 1 0 0 1 -0.454 0.891L-0.404 0.793A0.89 0.89 0 0 0 -0.139 0.879Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.259 0.508A0.57 0.57 0 0 1 -0.403 0.403L-0.113 0.113A0.16 0.16 0 0 0 -0.073 0.143Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.304 0.597A0.67 0.67 0 0 1 -0.474 0.474L-0.403 0.403A0.57 0.57 0 0 0 -0.259 0.508Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.404 0.793A0.89 0.89 0 0 1 -0.629 0.629L-0.474 0.474A0.67 0.67 0 0 0 -0.304 0.597Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.454 0.891A1 1 0 0 1 -0.707 0.707L-0.629 0.629A0.89 0.89 0 0 0 -0.404 0.793Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.403 0.403A0.57 0.57 0 0 1 -0.508 0.259L-0.143 0.073A0.16 0.16 0 0 0 -0.113 0.113Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.474 0.474A0.67 0.67 0 0 1 -0.597 0.304L-0.508 0.259A0.57 0.57 0 0 0 -0.403 0.403Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.629 0.629A0.89 0.89 0 0 1 -0.793 0.404L-0.597 0.304A0.67 0.67 0 0 0 -0.474 0.474Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.707 0.707A1 1 0 0 1 -0.891 0.454L-0.793 0.404A0.89 0.89 0 0 0 -0.629 0.629Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.508 0.259A0.57 0.57 0 0 1 -0.563 0.089L-0.158 0.025A0.16 0.16 0 0 0 -0.143 0.073Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.597 0.304A0.67 0.67 0 0 1 -0.662 0.105L-0.563 0.089A0.57 0.57 0 0 0 -0.508 0.259Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.793 0.404A0.89 0.89 0 0 1 -0.879 0.139L-0.662 0.105A0.67 0.67 0 0 0 -0.597 0.304Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.891 0.454A1 1 0 0 1 -0.988 0.156L-0.879 0.139A0.89 0.89 0 0 0 -0.793 0.404Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.563 0.089A0.57 0.57 0 0 1 -0.563 -0.089L-0.158 -0.025A0.16 0.16 0 0 0 -0.158 0.025Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.662 0.105A0.67 0.67 0 0 1 -0.662 -0.105L-0.563 -0.089A0.57 0.57 0 0 0 -0.563 0.089Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.879 0.139A0.89 0.89 0 0 1 -0.879 -0.139L-0.662 -0.105A0.67 0.67 0 0 0 -0.662 0.105Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.988 0.156A1 1 0 0 1 -0.988 -0.156L-0.879 -0.139A0.89 0.89 0 0 0 -0.879 0.139Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.563 -0.089A0.57 0.57 0 0 1 -0.508 -0.259L-0.143 -0.073A0.16 0.16 0 0 0 -0.158 -0.025Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.662 -0.105A0.67 0.67 0 0 1 -0.597 -0.304L-0.508 -0.259A0.57 0.57 0 0 0 -0.563 -0.089Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.879 -0.139A0.89 0.89 0 0 1 -0.793 -0.404L-0.597 -0.304A0.67 0.67 0 0 0 -0.662 -0.105Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.988 -0.156A1 1 0 0 1 -0.891 -0.454L-0.793 -0.404A0.89 0.89 0 0 0 -0.879 -0.139Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.508 -0.259A0.57 0.57 0 0 1 -0.403 -0.403L-0.113 -0.113A0.16 0.16 0 0 0 -0.143 -0.073Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.597 -0.304A0.67 0.67 0 0 1 -0.474 -0.474L-0.403 -0.403A0.57 0.57 0 0 0 -0.508 -0.259Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.793 -0.404A0.89 0.89 0 0 1 -0.629 -0.629L-0.474 -0.474A0.67 0.67 0 0 0 -0.597 -0.304Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.891 -0.454A1 1 0 0 1 -0.707 -0.707L-0.629 -0.629A0.89 0.89 0 0 0 -0.793 -0.404Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.403 -0.403A0.57 0.57 0 0 1 -0.259 -0.508L-0.073 -0.143A0.16 0.16 0 0 0 -0.113 -0.113Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.474 -0.474A0.67 0.67 0 0 1 -0.304 -0.597L-0.259 -0.508A0.57 0.57 0 0 0 -0.403 -0.403Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.629 -0.629A0.89 0.89 0 0 1 -0.404 -0.793L-0.304 -0.597A0.67 0.67 0 0 0 -0.474 -0.474Z" fill="#1c1c1c" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.707 -0.707A1 1 0 0 1 -0.454 -0.891L-0.404 -0.793A0.89 0.89 0 0 0 -0.629 -0.629Z" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.259 -0.508A0.57 0.57 0 0 1 -0.089 -0.563L-0.025 -0.158A0.16 0.16 0 0 0 -0.073 -0.143Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.304 -0.597A0.67 0.67 0 0 1 -0.105 -0.662L-0.089 -0.563A0.57 0.57 0 0 0 -0.259 -0.508Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.404 -0.793A0.89 0.89 0 0 1 -0.139 -0.879L-0.105 -0.662A0.67 0.67 0 0 0 -0.304 -0.597Z" fill="#efe3c2" stroke="#a0a0a0" stroke-width="0.006"/><path d="M-0.454 -0.891A1 1 0 0 1 -0.156 -0.988L-0.139 -0.879A0.89 0.89 0 0 0 -0.404 -0.793Z" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><circle cx="0" cy="0" r="0.16" fill="#1f8f3a" stroke="#a0a0a0" stroke-width="0.006"/><circle cx="0" cy="0" r="0.07" fill="#cc2222" stroke="#a0a0a0" stroke-width="0.006"/></svg>]]></data></image>
@@ -123,186 +122,6 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 	<element name="hl_bull"><disk state="1"><color red="1" green="0.93" blue="0.2" alpha="0.75" /></disk></element>
 	<element name="hl_bullseye"><disk state="1"><color red="1" green="0.93" blue="0.2" alpha="0.75" /></disk></element>
 
-	<element name="btn0" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="UP"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn1" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="DOWN"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn2" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="NP"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn3" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="PLAYER"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn4" defstate="0">
-		<rect state="0"><color red="0.4" green="0.4" blue="0.4" /></rect>
-		<rect state="1"><color red="0.75" green="0.75" blue="0.75" /></rect>
-		<text string="SETUP"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn5" defstate="0">
-		<rect state="0"><color red="0.4" green="0.4" blue="0.4" /></rect>
-		<rect state="1"><color red="0.75" green="0.75" blue="0.75" /></rect>
-		<text string="RESET"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn6" defstate="0">
-		<rect state="0"><color red="0.8" green="0.62" blue="0.1" /></rect>
-		<rect state="1"><color red="1" green="0.88" blue="0.45" /></rect>
-		<text string="COIN"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="500 PTS"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn7" defstate="0">
-		<rect state="0"><color red="0.8" green="0.62" blue="0.1" /></rect>
-		<rect state="1"><color red="1" green="0.88" blue="0.45" /></rect>
-		<text string="COIN"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="100 PTS"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn8" defstate="0">
-		<rect state="0"><color red="0.15" green="0.35" blue="0.7" /></rect>
-		<rect state="1"><color red="0.45" green="0.7" blue="1" /></rect>
-		<text string="MISSED"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="DART"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn9" defstate="0">
-		<rect state="0"><color red="0.15" green="0.35" blue="0.7" /></rect>
-		<rect state="1"><color red="0.45" green="0.7" blue="1" /></rect>
-		<text string="PLAYER"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="SENSOR"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn10" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="OK"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn11" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="HIGH SCORE"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="DOWN"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn12" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="SHANGHAI"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="UP"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn13" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="SCRAM"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYER"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn14" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="ROULETTE"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn15" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="TRES EN"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="RAYA"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn16" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="CRICKET"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn17" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="AHORCADO"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn18" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="301"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn19" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="501"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn20" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="DOUBLE IN"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="CUT THROAT"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn21" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="DOUBLE OUT"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="TEAM"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn22" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="1"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYER"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn23" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="2"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYERS"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn24" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="3"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYERS"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn25" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="4"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYERS"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn26" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="5"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYERS"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn27" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="6"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="PLAYERS"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn28" defstate="0">
-		<rect state="0"><color red="0.75" green="0.1" blue="0.08" /></rect>
-		<rect state="1"><color red="1" green="0.55" blue="0.25" /></rect>
-		<text string="PLAY"><color red="1" green="1" blue="1" /><bounds x="0.06" y="0.22" width="0.88" height="0.56" /></text>
-	</element>
-	<element name="btn29" defstate="0">
-		<rect state="0"><color red="0.8" green="0.62" blue="0.1" /></rect>
-		<rect state="1"><color red="1" green="0.88" blue="0.45" /></rect>
-		<text string="COIN"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="50 PTS"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn30" defstate="0">
-		<rect state="0"><color red="0.8" green="0.62" blue="0.1" /></rect>
-		<rect state="1"><color red="1" green="0.88" blue="0.45" /></rect>
-		<text string="COIN"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="200 PTS"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-	<element name="btn31" defstate="0">
-		<rect state="0"><color red="0.8" green="0.62" blue="0.1" /></rect>
-		<rect state="1"><color red="1" green="0.88" blue="0.45" /></rect>
-		<text string="COIN"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.08" width="0.88" height="0.42" /></text>
-		<text string="32 UNITS"><color red="0" green="0" blue="0" /><bounds x="0.06" y="0.50" width="0.88" height="0.42" /></text>
-	</element>
-
 	<view name="Dartboard" showpointers="yes">
 		<screen index="0"><bounds x="0" y="0" width="40" height="30" /></screen>
 		<element id="board" ref="board"><bounds x="41" y="0" width="30" height="30" /></element>
@@ -409,69 +228,7 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 		<element id="seg:Bull (25)" ref="hl_bull"><bounds x="54.08" y="13.08" width="3.84" height="3.84" /></element>
 		<element id="seg:Bull's Eye (50)" ref="hl_bullseye"><bounds x="55.16" y="14.16" width="1.68" height="1.68" /></element>
 
-		<element ref="panel_bg"><bounds x="-0.3" y="30.7" width="71.6" height="12" /></element>
-		<!-- k7 -->
-		<element id="panel:k7:BUTTONS0:01" ref="btn0"><bounds x="0" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:BUTTONS0:02" ref="btn1"><bounds x="8.95" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:BUTTONS0:04" ref="btn2"><bounds x="17.9" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:BUTTONS0:08" ref="btn3"><bounds x="26.85" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:BUTTONS0:10" ref="btn4"><bounds x="53.7" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:BUTTONS0:20" ref="btn5"><bounds x="62.65" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:IN1:01" ref="btn6"><bounds x="0" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:IN1:02" ref="btn7"><bounds x="8.95" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:IN1:40" ref="btn8"><bounds x="53.7" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7:IN1:80" ref="btn9"><bounds x="62.65" y="35" width="8.35" height="3.4" /></element>
-		<!-- sprtdart -->
-		<element id="panel:sprtdart:BUTTONS0:01" ref="btn0"><bounds x="0" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:BUTTONS0:02" ref="btn1"><bounds x="8.95" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:BUTTONS0:04" ref="btn10"><bounds x="17.9" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:BUTTONS0:08" ref="btn3"><bounds x="26.85" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:BUTTONS0:10" ref="btn4"><bounds x="53.7" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:BUTTONS0:20" ref="btn5"><bounds x="62.65" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:IN1:01" ref="btn6"><bounds x="0" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:IN1:02" ref="btn7"><bounds x="8.95" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:IN1:40" ref="btn8"><bounds x="53.7" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:sprtdart:IN1:80" ref="btn9"><bounds x="62.65" y="35" width="8.35" height="3.4" /></element>
-		<!-- k7v300 -->
-		<element id="panel:k7v300:BUTTONS0:01" ref="btn11"><bounds x="0" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:02" ref="btn12"><bounds x="8.95" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:04" ref="btn13"><bounds x="17.9" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:08" ref="btn14"><bounds x="26.85" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:40" ref="btn15"><bounds x="35.8" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:80" ref="btn16"><bounds x="44.75" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1_ALT:04" ref="btn17"><bounds x="53.7" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:20" ref="btn2"><bounds x="62.65" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:01" ref="btn18"><bounds x="0" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:02" ref="btn19"><bounds x="8.95" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:04" ref="btn20"><bounds x="17.9" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:08" ref="btn21"><bounds x="26.85" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:10" ref="btn22"><bounds x="35.8" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:20" ref="btn23"><bounds x="44.75" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:40" ref="btn24"><bounds x="53.7" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS1:80" ref="btn25"><bounds x="62.65" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1_COL:04" ref="btn26"><bounds x="0" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1_COL:08" ref="btn27"><bounds x="8.95" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:BUTTONS0:10" ref="btn4"><bounds x="17.9" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1:01" ref="btn6"><bounds x="35.8" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1:02" ref="btn7"><bounds x="44.75" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1:40" ref="btn8"><bounds x="53.7" y="39" width="8.35" height="3.4" /></element>
-		<element id="panel:k7v300:IN1:80" ref="btn9"><bounds x="62.65" y="39" width="8.35" height="3.4" /></element>
-		<!-- dardos -->
-		<element id="panel:dardos:BUTTONS0:01" ref="btn0"><bounds x="0" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:BUTTONS0:02" ref="btn1"><bounds x="8.95" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:BUTTONS0:04" ref="btn10"><bounds x="17.9" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:BUTTONS0:08" ref="btn28"><bounds x="26.85" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:BUTTONS0:10" ref="btn4"><bounds x="53.7" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:BUTTONS0:20" ref="btn5"><bounds x="62.65" y="31" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:02" ref="btn6"><bounds x="0" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:04" ref="btn7"><bounds x="8.95" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:08" ref="btn29"><bounds x="17.9" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:10" ref="btn30"><bounds x="26.85" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:20" ref="btn31"><bounds x="35.8" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PD:10" ref="btn8"><bounds x="53.7" y="35" width="8.35" height="3.4" /></element>
-		<element id="panel:dardos:IN_PC:40" ref="btn9"><bounds x="62.65" y="35" width="8.35" height="3.4" /></element>
-
-		<element id="warning" ref="warning"><bounds x="-0.3" y="30.7" width="71.6" height="12" /></element>
+		<element id="warning" ref="warning"><bounds x="41" y="13.5" width="30" height="3" /></element>
 	</view>
 
 	<script><![CDATA[
@@ -496,49 +253,15 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 					end
 				end
 
-				-- each board has its own control panel
-				local panel
-				if root:ioport('IN_PC') then
-					panel = 'dardos'
-				elseif root:ioport('IN1_ALT') then
-					panel = 'k7v300'
-				else
-					local buttons = root:ioport('BUTTONS0')
-					local ok = buttons and buttons:field(0x04)
-					panel = (ok and (ok.default_name == 'OK')) and 'sprtdart' or 'k7'
-				end
-
-				local function pressed(field)
-					return ((field.port:read() ~ field.defvalue) & field.mask) ~= 0
-				end
-
-				local function show_pressed(item, field)
-					item:set_element_state_callback(function () return pressed(field) and 1 or 0 end)
-				end
-
-				local transparent = emu.render_color(0, 0, 0, 0)
-				local buttons = { }
-				-- (view.items can't be iterated with ipairs, its index is the item id)
+				-- highlight the targets while they're pressed (view.items can't be iterated with ipairs)
 				for i = 1, #view.items do
 					local item = view.items:at(i)
-					local id = item.id or ''
-					local name = id:match('^seg%d*:(.+)$')
-					if name then
-						if targets[name] then
-							show_pressed(item, targets[name])
-						end
-					else
-						local group, tag, mask = id:match('^panel:(%w+):([%w_]+):(%x+)$')
-						if group then
-							local port = (group == panel) and root:ioport(tag)
-							local field = port and port:field(tonumber(mask, 16))
-							if field then
-								show_pressed(item, field)
-								table.insert(buttons, { item = item, field = field })
-							else
-								item:set_color_callback(function () return transparent end)
-							end
-						end
+					local field = targets[(item.id or ''):match('^seg%d*:(.+)$')]
+					if field then
+						item:set_element_state_callback(
+							function ()
+								return (((field.port:read() ~ field.defvalue) & field.mask) ~= 0) and 1 or 0
+							end)
 					end
 				end
 
@@ -571,16 +294,6 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 					return targets[ring .. ' ' .. number]
 				end
 
-				local function find_target(x, y)
-					for _, button in ipairs(buttons) do
-						local b = button.item.bounds
-						if (x >= b.x0) and (x < b.x1) and (y >= b.y0) and (y < b.y1) then
-							return button.field
-						end
-					end
-					return board_target(x, y)
-				end
-
 				-- the target is held while the primary button is down
 				local ptr_id = nil
 				local held = nil
@@ -599,7 +312,7 @@ The dart board targets are found by the names of the MATRIX0-3 port fields.
 							release()
 						end
 					elseif (not ptr_id) and ((dn & 0x01) ~= 0) then
-						held = find_target(x, y)
+						held = board_target(x, y)
 						if held then
 							ptr_id = id
 							held:set_value(1)

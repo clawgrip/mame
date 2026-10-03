@@ -182,6 +182,10 @@
   40 kHz emitter and receiver on their own board) before continuing on their
   own.
 
+  The darts games take 500 and 100 Pts coins (Sport Dart T.V. manual, K7
+  edge connector "COIN 500" and "COIN 100", and their "ENTRADAS 500 PTS" and
+  "ENTRADAS 100 PTS" accounting).
+
   The EEPROM holds the settings, high scores and accounting. The darts games
   initialize it when it's blank.
 
@@ -676,7 +680,7 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -772,8 +776,8 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED ) // coin selector lines 2-3, ignored by the games
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) // must be low at boot
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor")
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Missed Dart Sensor") PORT_CODE(KEYCODE_D)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor") PORT_CODE(KEYCODE_S)
 
 	PORT_START("BUTTONS0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Up")
@@ -807,13 +811,13 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_NAME("Coin 3 (50 Pts)")
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_NAME("Coin 4 (200 Pts)")
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_NAME("Coin 5 (32 units)")
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0) // credited as 800 Pts, no such coin
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor") PORT_CODE(KEYCODE_S)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN_PD")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Missed Dart Sensor")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Missed Dart Sensor") PORT_CODE(KEYCODE_D)
 	PORT_BIT( 0xe7, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
