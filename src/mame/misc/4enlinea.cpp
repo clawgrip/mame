@@ -1,12 +1,11 @@
 // license:BSD-3-Clause
-// copyright-holders:David Haywood, Roberto Fresca
+// copyright-holders:David Haywood, Roberto Fresca,
+                     Tomás García-Merás Capote (ClawGrip)
 /*************************************************************************
 
   Cuatro en Linea.
   System I.
   1991, Compumatic
-
-  Driver by David Haywood & Roberto Fresca.
 
 **************************************************************************
 
@@ -153,13 +152,13 @@
 
   Known games on this or similar hardware:
 
-  - [DUMPED]  4 en Línea (Compumatic)
-  - [DUMPED]  Dardos (Oper Coin)
-  - [DUMPED]  Olympic Darts (K7 Kursaal. At least three different hardware revisions,
-              the 1997 Kursaal schematics show a Z180 based board with a
-              27C4001 EPROM, a DAC for sound and a monochrome monitor output)
+  - [DUMPED]  4 en Línea (Compumatic).
+  - [DUMPED]  Dardos (Oper Coin).
+  - [DUMPED]  Olympic Darts (K7 Kursaal.
+              There is another (undumped) Z180-based board with a 27C4001 EPROM, a DAC
+              for sound and a monochrome monitor output).
   - [DUMPED]  Sport Darts TV (Compumatic / Desarrollos y Recambios S.L.)
-  - [MISSING] Dart Queen (Compumatic / Daryde)
+  - [MISSING] Dart Queen (Compumatic / Daryde).
 
 **************************************************************************
 
@@ -215,10 +214,8 @@
   - IRQ sources (see the machine configurations).
   - Master to video CPU link timing.
   - Master CPU wait states (see machine_start).
-  - Unknown inputs of the Compumatic boards (9046 port A and some port C/D
-    lines).
-  - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts
-    v3.00 lamps.
+  - Unknown inputs of the Compumatic boards (9046 port A and some port C/D lines).
+  - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts v3.00 lamps.
   - UM487F IORDY wait states.
 
 *************************************************************************/
@@ -811,7 +808,7 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_NAME("Coin 3 (50 Pts)")
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_NAME("Coin 4 (200 Pts)")
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0) // credited as 800 Pts, no such coin
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0) // credited as 800 Pts, but no such coin
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor") PORT_CODE(KEYCODE_S)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -1137,7 +1134,7 @@ ROM_END
 *           Game Drivers           *
 ***********************************/
 
-//    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT    COMPANY                                      FULLNAME                            FLAGS
+//    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT   COMPANY                                      FULLNAME                       FLAGS
 GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
 GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
 GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_sysi_darts )
