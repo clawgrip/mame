@@ -99,16 +99,16 @@ SCL4052BE || C |  | D |  | E |  | F |       |    ___  ___ |
    |______________________________________________________|
 
 What the firmware does (facts from the disassembly):
- - It only clears the MC6802 internal RAM (0000-007F) at reset.
- - Programs and parameters are at 2000-23FF: decimal addresses 100-999 are 2064-23E7.
+ - It only clears the MC6802 internal RAM (0000-007f) at reset.
+ - Programs and parameters are at 2000-23ff: decimal addresses 100-999 are 2064-23e7.
  - The keyboard, display, switches and interrupts use a PIA at 8800. A PIA at 8400 is
    initialized but never used (the main PCB has only one MC6821).
- - The relay boards are at A000-AFFF, one per address line from A2 to A11 (the PIAs at
-   A004, A008, ... A800 are initialized). Port A drives the lamps, active low: FF at
-   start-up, and 77 for a board with no lamps lit in the tables. Port B is compared with
-   port A for the lamps in the mask at 160 (lamp current sensors).
- - The lamp tables are reached through the pointer at C625, and the pointers stored there
-   (C65D-C695) only make sense with the EEPROM at C000. They have entries for three relay
+ - The relay boards are at a000-afff, one per address line from A2 to A11 (the PIAs at
+   a004, a008, ... a800 are initialized). Port A drives the lamps, active low: 0xff at
+   start-up, and 0x77 for a board with no lamps lit in the tables. Port B is compared
+   with port A for the lamps in the mask at 160 (lamp current sensors).
+ - The lamp tables are reached through the pointer at c625, and the pointers stored there
+   (c65d-c695) only make sense with the EEPROM at c000. They have entries for three relay
    boards. Lamp bits, going by these tables: 0/4 red, 1/5 amber, 2/6 green; 2/6 can also
    use a second flashing rate (the pedestrian green flashing); 3/7 aren't lamps (never
    checked with the sensors). Groups 1 A and 1 B always match (first vehicle phase), 2 A
@@ -168,41 +168,41 @@ click them on the panel. The dot after the last digit is an indicator (see steps
 11) and is left out below.
 
  1. Leave the three toggle switches down (FLASHING, MANUAL and EXT. PROG. off) and start
-	the machine. With an empty memory the lamps flash amber and the display shows
-	[000.000]. After about four minutes of flashing, if no step has a duration yet, the
-	firmware loops forever looking for one and the controller stops (the display no
-	longer reacts; the watchdog, not emulated, may restart it): reset it (F3) and go on,
-	stored values are kept.
+    the machine. With an empty memory the lamps flash amber and the display shows
+    [000.000]. After about four minutes of flashing, if no step has a duration yet, the
+    firmware loops forever looking for one and the controller stops (the display no
+    longer reacts; the watchdog, not emulated, may restart it): reset it (F3) and go on,
+    stored values are kept.
  2. Press R. The display goes blank: [   .   ].
  3. Type 1 0 0. The display shows [100.000]: address 100, value 000.
  4. Type 0 2 0 (20 seconds of green for the vehicles). The display shows [100.020].
  5. Press K to store it. The display still shows [100.020].
  6. Press K again to go to the next address. The display shows [101.000].
  7. For each of these addresses type the value, press K to store it and K again to go to
-	the next one (all the times are in seconds):
-	  101  003  pedestrian clearance (all red)
-	  102  005  flashing pedestrian green (amber for the second vehicle phase)
-	  103  010  pedestrian green (and green for the second vehicle phase)
-	  104  002  vehicle clearance (all red)
-	  105  003  vehicle amber (no need to press K twice after this one)
+    the next one (all the times are in seconds):
+      101  003  pedestrian clearance (all red)
+      102  005  flashing pedestrian green (amber for the second vehicle phase)
+      103  010  pedestrian green (and green for the second vehicle phase)
+      104  002  vehicle clearance (all red)
+      105  003  vehicle amber (no need to press K twice after this one)
  8. Press R, type 1 2 4 ([124.000]) and enter these values the same way:
-	  124  006  number of steps
-	  125  003  red at start-up
-	  126  003  steady amber at start-up
-	  127  005  flashing amber at start-up
+      124  006  number of steps
+      125  003  red at start-up
+      126  003  steady amber at start-up
+      127  005  flashing amber at start-up
  9. Press R, type 1 6 1 and then 0 6 0 ([161.060]) and press K. This is the maximum
-	synchronisation wait; without it a green time can last about four minutes.
+    synchronisation wait; without it a green time can last about four minutes.
 10. Reset the machine (F3). The lamps flash amber for 5 seconds, show steady amber for 3,
-	red for 3 and then green, where they stay. The dot after the last digit goes off: the
-	controller is waiting for a pedestrian.
+    red for 3 and then green, where they stay. The dot after the last digit goes off: the
+    controller is waiting for a pedestrian.
 11. Press the pedestrian button (Enter, or PUSH on the panel). The dot after the last
-	digit lights up to confirm it; if it doesn't, try again a bit later. When the current
-	cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
-	turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
-	green (5 s) and red, and 3 s later the vehicles get green again. The first pole has the
-	first vehicle phase and the pedestrian signal, the second one the second vehicle phase,
-	which has green along with the pedestrians; each vehicle head has a flashing amber
-	turn arrow beside it.
+    digit lights up to confirm it; if it doesn't, try again a bit later. When the current
+    cycle ends (it can take a minute, a little more just after a reset) the vehicle lamps
+    turn amber (3 s) and red, 2 s later the pedestrians get green (10 s), then flashing
+    green (5 s) and red, and 3 s later the vehicles get green again. The first pole has the
+    first vehicle phase and the pedestrian signal, the second one the second vehicle phase,
+    which has green along with the pedestrians; each vehicle head has a flashing amber
+    turn arrow beside it.
 
 Other keys and tips:
  - To check a value press R and type its address; to change it type the new value and K.
@@ -238,6 +238,9 @@ TODO:
 #include "machine/input_merger.h"
 #include "machine/nvram.h"
 #include "video/pwm.h"
+
+#include <algorithm>
+#include <iterator>
 
 #include "semcrossw.lh"
 
@@ -315,7 +318,7 @@ u8 semcrossw_state::pia_pa_r()
 	// the firmware selects the rows with PA0-PA2 and the columns with PA3-PA4; the
 	// programmer PCB has a 74LS155 and a 4052 that would do it (not verified)
 	u8 const row = m_pia_pa & 0x07;
-	u8 const col = (m_pia_pa >> 3) & 0x03;
+	u8 const col = BIT(m_pia_pa, 3, 2);
 	u8 data = 0xff;
 
 	if (row < 5)
@@ -356,8 +359,10 @@ u8 semcrossw_state::relay_r(offs_t offset)
 {
 	u8 data = 0xff;
 	for (unsigned i = 0; i < RELAY_BOARDS; i++)
+	{
 		if (BIT(offset, i + 2))
 			data &= m_relay_pia[i]->read(offset & 0x03);
+	}
 
 	return data;
 }
@@ -365,8 +370,10 @@ u8 semcrossw_state::relay_r(offs_t offset)
 void semcrossw_state::relay_w(offs_t offset, u8 data)
 {
 	for (unsigned i = 0; i < RELAY_BOARDS; i++)
+	{
 		if (BIT(offset, i + 2))
 			m_relay_pia[i]->write(offset & 0x03, data);
+	}
 }
 
 template <unsigned N>
@@ -374,8 +381,10 @@ void semcrossw_state::relay_pa_w(u8 data)
 {
 	m_relay_pa[N] = data;
 	for (unsigned i = 0; i < 8; i++)
+	{
 		if (i != 3 && i != 7)
 			m_lamps[N][i] = BIT(~data, i);
+	}
 }
 
 template <unsigned N>

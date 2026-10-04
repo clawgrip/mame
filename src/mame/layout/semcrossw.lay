@@ -224,20 +224,20 @@ license:CC0-1.0
 		     button -->
 		<element ref="pole"><bounds x="175" y="352" width="20" height="348" /></element>
 
-		<!-- relay board 1 (A004) group A, bits 0-2 (group B always shows the same) -->
+		<!-- relay board 1 (a004) group A, bits 0-2 (group B always shows the same) -->
 		<element ref="t_grp1a"><bounds x="130" y="12" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="130" y="40" width="110" height="312" /></element>
 		<element name="lamp1_0" ref="lamp_red"><bounds x="140" y="52" width="90" height="90" /></element>
 		<element name="lamp1_1" ref="lamp_amber"><bounds x="140" y="151" width="90" height="90" /></element>
 		<element name="lamp1_2" ref="lamp_green"><bounds x="140" y="250" width="90" height="90" /></element>
 
-		<!-- relay board 2 (A008) group B, bit 5: flashes while the first vehicle phase is red
+		<!-- relay board 2 (a008) group B, bit 5: flashes while the first vehicle phase is red
 		     during the pedestrian phase -->
 		<element ref="t_grp2b"><bounds x="20" y="214" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="20" y="238" width="110" height="114" /></element>
 		<element name="lamp2_5" ref="arrow_left"><bounds x="30" y="250" width="90" height="90" /></element>
 
-		<!-- relay board 2 (A008) group B, bits 4 and 6: going by the lamp tables, a walk /
+		<!-- relay board 2 (a008) group B, bits 4 and 6: going by the lamp tables, a walk /
 		     don't walk signal -->
 		<element ref="t_grp2b"><bounds x="100" y="378" width="36" height="22" /></element>
 		<element ref="housing"><bounds x="140" y="368" width="90" height="180" /></element>
@@ -253,14 +253,14 @@ license:CC0-1.0
 		     arrow -->
 		<element ref="pole"><bounds x="325" y="352" width="20" height="348" /></element>
 
-		<!-- relay board 2 (A008) group A, bits 0-2 -->
+		<!-- relay board 2 (a008) group A, bits 0-2 -->
 		<element ref="t_grp2a"><bounds x="280" y="12" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="280" y="40" width="110" height="312" /></element>
 		<element name="lamp2_0" ref="lamp_red"><bounds x="290" y="52" width="90" height="90" /></element>
 		<element name="lamp2_1" ref="lamp_amber"><bounds x="290" y="151" width="90" height="90" /></element>
 		<element name="lamp2_2" ref="lamp_green"><bounds x="290" y="250" width="90" height="90" /></element>
 
-		<!-- relay board 3 (A010) group A, bit 1: flashes in step 0, while the second vehicle
+		<!-- relay board 3 (a010) group A, bit 1: flashes in step 0, while the second vehicle
 		     phase is red (bits 0 and 2 are never lit) -->
 		<element ref="t_grp3a"><bounds x="390" y="214" width="110" height="22" /></element>
 		<element ref="housing"><bounds x="390" y="238" width="110" height="114" /></element>
