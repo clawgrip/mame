@@ -105,8 +105,6 @@
 #include "speaker.h"
 
 #include <algorithm>
-#include <iterator>
-#include <memory>
 
 #define LOG_REGS   (1U << 1)
 #define LOG_WINDOW (1U << 2)
