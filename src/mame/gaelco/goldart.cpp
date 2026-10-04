@@ -104,6 +104,10 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include <algorithm>
+#include <iterator>
+#include <memory>
+
 #define LOG_REGS   (1U << 1)
 #define LOG_WINDOW (1U << 2)
 
@@ -390,7 +394,7 @@ static INPUT_PORTS_START( goldart )
 	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED ) // serial port, INT0, INT1
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Test 1 (Initialization Menu)")
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE2 ) PORT_NAME("Test 2 (Test Menu)")
-	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED ) // expanded bus /WR, /RD
 
 	// dart board matrix, DARTn = row line n / 2 (P1.0-P1.3), return lines 0-7 (n even) or 8-15 (n odd)
 	PORT_START("DART0")
