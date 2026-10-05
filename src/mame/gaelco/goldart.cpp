@@ -532,10 +532,6 @@ void goldart_state::goldart(machine_config &config)
 }
 
 
-/* Different versions of the internal code exist (0x6000-0x6fff code is VERY different between them,
-   it's an overlay loaded from the data ROM at runtime, see the notes at the top).
-   The one we're using for now is the Gaelco "official" archived one (for repairs, etc.). */
-
 ROM_START( goldart )
 	ROM_REGION( 0x8000, "sram", 0 ) // DS5002FP code
 	ROM_LOAD( "ds5002fp_sram.bin", 0x00000, 0x8000, CRC(cd2bf151) SHA1(6f601cef86493fc2db181c93b17949b982149b0e) )
