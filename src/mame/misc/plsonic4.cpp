@@ -38,9 +38,7 @@ Notes:
 TODO:
 - Colors come from three 18-pin chips with scratched-off markings (probably 1Kx4 PROMs, one
   per RGB channel, each feeding a two-resistor DAC) addressed by the pixel data and the upper
-  six bits of the attribute byte. They aren't dumped, so the palette is a placeholder that uses
-  each bitplane as a color gun. Real colors can be seen in the flyer (blue background, red and
-  white logo banner, orange game list with blue text).
+  six bits of the attribute byte. They aren't dumped.
 - I/O 0x00 is cleared around every video RAM access and set again afterwards (display enable?).
 - I/O 0x09 is only set during the boot delay loops (game PCB reset?).
 - Screen raw parameters are guessed. The program counts 60 NMIs per second.
@@ -71,6 +69,7 @@ public:
 		m_outlatch(*this, "outlatch%u", 0U),
 		m_videoram(*this, "videoram"),
 		m_nvram(*this, "nvram"),
+		m_proms(*this, "proms"),
 		m_digits(*this, "digit%u", 0U)
 	{ }
 
@@ -85,6 +84,7 @@ private:
 	required_device_array<ls259_device, 4> m_outlatch;
 	required_shared_ptr<uint8_t> m_videoram;
 	required_shared_ptr<uint8_t> m_nvram;
+	required_region_ptr<uint8_t> m_proms;
 	output_finder<5> m_digits;
 
 	tilemap_t *m_tilemap = nullptr;
@@ -111,9 +111,9 @@ void plsonic4_state::video_start()
 
 void plsonic4_state::palette_init(palette_device &palette) const
 {
-	// TODO: placeholder, the color PROMs aren't dumped (see notes at the top of the file)
+	// TODO: placeholder, the color PROMs aren't dumped
 	for (int i = 0; i < palette.entries(); i++)
-		palette.set_pen_color(i, pal1bit(BIT(i, 0)), pal1bit(BIT(i, 1)), pal1bit(BIT(i, 2)));
+		palette.set_pen_color(i, pal2bit(m_proms[i]), pal2bit(m_proms[0x400 + i]), pal2bit(m_proms[0x800 + i]));
 }
 
 TILE_GET_INFO_MEMBER(plsonic4_state::tile_info)
