@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 license:CC0-1.0
-copyright-holders:ClawGrip
+copyright-holders: Tomás García-Merás Capote (ClawGrip)
 
 Gaelco Goldart: clickable dart board.
 The targets are found by the names of the DART0-7 port fields.
