@@ -3,8 +3,11 @@
 license:CC0-1.0
 copyright-holders: Tomás García-Merás Capote (ClawGrip)
 
-Gaelco Goldart: clickable dart board.
-The targets are found by the names of the DART0-7 port fields.
+Clickable dart board shared by the dart games, shown next to the first screen.
+The targets are found by the names of the input fields, wherever they are:
+  "Dart Single 20", "Dart Double 20", "Dart Triple 20", ... (1 to 20)
+  "Dart Single Bull", "Dart Double Bull"
+  "Missed Dart Sensor" (optional), triggered by the black outer ring
 -->
 <mamelayout version="2">
 
@@ -224,7 +227,7 @@ The targets are found by the names of the DART0-7 port fields.
 		<element id="seg:Dart Triple 5" ref="hl77"><bounds x="52.35" y="7.059" width="2.58" height="1.847" /></element>
 		<element id="seg1:Dart Single 5" ref="hl78"><bounds x="51.151" y="4.451" width="3.591" height="3.385" /></element>
 		<element id="seg:Dart Double 5" ref="hl79"><bounds x="50.552" y="3.148" width="3.777" height="2.336" /></element>
-		<element id="seg:Dart Bull" ref="hl_bull"><bounds x="54.08" y="13.08" width="3.84" height="3.84" /></element>
+		<element id="seg:Dart Single Bull" ref="hl_bull"><bounds x="54.08" y="13.08" width="3.84" height="3.84" /></element>
 		<element id="seg:Dart Double Bull" ref="hl_bullseye"><bounds x="55.16" y="14.16" width="1.68" height="1.68" /></element>
 
 		<element id="warning" ref="warning"><bounds x="41" y="13.5" width="30" height="3" /></element>
@@ -234,18 +237,15 @@ The targets are found by the names of the DART0-7 port fields.
 		file:set_resolve_tags_callback(
 			function ()
 				local view = file.views['Dartboard']
-				local root = file.device
 
-				-- dart board targets by name
+				-- dart board targets and the optional missed dart sensor, by name
 				local targets = { }
-				for i = 0, 7 do
-					local port = root:ioport('DART' .. i)
-					if port then
-						for _, field in pairs(port.fields) do
-							targets[field.default_name] = field
-						end
+				for _, port in pairs(machine.ioport.ports) do
+					for _, field in pairs(port.fields) do
+						targets[field.default_name] = field
 					end
 				end
+				local missed = targets['Missed Dart Sensor']
 
 				-- highlight the targets while they're pressed (view.items can't be iterated with ipairs)
 				for i = 1, #view.items do
@@ -269,12 +269,14 @@ The targets are found by the names of the DART0-7 port fields.
 					local dx = (x - ((b.x0 + b.x1) / 2)) * 2.5 / b.width
 					local dy = (y - ((b.y0 + b.y1) / 2)) * 2.5 / b.height
 					local r = math.sqrt((dx * dx) + (dy * dy))
-					if r >= 1.0 then
+					if r >= 1.25 then
 						return nil
+					elseif r >= 1.0 then
+						return missed
 					elseif r < 0.07 then
 						return targets['Dart Double Bull']
 					elseif r < 0.16 then
-						return targets['Dart Bull']
+						return targets['Dart Single Bull']
 					end
 					local number = order[(math.floor((math.deg(math.atan(dx, -dy)) + 9) / 18) % 20) + 1]
 					local ring = 'Single'
