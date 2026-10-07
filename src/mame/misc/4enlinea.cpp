@@ -157,7 +157,11 @@
   - [DUMPED]  Olympic Darts (K7 Kursaal.
               There is another (undumped) Z180-based board with a 27C4001 EPROM, a DAC
               for sound and a monochrome monitor output).
-  - [DUMPED]  Sport Darts TV (Compumatic / Desarrollos y Recambios S.L.)
+  - [DUMPED]  Sport Darts TV (Compumatic / Desarrollos y Recambios S.L.).
+              The dumped version never shows the "Desarrollos y Recambios S.L." screen,
+			  but it's on the ROM, and there's no DIP switch to activate it.
+			  So, there's another (undumped) version that does show it (see pics at
+			  https://www.recreativas.org/sport-dart-tv-4371-compumatic).
   - [MISSING] Dart Queen (Compumatic / Daryde).
 
 **************************************************************************
