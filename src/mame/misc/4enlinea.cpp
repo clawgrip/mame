@@ -231,16 +231,9 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include <algorithm>
+
 #include "dartboard.lh"
-
-
-#define MAIN_CLOCK           XTAL(16'000'000)
-#define SEC_CLOCK            XTAL(8'000'000)
-#define HCGA_CLOCK           XTAL(14'318'181)
-
-#define PRG_CPU_CLOCK        MAIN_CLOCK /2      // 8 MHz. (measured)
-#define SND_CPU_CLOCK        SEC_CLOCK /2       // 4 MHz. (measured)
-#define SND_AY_CLOCK         SEC_CLOCK /4       // 2 MHz. (measured)
 
 
 namespace {
@@ -256,14 +249,14 @@ protected:
 		, m_eeprom(*this, "eeprom")
 	{ }
 
+	void hcga_config(machine_config &config) ATTR_COLD;
+
 	// A15 = 1 selects the CGA video memory window of the UM487F
 	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 | offset); }
 	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
-
-	void hcga_config(machine_config &config) ATTR_COLD;
 	rgb_t rgbi_to_rgb(uint8_t rgbi);
 
-	required_device<cpu_device> m_maincpu;
+	required_device<z80_device> m_maincpu;
 	required_device<um487f_device> m_video;
 	required_device<ay8910_device> m_ay;
 	required_device<i2cmem_device> m_eeprom;
@@ -275,7 +268,7 @@ class _4enlinea_state : public sysi_state
 public:
 	_4enlinea_state(const machine_config &mconfig, device_type type, const char *tag)
 		: sysi_state(mconfig, type, tag)
-		, m_audiocpu(*this, "audiocpu")
+		, m_mastercpu(*this, "mastercpu")
 		, m_matrix(*this, "MATRIX%u", 0U)
 		, m_buttons(*this, "BUTTONS%u", 0U)
 		, m_in_pc(*this, "IN_PC")
@@ -298,6 +291,8 @@ private:
 	void link_control_w(uint8_t data);
 	void link_data_w(offs_t offset, uint8_t data);
 	void send_to_video(uint8_t data0, uint8_t data1);
+	TIMER_CALLBACK_MEMBER(link_word_w);
+	TIMER_CALLBACK_MEMBER(link_read_w);
 	TIMER_CALLBACK_MEMBER(link_ready);
 
 	// ES2 9046 I/O ports
@@ -308,11 +303,11 @@ private:
 	uint8_t ay_porta_r();
 	uint8_t ay_portb_r();
 
-	void audio_map(address_map &map) ATTR_COLD;
+	void master_map(address_map &map) ATTR_COLD;
 	void main_map(address_map &map) ATTR_COLD;
 	void main_portmap(address_map &map) ATTR_COLD;
 
-	required_device<cpu_device> m_audiocpu;
+	required_device<z80_device> m_mastercpu;
 	optional_ioport_array<4> m_matrix;
 	required_ioport_array<2> m_buttons;
 	required_ioport m_in_pc;
@@ -341,40 +336,58 @@ public:
 		, m_in1_col(*this, "IN1_COL")
 		, m_in1_alt(*this, "IN1_ALT")
 		, m_lamp(*this, "lamp0")
-		, m_lamps(*this, "lamp%u", 1U)
 	{ }
 
 	void k7_olym(machine_config &config) ATTR_COLD;
-	void sprtdart(machine_config &config) ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
 
-private:
-	uint8_t in1_r();
+	void io_map(address_map &map) ATTR_COLD;
+
 	void out0_w(uint8_t data);
+
+	uint8_t m_selected_lines = 0;
+
+private:
+	void mem_map(address_map &map) ATTR_COLD;
+
+	uint8_t in1_r();
 	void out1_w(uint8_t data);
-	uint8_t selected_lines() const { return m_sport_darts ? ~m_out1 : m_out1; }
 	uint8_t ay_porta_r();
 	uint8_t ay_portb_r();
 	void hsync_w(int state);
 
-	void mem_map(address_map &map) ATTR_COLD;
-	void io_map(address_map &map) ATTR_COLD;
-
 	required_memory_bank m_rombank;
 	required_ioport_array<4> m_matrix;
-	optional_ioport_array<2> m_buttons;
+	required_ioport_array<2> m_buttons;
 	required_ioport m_in1;
 	optional_ioport m_in1_col;
 	optional_ioport m_in1_alt;
 	output_finder<> m_lamp;
-	output_finder<4> m_lamps;
 
-	bool m_sport_darts = false;
 	uint8_t m_out0 = 0;
-	uint8_t m_out1 = 0;
 	uint8_t m_hsync_count = 0;
+};
+
+
+class sprtdart_state : public k7_state
+{
+public:
+	sprtdart_state(const machine_config &mconfig, device_type type, const char *tag)
+		: k7_state(mconfig, type, tag)
+		, m_lamps(*this, "lamp%u", 1U)
+	{ }
+
+	void sprtdart(machine_config &config) ATTR_COLD;
+
+private:
+	void io_map(address_map &map) ATTR_COLD;
+
+	void out0_w(uint8_t data);
+	void out1_w(uint8_t data);
+
+	output_finder<4> m_lamps;
 };
 
 
@@ -385,11 +398,11 @@ private:
 /*
   Master to video CPU link (ES2 9046 and 8952 CM 32?)
 
-  The master writes each word twice to FC29h-FC2Ch (CN1/CN2 half, always 0,
-  then command and parameter), strobes FC28h and waits for FC28h bit 3 before
-  sending the next one. The video CPU gets a NMI for each word.
+  The master writes each word twice to 0xfc29-0xfc2c (CN1/CN2 half, always 0,
+  then command and parameter), strobes 0xfc28 and waits for 0xfc28 bit 3
+  before sending the next one. The video CPU gets a NMI for each word.
 
-  FC28h bit 3 can't depend on the video CPU reading the word: Dardos keeps
+  0xfc28 bit 3 can't depend on the video CPU reading the word: Dardos keeps
   sending null words while idle, and its video CPU stops reading them while
   its command queue is full (during the boot delay).
 
@@ -397,9 +410,19 @@ private:
 */
 void _4enlinea_state::send_to_video(uint8_t data0, uint8_t data1)
 {
-	m_link_latch[0] = data0;
-	m_link_latch[1] = data1;
+	machine().scheduler().synchronize(timer_expired_delegate(FUNC(_4enlinea_state::link_word_w), this), (data1 << 8) | data0);
+}
+
+TIMER_CALLBACK_MEMBER(_4enlinea_state::link_word_w)
+{
+	m_link_latch[0] = uint8_t(param);
+	m_link_latch[1] = uint8_t(param >> 8);
 	m_maincpu->pulse_input_line(INPUT_LINE_NMI, attotime::zero);
+}
+
+TIMER_CALLBACK_MEMBER(_4enlinea_state::link_read_w)
+{
+	m_handshake_status |= 0x20;
 }
 
 TIMER_CALLBACK_MEMBER(_4enlinea_state::link_ready)
@@ -410,7 +433,7 @@ TIMER_CALLBACK_MEMBER(_4enlinea_state::link_ready)
 uint8_t _4enlinea_state::link_r(offs_t offset)
 {
 	if (offset == 0 && !machine().side_effects_disabled())
-		m_handshake_status |= 0x20;
+		machine().scheduler().synchronize(timer_expired_delegate(FUNC(_4enlinea_state::link_read_w), this));
 
 	return m_link_latch[offset];
 }
@@ -465,7 +488,7 @@ uint8_t _4enlinea_state::port_r(offs_t offset)
 	switch (port)
 	{
 	case 2:
-		in = (m_in_pc->read() & 0xfe) | (m_eeprom->read_sda() ? 0x01 : 0x00);
+		in = m_in_pc->read();
 		break;
 	case 3:
 		in = m_in_pd->read();
@@ -499,8 +522,10 @@ uint8_t _4enlinea_state::ay_porta_r()
 	uint8_t data = 0xff;
 
 	for (int i = 0; i < 4; i++)
+	{
 		if (BIT(columns, i))
 			data &= m_matrix[i].read_safe(0xffff);
+	}
 
 	if (BIT(port_out(3), 7))
 		data &= m_buttons[0]->read();
@@ -514,8 +539,10 @@ uint8_t _4enlinea_state::ay_portb_r()
 	uint8_t data = 0xff;
 
 	for (int i = 0; i < 4; i++)
+	{
 		if (BIT(columns, i))
 			data &= m_matrix[i].read_safe(0xffff) >> 8;
+	}
 
 	if (BIT(port_out(3), 7))
 		data &= m_buttons[1]->read();
@@ -539,7 +566,7 @@ void _4enlinea_state::main_portmap(address_map &map)
 	map(0x3b0, 0x3df).rw(m_video, FUNC(um487f_device::io_r), FUNC(um487f_device::io_w));
 }
 
-void _4enlinea_state::audio_map(address_map &map)
+void _4enlinea_state::master_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom();
 	map(0xf800, 0xfbff).ram();
@@ -560,7 +587,7 @@ uint8_t k7_state::in1_r()
 		return m_in1_alt->read();
 
 	uint8_t data = m_in1->read();
-	if (BIT(selected_lines(), 4) && m_in1_col)
+	if (BIT(m_selected_lines, 4) && m_in1_col)
 		data = (data & ~0x0c) | (m_in1_col->read() & 0x0c);
 
 	return data;
@@ -572,63 +599,57 @@ void k7_state::out0_w(uint8_t data)
 	m_rombank->set_entry(data & 0x03);
 	m_eeprom->write_scl(BIT(data, 2));
 	m_eeprom->write_sda(!BIT(data, 3)); // through an open collector transistor
-
-	if (m_sport_darts)
-		for (int i = 0; i < 4; i++)
-			m_lamps[i] = BIT(data, 4 + i);
 }
 
 // bit 7 is pulsed low at boot (unknown)
 void k7_state::out1_w(uint8_t data)
 {
-	m_out1 = data;
-
-	if (m_sport_darts)
-		machine().bookkeeping().coin_lockout_global_w(!BIT(data, 5));
-	else
-		m_lamp = BIT(data, 5); // blinks while waiting for a player to start
+	m_selected_lines = data;
+	m_lamp = BIT(data, 5); // blinks while waiting for a player to start
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
 void k7_state::hsync_w(int state)
 {
 	if (state && !(++m_hsync_count & 0x07))
-		m_maincpu->set_input_line(0, HOLD_LINE);
+		m_maincpu->set_input_line(INPUT_LINE_IRQ0, ASSERT_LINE);
 }
 
 uint8_t k7_state::ay_porta_r()
 {
-	uint8_t const sel = selected_lines();
 	uint8_t data = 0xff;
 
 	for (int i = 0; i < 4; i++)
-		if (BIT(sel, i))
+	{
+		if (BIT(m_selected_lines, i))
 			data &= m_matrix[i]->read();
+	}
 
-	if (BIT(sel, 4))
-		data &= m_buttons[0].read_safe(0xff);
+	if (BIT(m_selected_lines, 4))
+		data &= m_buttons[0]->read();
 
 	return data;
 }
 
 uint8_t k7_state::ay_portb_r()
 {
-	uint8_t const sel = selected_lines();
 	uint8_t data = 0xff;
 
 	for (int i = 0; i < 4; i++)
-		if (BIT(sel, i))
+	{
+		if (BIT(m_selected_lines, i))
 			data &= m_matrix[i]->read() >> 8;
+	}
 
-	if (BIT(sel, 4))
-		data &= m_buttons[1].read_safe(0xff);
+	if (BIT(m_selected_lines, 4))
+		data &= m_buttons[1]->read();
 
 	return data;
 }
 
 void k7_state::mem_map(address_map &map)
 {
-	map(0x0000, 0x7fff).rom().region("maincpu", 0);
+	map(0x0000, 0x7fff).rom();
 	map(0x8000, 0xbfff).rw(FUNC(k7_state::vram_r), FUNC(k7_state::vram_w));
 	map(0xc000, 0xdfff).bankr(m_rombank);
 	map(0xe000, 0xffff).ram().share("nvram");
@@ -642,6 +663,29 @@ void k7_state::io_map(address_map &map)
 	map(0x0101, 0x0101).r(m_ay, FUNC(ay8910_device::data_r));
 	map(0x0102, 0x0102).w(m_ay, FUNC(ay8910_device::data_w));
 	map(0x03b0, 0x03df).mirror(0xfc00).rw(m_video, FUNC(um487f_device::io_r), FUNC(um487f_device::io_w));
+}
+
+
+void sprtdart_state::out0_w(uint8_t data)
+{
+	k7_state::out0_w(data);
+
+	for (int i = 0; i < 4; i++)
+		m_lamps[i] = BIT(data, 4 + i);
+}
+
+void sprtdart_state::out1_w(uint8_t data)
+{
+	m_selected_lines = ~data;
+	machine().bookkeeping().coin_lockout_global_w(!BIT(data, 5));
+	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
+}
+
+void sprtdart_state::io_map(address_map &map)
+{
+	k7_state::io_map(map);
+	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(sprtdart_state::out0_w));
+	map(0x0001, 0x0001).mirror(0xfc00).w(FUNC(sprtdart_state::out1_w));
 }
 
 
@@ -668,16 +712,16 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY  PORT_PLAYER(1)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(1)
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE
 
 	// each coin line adds a credit (with its own counter)
 	PORT_START("IN_PC")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -782,9 +826,12 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Player")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("BUTTONS1")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( dardos )
@@ -796,7 +843,7 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("OK")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Play")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE PORT_CODE(KEYCODE_F2) // only read at power on
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE // only read at power on
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -804,12 +851,12 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN_PC")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED ) // EEPROM SDA
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_NAME("Coin 1 (500 Pts)")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_NAME("Coin 3 (50 Pts)")
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_NAME("Coin 4 (200 Pts)")
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) PORT_CODE(KEYCODE_0) // credited as 800 Pts, but no such coin
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN5 ) // credited as 800 Pts, but no such coin
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor") PORT_CODE(KEYCODE_S)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -840,7 +887,7 @@ static INPUT_PORTS_START( k7_olym30 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Tres en Raya")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Cricket")
 
-	PORT_START("BUTTONS1")
+	PORT_MODIFY("BUTTONS1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("301")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("501")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("Double In / Cut Throat")
@@ -876,18 +923,18 @@ void _4enlinea_state::machine_start()
 	   loop discards the sector when it doesn't get a new matrix scan from
 	   the IRQ handler since the previous pass, so it must be slower than the
 	   IRQ period. */
-	address_space &space = m_audiocpu->space(AS_PROGRAM);
+	address_space &space = m_mastercpu->space(AS_PROGRAM);
 	space.install_read_tap(0x0000, 0xffff, "master_wait_r",
 			[this] (offs_t offset, u8 &data, u8 mem_mask)
 			{
 				if (!machine().side_effects_disabled())
-					m_audiocpu->adjust_icount(-1);
+					m_mastercpu->adjust_icount(-1);
 			});
 	space.install_write_tap(0x0000, 0xffff, "master_wait_w",
 			[this] (offs_t offset, u8 &data, u8 mem_mask)
 			{
 				if (!machine().side_effects_disabled())
-					m_audiocpu->adjust_icount(-1);
+					m_mastercpu->adjust_icount(-1);
 			});
 
 	save_item(NAME(m_handshake_status));
@@ -913,7 +960,7 @@ void k7_state::machine_start()
 	m_rombank->set_entry(0);
 
 	save_item(NAME(m_out0));
-	save_item(NAME(m_out1));
+	save_item(NAME(m_selected_lines));
 	save_item(NAME(m_hsync_count));
 }
 
@@ -926,10 +973,10 @@ void sysi_state::hcga_config(machine_config &config)
 {
 	// the UM487F reconfigures it from its CRTC registers
 	screen_device &screen(SCREEN(config, "screen"));
-	screen.set_raw(HCGA_CLOCK / 2, 456, 0, 320, 262, 0, 200);
+	screen.set_raw(14.318181_MHz_XTAL / 2, 456, 0, 320, 262, 0, 200);
 	screen.set_screen_update(m_video, FUNC(um487f_device::screen_update));
 
-	UM487F(config, m_video, HCGA_CLOCK); // MOSC (MGA clock) tied to GND
+	UM487F(config, m_video, 14.318181_MHz_XTAL); // MOSC (MGA clock) tied to GND
 	m_video->set_screen("screen");
 	m_video->set_rgbi_callback(FUNC(sysi_state::rgbi_to_rgb));
 }
@@ -951,7 +998,7 @@ rgb_t sysi_state::rgbi_to_rgb(uint8_t rgbi)
 void _4enlinea_state::_4enlinea(machine_config &config)
 {
 	// basic machine hardware
-	Z80(config, m_maincpu, PRG_CPU_CLOCK);
+	Z80(config, m_maincpu, 16_MHz_XTAL / 2); // measured
 	m_maincpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::main_map);
 	m_maincpu->set_addrmap(AS_IO, &_4enlinea_state::main_portmap);
 	/* TODO: IRQ sources are unknown.
@@ -964,11 +1011,11 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	   - Sport Darts runs its IRQ routine every 16 horizontal syncs.
 	   The CM3080 gets the 16 MHz crystal and drives the video CPU /INT, the
 	   master one probably comes from the 9046. */
-	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(MAIN_CLOCK / 16384));
+	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(16_MHz_XTAL / 16384));
 
-	Z80(config, m_audiocpu, SND_CPU_CLOCK); // wait states added in machine_start()
-	m_audiocpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::audio_map);
-	m_audiocpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(SEC_CLOCK / 8192));
+	Z80(config, m_mastercpu, 8_MHz_XTAL / 2); // measured, wait states added in machine_start()
+	m_mastercpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::master_map);
+	m_mastercpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(8_MHz_XTAL / 8192));
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
@@ -977,7 +1024,7 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
-	AY8910(config, m_ay, SND_AY_CLOCK);
+	AY8910(config, m_ay, 8_MHz_XTAL / 4); // measured
 	m_ay->port_a_read_callback().set(FUNC(_4enlinea_state::ay_porta_r));
 	m_ay->port_b_read_callback().set(FUNC(_4enlinea_state::ay_portb_r));
 	m_ay->add_route(ALL_OUTPUTS, "mono", 0.50);
@@ -986,9 +1033,10 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 
 void k7_state::k7_olym(machine_config &config)
 {
-	Z80(config, m_maincpu, HCGA_CLOCK / 2); // Z84C00BB6
+	Z80(config, m_maincpu, 14.318181_MHz_XTAL / 2); // Z84C00BB6
 	m_maincpu->set_addrmap(AS_PROGRAM, &k7_state::mem_map);
 	m_maincpu->set_addrmap(AS_IO, &k7_state::io_map);
+	m_maincpu->irqack_cb().set_inputline(m_maincpu, INPUT_LINE_IRQ0, CLEAR_LINE);
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0); // D4464C-15L (6264) + battery
 
@@ -1004,21 +1052,21 @@ void k7_state::k7_olym(machine_config &config)
 	m_video->hsync_callback().set(FUNC(k7_state::hsync_w));
 
 	SPEAKER(config, "mono").front_center();
-	AY8910(config, m_ay, HCGA_CLOCK / 8); // Winbond WF19054
+	AY8910(config, m_ay, 14.318181_MHz_XTAL / 8); // Winbond WF19054
 	m_ay->port_a_read_callback().set(FUNC(k7_state::ay_porta_r));
 	m_ay->port_b_read_callback().set(FUNC(k7_state::ay_portb_r));
 	m_ay->add_route(ALL_OUTPUTS, "mono", 0.50);
 }
 
-void k7_state::sprtdart(machine_config &config)
+void sprtdart_state::sprtdart(machine_config &config)
 {
 	k7_olym(config);
 
+	m_maincpu->set_addrmap(AS_IO, &sprtdart_state::io_map);
+
 	/* The IRQ handler counts the IRQs from the vertical retrace to change the
 	   background color at a given raster line. */
-	m_video->hsync_callback().set_inputline(m_maincpu, 0, HOLD_LINE); // TODO: polarity
-
-	m_sport_darts = true;
+	m_video->hsync_callback().set_inputline(m_maincpu, INPUT_LINE_IRQ0, ASSERT_LINE); // TODO: polarity
 }
 
 
@@ -1030,7 +1078,7 @@ ROM_START( 4enlinea )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_27c256__cicplay-2.ic6",  0x0000, 0x8000, CRC(f8f14bf8) SHA1(e48fbedbd1b9be6fb56a0f65db80eddbedb487c7) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_REGION( 0x10000, "mastercpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_27c256__cicplay-1.ic19", 0x0000, 0x8000, CRC(307a57a3) SHA1(241329d919ec43d0eeb1dad0a4db6cf6de06e7e1) )
 
 	// the game only reads the settings (game time and accounting) and doesn't initialize them
@@ -1038,14 +1086,14 @@ ROM_START( 4enlinea )
 	ROM_LOAD( "cuatro_en_linea_x24c16p_handcrafted.ic17", 0x0000, 0x0800, BAD_DUMP CRC(f07b9347) SHA1(4653793216fdb10d5cc8657e7f1b1479949c58e5) ) // handcrafted: 2:00 game time, counters cleared
 
 	ROM_REGION( 0x0200, "plds", 0 )
-	ROM_LOAD( "cuatro_en_linea_gal16v8as__nosticker.ic04", 0x0000, 0x0117, CRC(094edf29) SHA1(428a2f6568ac1032833ee0c65fa8304967a58607) )
+	ROM_LOAD( "cuatro_en_linea_gal16v8as__nosticker.ic04", 0x0000, 0x0117, NO_DUMP )
 ROM_END
 
 ROM_START( 4enlineb )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_2_a06.ic6",  0x0000, 0x8000, CRC(f8f14bf8) SHA1(e48fbedbd1b9be6fb56a0f65db80eddbedb487c7) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_REGION( 0x10000, "mastercpu", 0 )
 	ROM_LOAD( "cuatro_en_linea_1_a06.ic19", 0x0000, 0x8000, CRC(993d0581) SHA1(d6e366dd827543508037d2071c4b6e638c2cf87b) )
 
 	// the game only reads the settings (game time and accounting) and doesn't initialize them
@@ -1053,7 +1101,7 @@ ROM_START( 4enlineb )
 	ROM_LOAD( "cuatro_en_linea_x24c16p_handcrafted.ic17", 0x0000, 0x0800, BAD_DUMP CRC(f07b9347) SHA1(4653793216fdb10d5cc8657e7f1b1479949c58e5) ) // handcrafted: 2:00 game time, counters cleared
 
 	ROM_REGION( 0x0200, "plds", 0 )
-	ROM_LOAD( "cuatro_en_linea_gal16v8a.ic04", 0x0000, 0x0117, CRC(1edaf06c) SHA1(51e44c2e6b54991330d6ef945e98fa2c8a49408d) )
+	ROM_LOAD( "cuatro_en_linea_gal16v8a.ic04", 0x0000, 0x0117, NO_DUMP )
 ROM_END
 
 /*
@@ -1065,7 +1113,7 @@ ROM_START( dardos )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "diana_iv_video_27-1-92.bin",  0x0000, 0x8000, CRC(f23b5313) SHA1(488cf9bedce7b0c7b474bd93da70181c81fa300b) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_REGION( 0x10000, "mastercpu", 0 )
 	ROM_LOAD( "diana_iv_master_27-1-92.bin", 0x0000, 0x8000, CRC(4b2c868a) SHA1(91120a32fac9c5a6e7746d2e2587921f7d42eaa3) )
 ROM_END
 
@@ -1136,9 +1184,9 @@ ROM_END
 ***********************************/
 
 //    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT   COMPANY                                      FULLNAME                       FLAGS
-GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING )
-GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING )
-GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_dartboard )
-GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_dartboard )
-GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_dartboard )
-GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  k7_state,        empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL, layout_dartboard )
+GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING | MACHINE_SUPPORTS_SAVE )
+GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING | MACHINE_SUPPORTS_SAVE )
+GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  sprtdart_state,  empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
