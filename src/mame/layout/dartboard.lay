@@ -1,11 +1,13 @@
 <?xml version="1.0"?>
 <!--
 license:CC0-1.0
-copyright-holders:ClawGrip
+copyright-holders: Tomás García-Merás Capote (ClawGrip)
 
-Compumatic / K7 dart games: clickable dart board.
-The targets are found by the names of the MATRIX0-3 port fields, the black outer ring
-triggers the missed dart sensor.
+Clickable dart board shared by the dart games, shown next to the first screen.
+The targets are found by the names of the input fields, wherever they are:
+  "Dart Single 20", "Dart Double 20", "Dart Triple 20", ... (1 to 20)
+  "Dart Single Bull", "Dart Double Bull"
+  "Missed Dart Sensor" (optional), triggered by the black outer ring
 -->
 <mamelayout version="2">
 
@@ -145,88 +147,88 @@ triggers the missed dart sensor.
 		<element ref="num9"><bounds x="43.978" y="6.165" width="2.2" height="1.8" /></element>
 		<element ref="num12"><bounds x="46.965" y="3.178" width="2.2" height="1.8" /></element>
 		<element ref="num5"><bounds x="50.728" y="1.261" width="2.2" height="1.8" /></element>
-		<element id="seg:Single 20" ref="hl0"><bounds x="54.93" y="8.16" width="2.14" height="4.944" /></element>
-		<element id="seg:Triple 20" ref="hl1"><bounds x="54.742" y="6.96" width="2.515" height="1.284" /></element>
-		<element id="seg1:Single 20" ref="hl2"><bounds x="54.329" y="4.32" width="3.341" height="2.739" /></element>
-		<element id="seg:Double 20" ref="hl3"><bounds x="54.123" y="3" width="3.754" height="1.451" /></element>
-		<element id="seg:Single 1" ref="hl4"><bounds x="56.3" y="8.244" width="2.805" height="5.045" /></element>
-		<element id="seg:Triple 1" ref="hl5"><bounds x="57.07" y="7.059" width="2.58" height="1.847" /></element>
-		<element id="seg1:Single 1" ref="hl6"><bounds x="57.258" y="4.451" width="3.591" height="3.385" /></element>
-		<element id="seg:Double 1" ref="hl7"><bounds x="57.671" y="3.148" width="3.777" height="2.336" /></element>
-		<element id="seg:Single 18" ref="hl8"><bounds x="56.872" y="8.906" width="3.965" height="4.737" /></element>
-		<element id="seg:Triple 18" ref="hl9"><bounds x="59.105" y="7.836" width="2.58" height="2.327" /></element>
-		<element id="seg1:Single 18" ref="hl10"><bounds x="59.65" y="5.484" width="3.902" height="3.831" /></element>
-		<element id="seg:Double 18" ref="hl11"><bounds x="60.849" y="4.308" width="3.637" height="3.14" /></element>
-		<element id="seg:Single 4" ref="hl12"><bounds x="57.358" y="10.163" width="4.737" height="3.965" /></element>
-		<element id="seg:Triple 4" ref="hl13"><bounds x="60.837" y="9.315" width="2.327" height="2.58" /></element>
-		<element id="seg1:Single 4" ref="hl14"><bounds x="61.685" y="7.448" width="3.831" height="3.902" /></element>
-		<element id="seg:Double 4" ref="hl15"><bounds x="63.552" y="6.515" width="3.14" height="3.637" /></element>
-		<element id="seg:Single 13" ref="hl16"><bounds x="57.711" y="11.895" width="5.045" height="2.805" /></element>
-		<element id="seg:Triple 13" ref="hl17"><bounds x="62.094" y="11.35" width="1.847" height="2.58" /></element>
-		<element id="seg1:Single 13" ref="hl18"><bounds x="63.164" y="10.151" width="3.385" height="3.591" /></element>
-		<element id="seg:Double 13" ref="hl19"><bounds x="65.516" y="9.552" width="2.336" height="3.777" /></element>
-		<element id="seg:Single 6" ref="hl20"><bounds x="57.896" y="13.93" width="4.944" height="2.14" /></element>
-		<element id="seg:Triple 6" ref="hl21"><bounds x="62.756" y="13.742" width="1.284" height="2.515" /></element>
-		<element id="seg1:Single 6" ref="hl22"><bounds x="63.941" y="13.329" width="2.739" height="3.341" /></element>
-		<element id="seg:Double 6" ref="hl23"><bounds x="66.549" y="13.123" width="1.451" height="3.754" /></element>
-		<element id="seg:Single 10" ref="hl24"><bounds x="57.711" y="15.3" width="5.045" height="2.805" /></element>
-		<element id="seg:Triple 10" ref="hl25"><bounds x="62.094" y="16.07" width="1.847" height="2.58" /></element>
-		<element id="seg1:Single 10" ref="hl26"><bounds x="63.164" y="16.258" width="3.385" height="3.591" /></element>
-		<element id="seg:Double 10" ref="hl27"><bounds x="65.516" y="16.671" width="2.336" height="3.777" /></element>
-		<element id="seg:Single 15" ref="hl28"><bounds x="57.358" y="15.872" width="4.737" height="3.965" /></element>
-		<element id="seg:Triple 15" ref="hl29"><bounds x="60.837" y="18.105" width="2.327" height="2.58" /></element>
-		<element id="seg1:Single 15" ref="hl30"><bounds x="61.685" y="18.65" width="3.831" height="3.902" /></element>
-		<element id="seg:Double 15" ref="hl31"><bounds x="63.552" y="19.849" width="3.14" height="3.637" /></element>
-		<element id="seg:Single 2" ref="hl32"><bounds x="56.872" y="16.358" width="3.965" height="4.737" /></element>
-		<element id="seg:Triple 2" ref="hl33"><bounds x="59.105" y="19.837" width="2.58" height="2.327" /></element>
-		<element id="seg1:Single 2" ref="hl34"><bounds x="59.65" y="20.685" width="3.902" height="3.831" /></element>
-		<element id="seg:Double 2" ref="hl35"><bounds x="60.849" y="22.552" width="3.637" height="3.14" /></element>
-		<element id="seg:Single 17" ref="hl36"><bounds x="56.3" y="16.711" width="2.805" height="5.045" /></element>
-		<element id="seg:Triple 17" ref="hl37"><bounds x="57.07" y="21.094" width="2.58" height="1.847" /></element>
-		<element id="seg1:Single 17" ref="hl38"><bounds x="57.258" y="22.164" width="3.591" height="3.385" /></element>
-		<element id="seg:Double 17" ref="hl39"><bounds x="57.671" y="24.516" width="3.777" height="2.336" /></element>
-		<element id="seg:Single 3" ref="hl40"><bounds x="54.93" y="16.896" width="2.14" height="4.944" /></element>
-		<element id="seg:Triple 3" ref="hl41"><bounds x="54.742" y="21.756" width="2.515" height="1.284" /></element>
-		<element id="seg1:Single 3" ref="hl42"><bounds x="54.329" y="22.941" width="3.341" height="2.739" /></element>
-		<element id="seg:Double 3" ref="hl43"><bounds x="54.123" y="25.549" width="3.754" height="1.451" /></element>
-		<element id="seg:Single 19" ref="hl44"><bounds x="52.895" y="16.711" width="2.805" height="5.045" /></element>
-		<element id="seg:Triple 19" ref="hl45"><bounds x="52.35" y="21.094" width="2.58" height="1.847" /></element>
-		<element id="seg1:Single 19" ref="hl46"><bounds x="51.151" y="22.164" width="3.591" height="3.385" /></element>
-		<element id="seg:Double 19" ref="hl47"><bounds x="50.552" y="24.516" width="3.777" height="2.336" /></element>
-		<element id="seg:Single 7" ref="hl48"><bounds x="51.163" y="16.358" width="3.965" height="4.737" /></element>
-		<element id="seg:Triple 7" ref="hl49"><bounds x="50.315" y="19.837" width="2.58" height="2.327" /></element>
-		<element id="seg1:Single 7" ref="hl50"><bounds x="48.448" y="20.685" width="3.902" height="3.831" /></element>
-		<element id="seg:Double 7" ref="hl51"><bounds x="47.515" y="22.552" width="3.637" height="3.14" /></element>
-		<element id="seg:Single 16" ref="hl52"><bounds x="49.906" y="15.872" width="4.737" height="3.965" /></element>
-		<element id="seg:Triple 16" ref="hl53"><bounds x="48.836" y="18.105" width="2.327" height="2.58" /></element>
-		<element id="seg1:Single 16" ref="hl54"><bounds x="46.484" y="18.65" width="3.831" height="3.902" /></element>
-		<element id="seg:Double 16" ref="hl55"><bounds x="45.308" y="19.849" width="3.14" height="3.637" /></element>
-		<element id="seg:Single 8" ref="hl56"><bounds x="49.244" y="15.3" width="5.045" height="2.805" /></element>
-		<element id="seg:Triple 8" ref="hl57"><bounds x="48.059" y="16.07" width="1.847" height="2.58" /></element>
-		<element id="seg1:Single 8" ref="hl58"><bounds x="45.451" y="16.258" width="3.385" height="3.591" /></element>
-		<element id="seg:Double 8" ref="hl59"><bounds x="44.148" y="16.671" width="2.336" height="3.777" /></element>
-		<element id="seg:Single 11" ref="hl60"><bounds x="49.16" y="13.93" width="4.944" height="2.14" /></element>
-		<element id="seg:Triple 11" ref="hl61"><bounds x="47.96" y="13.742" width="1.284" height="2.515" /></element>
-		<element id="seg1:Single 11" ref="hl62"><bounds x="45.32" y="13.329" width="2.739" height="3.341" /></element>
-		<element id="seg:Double 11" ref="hl63"><bounds x="44" y="13.123" width="1.451" height="3.754" /></element>
-		<element id="seg:Single 14" ref="hl64"><bounds x="49.244" y="11.895" width="5.045" height="2.805" /></element>
-		<element id="seg:Triple 14" ref="hl65"><bounds x="48.059" y="11.35" width="1.847" height="2.58" /></element>
-		<element id="seg1:Single 14" ref="hl66"><bounds x="45.451" y="10.151" width="3.385" height="3.591" /></element>
-		<element id="seg:Double 14" ref="hl67"><bounds x="44.148" y="9.552" width="2.336" height="3.777" /></element>
-		<element id="seg:Single 9" ref="hl68"><bounds x="49.906" y="10.163" width="4.737" height="3.965" /></element>
-		<element id="seg:Triple 9" ref="hl69"><bounds x="48.836" y="9.315" width="2.327" height="2.58" /></element>
-		<element id="seg1:Single 9" ref="hl70"><bounds x="46.484" y="7.448" width="3.831" height="3.902" /></element>
-		<element id="seg:Double 9" ref="hl71"><bounds x="45.308" y="6.515" width="3.14" height="3.637" /></element>
-		<element id="seg:Single 12" ref="hl72"><bounds x="51.163" y="8.906" width="3.965" height="4.737" /></element>
-		<element id="seg:Triple 12" ref="hl73"><bounds x="50.315" y="7.836" width="2.58" height="2.327" /></element>
-		<element id="seg1:Single 12" ref="hl74"><bounds x="48.448" y="5.484" width="3.902" height="3.831" /></element>
-		<element id="seg:Double 12" ref="hl75"><bounds x="47.515" y="4.308" width="3.637" height="3.14" /></element>
-		<element id="seg:Single 5" ref="hl76"><bounds x="52.895" y="8.244" width="2.805" height="5.045" /></element>
-		<element id="seg:Triple 5" ref="hl77"><bounds x="52.35" y="7.059" width="2.58" height="1.847" /></element>
-		<element id="seg1:Single 5" ref="hl78"><bounds x="51.151" y="4.451" width="3.591" height="3.385" /></element>
-		<element id="seg:Double 5" ref="hl79"><bounds x="50.552" y="3.148" width="3.777" height="2.336" /></element>
-		<element id="seg:Bull (25)" ref="hl_bull"><bounds x="54.08" y="13.08" width="3.84" height="3.84" /></element>
-		<element id="seg:Bull's Eye (50)" ref="hl_bullseye"><bounds x="55.16" y="14.16" width="1.68" height="1.68" /></element>
+		<element id="seg:Dart Single 20" ref="hl0"><bounds x="54.93" y="8.16" width="2.14" height="4.944" /></element>
+		<element id="seg:Dart Triple 20" ref="hl1"><bounds x="54.742" y="6.96" width="2.515" height="1.284" /></element>
+		<element id="seg1:Dart Single 20" ref="hl2"><bounds x="54.329" y="4.32" width="3.341" height="2.739" /></element>
+		<element id="seg:Dart Double 20" ref="hl3"><bounds x="54.123" y="3" width="3.754" height="1.451" /></element>
+		<element id="seg:Dart Single 1" ref="hl4"><bounds x="56.3" y="8.244" width="2.805" height="5.045" /></element>
+		<element id="seg:Dart Triple 1" ref="hl5"><bounds x="57.07" y="7.059" width="2.58" height="1.847" /></element>
+		<element id="seg1:Dart Single 1" ref="hl6"><bounds x="57.258" y="4.451" width="3.591" height="3.385" /></element>
+		<element id="seg:Dart Double 1" ref="hl7"><bounds x="57.671" y="3.148" width="3.777" height="2.336" /></element>
+		<element id="seg:Dart Single 18" ref="hl8"><bounds x="56.872" y="8.906" width="3.965" height="4.737" /></element>
+		<element id="seg:Dart Triple 18" ref="hl9"><bounds x="59.105" y="7.836" width="2.58" height="2.327" /></element>
+		<element id="seg1:Dart Single 18" ref="hl10"><bounds x="59.65" y="5.484" width="3.902" height="3.831" /></element>
+		<element id="seg:Dart Double 18" ref="hl11"><bounds x="60.849" y="4.308" width="3.637" height="3.14" /></element>
+		<element id="seg:Dart Single 4" ref="hl12"><bounds x="57.358" y="10.163" width="4.737" height="3.965" /></element>
+		<element id="seg:Dart Triple 4" ref="hl13"><bounds x="60.837" y="9.315" width="2.327" height="2.58" /></element>
+		<element id="seg1:Dart Single 4" ref="hl14"><bounds x="61.685" y="7.448" width="3.831" height="3.902" /></element>
+		<element id="seg:Dart Double 4" ref="hl15"><bounds x="63.552" y="6.515" width="3.14" height="3.637" /></element>
+		<element id="seg:Dart Single 13" ref="hl16"><bounds x="57.711" y="11.895" width="5.045" height="2.805" /></element>
+		<element id="seg:Dart Triple 13" ref="hl17"><bounds x="62.094" y="11.35" width="1.847" height="2.58" /></element>
+		<element id="seg1:Dart Single 13" ref="hl18"><bounds x="63.164" y="10.151" width="3.385" height="3.591" /></element>
+		<element id="seg:Dart Double 13" ref="hl19"><bounds x="65.516" y="9.552" width="2.336" height="3.777" /></element>
+		<element id="seg:Dart Single 6" ref="hl20"><bounds x="57.896" y="13.93" width="4.944" height="2.14" /></element>
+		<element id="seg:Dart Triple 6" ref="hl21"><bounds x="62.756" y="13.742" width="1.284" height="2.515" /></element>
+		<element id="seg1:Dart Single 6" ref="hl22"><bounds x="63.941" y="13.329" width="2.739" height="3.341" /></element>
+		<element id="seg:Dart Double 6" ref="hl23"><bounds x="66.549" y="13.123" width="1.451" height="3.754" /></element>
+		<element id="seg:Dart Single 10" ref="hl24"><bounds x="57.711" y="15.3" width="5.045" height="2.805" /></element>
+		<element id="seg:Dart Triple 10" ref="hl25"><bounds x="62.094" y="16.07" width="1.847" height="2.58" /></element>
+		<element id="seg1:Dart Single 10" ref="hl26"><bounds x="63.164" y="16.258" width="3.385" height="3.591" /></element>
+		<element id="seg:Dart Double 10" ref="hl27"><bounds x="65.516" y="16.671" width="2.336" height="3.777" /></element>
+		<element id="seg:Dart Single 15" ref="hl28"><bounds x="57.358" y="15.872" width="4.737" height="3.965" /></element>
+		<element id="seg:Dart Triple 15" ref="hl29"><bounds x="60.837" y="18.105" width="2.327" height="2.58" /></element>
+		<element id="seg1:Dart Single 15" ref="hl30"><bounds x="61.685" y="18.65" width="3.831" height="3.902" /></element>
+		<element id="seg:Dart Double 15" ref="hl31"><bounds x="63.552" y="19.849" width="3.14" height="3.637" /></element>
+		<element id="seg:Dart Single 2" ref="hl32"><bounds x="56.872" y="16.358" width="3.965" height="4.737" /></element>
+		<element id="seg:Dart Triple 2" ref="hl33"><bounds x="59.105" y="19.837" width="2.58" height="2.327" /></element>
+		<element id="seg1:Dart Single 2" ref="hl34"><bounds x="59.65" y="20.685" width="3.902" height="3.831" /></element>
+		<element id="seg:Dart Double 2" ref="hl35"><bounds x="60.849" y="22.552" width="3.637" height="3.14" /></element>
+		<element id="seg:Dart Single 17" ref="hl36"><bounds x="56.3" y="16.711" width="2.805" height="5.045" /></element>
+		<element id="seg:Dart Triple 17" ref="hl37"><bounds x="57.07" y="21.094" width="2.58" height="1.847" /></element>
+		<element id="seg1:Dart Single 17" ref="hl38"><bounds x="57.258" y="22.164" width="3.591" height="3.385" /></element>
+		<element id="seg:Dart Double 17" ref="hl39"><bounds x="57.671" y="24.516" width="3.777" height="2.336" /></element>
+		<element id="seg:Dart Single 3" ref="hl40"><bounds x="54.93" y="16.896" width="2.14" height="4.944" /></element>
+		<element id="seg:Dart Triple 3" ref="hl41"><bounds x="54.742" y="21.756" width="2.515" height="1.284" /></element>
+		<element id="seg1:Dart Single 3" ref="hl42"><bounds x="54.329" y="22.941" width="3.341" height="2.739" /></element>
+		<element id="seg:Dart Double 3" ref="hl43"><bounds x="54.123" y="25.549" width="3.754" height="1.451" /></element>
+		<element id="seg:Dart Single 19" ref="hl44"><bounds x="52.895" y="16.711" width="2.805" height="5.045" /></element>
+		<element id="seg:Dart Triple 19" ref="hl45"><bounds x="52.35" y="21.094" width="2.58" height="1.847" /></element>
+		<element id="seg1:Dart Single 19" ref="hl46"><bounds x="51.151" y="22.164" width="3.591" height="3.385" /></element>
+		<element id="seg:Dart Double 19" ref="hl47"><bounds x="50.552" y="24.516" width="3.777" height="2.336" /></element>
+		<element id="seg:Dart Single 7" ref="hl48"><bounds x="51.163" y="16.358" width="3.965" height="4.737" /></element>
+		<element id="seg:Dart Triple 7" ref="hl49"><bounds x="50.315" y="19.837" width="2.58" height="2.327" /></element>
+		<element id="seg1:Dart Single 7" ref="hl50"><bounds x="48.448" y="20.685" width="3.902" height="3.831" /></element>
+		<element id="seg:Dart Double 7" ref="hl51"><bounds x="47.515" y="22.552" width="3.637" height="3.14" /></element>
+		<element id="seg:Dart Single 16" ref="hl52"><bounds x="49.906" y="15.872" width="4.737" height="3.965" /></element>
+		<element id="seg:Dart Triple 16" ref="hl53"><bounds x="48.836" y="18.105" width="2.327" height="2.58" /></element>
+		<element id="seg1:Dart Single 16" ref="hl54"><bounds x="46.484" y="18.65" width="3.831" height="3.902" /></element>
+		<element id="seg:Dart Double 16" ref="hl55"><bounds x="45.308" y="19.849" width="3.14" height="3.637" /></element>
+		<element id="seg:Dart Single 8" ref="hl56"><bounds x="49.244" y="15.3" width="5.045" height="2.805" /></element>
+		<element id="seg:Dart Triple 8" ref="hl57"><bounds x="48.059" y="16.07" width="1.847" height="2.58" /></element>
+		<element id="seg1:Dart Single 8" ref="hl58"><bounds x="45.451" y="16.258" width="3.385" height="3.591" /></element>
+		<element id="seg:Dart Double 8" ref="hl59"><bounds x="44.148" y="16.671" width="2.336" height="3.777" /></element>
+		<element id="seg:Dart Single 11" ref="hl60"><bounds x="49.16" y="13.93" width="4.944" height="2.14" /></element>
+		<element id="seg:Dart Triple 11" ref="hl61"><bounds x="47.96" y="13.742" width="1.284" height="2.515" /></element>
+		<element id="seg1:Dart Single 11" ref="hl62"><bounds x="45.32" y="13.329" width="2.739" height="3.341" /></element>
+		<element id="seg:Dart Double 11" ref="hl63"><bounds x="44" y="13.123" width="1.451" height="3.754" /></element>
+		<element id="seg:Dart Single 14" ref="hl64"><bounds x="49.244" y="11.895" width="5.045" height="2.805" /></element>
+		<element id="seg:Dart Triple 14" ref="hl65"><bounds x="48.059" y="11.35" width="1.847" height="2.58" /></element>
+		<element id="seg1:Dart Single 14" ref="hl66"><bounds x="45.451" y="10.151" width="3.385" height="3.591" /></element>
+		<element id="seg:Dart Double 14" ref="hl67"><bounds x="44.148" y="9.552" width="2.336" height="3.777" /></element>
+		<element id="seg:Dart Single 9" ref="hl68"><bounds x="49.906" y="10.163" width="4.737" height="3.965" /></element>
+		<element id="seg:Dart Triple 9" ref="hl69"><bounds x="48.836" y="9.315" width="2.327" height="2.58" /></element>
+		<element id="seg1:Dart Single 9" ref="hl70"><bounds x="46.484" y="7.448" width="3.831" height="3.902" /></element>
+		<element id="seg:Dart Double 9" ref="hl71"><bounds x="45.308" y="6.515" width="3.14" height="3.637" /></element>
+		<element id="seg:Dart Single 12" ref="hl72"><bounds x="51.163" y="8.906" width="3.965" height="4.737" /></element>
+		<element id="seg:Dart Triple 12" ref="hl73"><bounds x="50.315" y="7.836" width="2.58" height="2.327" /></element>
+		<element id="seg1:Dart Single 12" ref="hl74"><bounds x="48.448" y="5.484" width="3.902" height="3.831" /></element>
+		<element id="seg:Dart Double 12" ref="hl75"><bounds x="47.515" y="4.308" width="3.637" height="3.14" /></element>
+		<element id="seg:Dart Single 5" ref="hl76"><bounds x="52.895" y="8.244" width="2.805" height="5.045" /></element>
+		<element id="seg:Dart Triple 5" ref="hl77"><bounds x="52.35" y="7.059" width="2.58" height="1.847" /></element>
+		<element id="seg1:Dart Single 5" ref="hl78"><bounds x="51.151" y="4.451" width="3.591" height="3.385" /></element>
+		<element id="seg:Dart Double 5" ref="hl79"><bounds x="50.552" y="3.148" width="3.777" height="2.336" /></element>
+		<element id="seg:Dart Single Bull" ref="hl_bull"><bounds x="54.08" y="13.08" width="3.84" height="3.84" /></element>
+		<element id="seg:Dart Double Bull" ref="hl_bullseye"><bounds x="55.16" y="14.16" width="1.68" height="1.68" /></element>
 
 		<element id="warning" ref="warning"><bounds x="41" y="13.5" width="30" height="3" /></element>
 	</view>
@@ -235,23 +237,15 @@ triggers the missed dart sensor.
 		file:set_resolve_tags_callback(
 			function ()
 				local view = file.views['Dartboard']
-				local root = file.device
 
-				-- dart board targets by name, and the impact sensor for darts out of the scoring area
+				-- dart board targets and the optional missed dart sensor, by name
 				local targets = { }
-				local missed
-				for _, tag in ipairs({ 'MATRIX0', 'MATRIX1', 'MATRIX2', 'MATRIX3', 'IN1', 'IN_PD' }) do
-					local port = root:ioport(tag)
-					if port then
-						for _, field in pairs(port.fields) do
-							if tag:sub(1, 6) == 'MATRIX' then
-								targets[field.default_name] = field
-							elseif field.default_name == 'Missed Dart Sensor' then
-								missed = field
-							end
-						end
+				for _, port in pairs(machine.ioport.ports) do
+					for _, field in pairs(port.fields) do
+						targets[field.default_name] = field
 					end
 				end
+				local missed = targets['Missed Dart Sensor']
 
 				-- highlight the targets while they're pressed (view.items can't be iterated with ipairs)
 				for i = 1, #view.items do
@@ -277,12 +271,12 @@ triggers the missed dart sensor.
 					local r = math.sqrt((dx * dx) + (dy * dy))
 					if r >= 1.25 then
 						return nil
-					elseif r < 0.07 then
-						return targets["Bull's Eye (50)"]
-					elseif r < 0.16 then
-						return targets['Bull (25)']
 					elseif r >= 1.0 then
 						return missed
+					elseif r < 0.07 then
+						return targets['Dart Double Bull']
+					elseif r < 0.16 then
+						return targets['Dart Single Bull']
 					end
 					local number = order[(math.floor((math.deg(math.atan(dx, -dy)) + 9) / 18) % 20) + 1]
 					local ring = 'Single'
@@ -291,7 +285,7 @@ triggers the missed dart sensor.
 					elseif r >= 0.89 then
 						ring = 'Double'
 					end
-					return targets[ring .. ' ' .. number]
+					return targets['Dart ' .. ring .. ' ' .. number]
 				end
 
 				-- the target is held while the primary button is down
