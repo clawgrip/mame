@@ -1184,9 +1184,9 @@ ROM_END
 ***********************************/
 
 //    YEAR  NAME       PARENT    MACHINE    INPUT      CLASS            INIT        ROT   COMPANY                                      FULLNAME                       FLAGS
-GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_NOT_WORKING | MACHINE_SUPPORTS_SAVE )
-GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_NOT_WORKING | MACHINE_SUPPORTS_SAVE )
-GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
-GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
-GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
-GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  sprtdart_state,  empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_NOT_WORKING | MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-07)", MACHINE_SUPPORTS_SAVE )
+GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_SUPPORTS_SAVE )
+GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  sprtdart_state,  empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
