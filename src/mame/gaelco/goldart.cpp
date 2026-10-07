@@ -99,6 +99,8 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include "goldart.lh"
+
 #include <algorithm>
 
 #define LOG_REGS   (1U << 1)
@@ -615,10 +617,10 @@ ROM_END
 
 } // Anonymous namespace
 
-//    YEAR, NAME,       PARENT,  MACHINE,  INPUT,   CLASS,         INIT,       ROT,  COMPANY,             FULLNAME
+//    YEAR, NAME,       PARENT,  MACHINE,  INPUT,   CLASS,         INIT,       ROT,  COMPANY,             FULLNAME,                             FLAGS,                 LAYOUT
 
-GAME( 1994, goldart,    0,       goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Spain)",                    MACHINE_SUPPORTS_SAVE )
-GAME( 1994, goldartfr,  goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Jeutel",   "Goldart (France, Covielsa license)", MACHINE_SUPPORTS_SAVE )
-GAME( 1994, goldartgr,  goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Germany)",                  MACHINE_SUPPORTS_SAVE )
-GAME( 1994, goldartpt,  goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Portugal)",                 MACHINE_SUPPORTS_SAVE )
-GAME( 1994, goldartuk,  goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (United Kingdom)",           MACHINE_SUPPORTS_SAVE )
+GAMEL( 1994, goldart,   0,       goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Spain)",                    MACHINE_SUPPORTS_SAVE, layout_goldart )
+GAMEL( 1994, goldartfr, goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Jeutel",   "Goldart (France, Covielsa license)", MACHINE_SUPPORTS_SAVE, layout_goldart )
+GAMEL( 1994, goldartgr, goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Germany)",                  MACHINE_SUPPORTS_SAVE, layout_goldart )
+GAMEL( 1994, goldartpt, goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (Portugal)",                 MACHINE_SUPPORTS_SAVE, layout_goldart )
+GAMEL( 1994, goldartuk, goldart, goldart,  goldart, goldart_state, empty_init, ROT0, "Gaelco / Covielsa", "Goldart (United Kingdom)",           MACHINE_SUPPORTS_SAVE, layout_goldart )
