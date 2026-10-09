@@ -458,10 +458,10 @@ ROM_END
 
 static INPUT_PORTS_START( saltcrdi ) // dipswitches are on the REVERSE side of the PCB (!)
 	PORT_START("IN0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_UNKNOWN ) // serial link to I/O board (brake level)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_UNKNOWN ) // serial link to I/O board (brake level)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNKNOWN ) // serial link for linked play
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN ) // serial link for linked play
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) // pedal
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) // green
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) // red
@@ -470,47 +470,54 @@ static INPUT_PORTS_START( saltcrdi ) // dipswitches are on the REVERSE side of t
 
 	PORT_START("DSW")
 	PORT_SERVICE_DIPLOC(0x01, IP_ACTIVE_LOW, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
+	PORT_DIPUNUSED_DIPLOC(0x02, 0x02, "SW1:2")
+	PORT_DIPUNUSED_DIPLOC(0x04, 0x04, "SW1:3")
+	PORT_DIPUNUSED_DIPLOC(0x08, 0x08, "SW1:4")
+	PORT_DIPUNUSED_DIPLOC(0x10, 0x10, "SW1:5")
 	PORT_DIPNAME( 0xe0, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("SW1:6,7,8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Spanish ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( German ) )
-	PORT_DIPSETTING(    0x60, "Catalan" ) // ?
-	PORT_DIPSETTING(    0x80, DEF_STR( Spanish ) ) // double?
-	PORT_DIPSETTING(    0xa0, "Portuguese" ) // ?
+	PORT_DIPSETTING(    0x60, "Catalan" )
+	PORT_DIPSETTING(    0x80, "Spanish (duplicate 1)" )
+	PORT_DIPSETTING(    0xa0, "Portuguese" )
 	PORT_DIPSETTING(    0xc0, DEF_STR( French ) )
-	PORT_DIPSETTING(    0xe0, DEF_STR( Spanish ) ) // triple?
+	PORT_DIPSETTING(    0xe0, "Spanish (duplicate 2)" )
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("COIN")
 	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("PULSE")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("Heart Rate Sensor") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(saltcrdi_state::heart_rate_pulse), 0)
 INPUT_PORTS_END
 
-// just a copy of maniac square for now
-void gaelco2_state::saltcrdi_map(address_map &map)
+void saltcrdi_state::saltcrdi_map(address_map &map)
 {
 	map(0x000000, 0x03ffff).rom();
-	map(0x200000, 0x20ffff).ram().w(FUNC(gaelco2_state::vram_w)).share("spriteram");
+	map(0x200000, 0x20ffff).ram().w(FUNC(saltcrdi_state::vram_w)).share("spriteram");
 	map(0x202890, 0x2028ff).rw("gaelco", FUNC(gaelco_gae1_device::gaelcosnd_r), FUNC(gaelco_gae1_device::gaelcosnd_w));
-	map(0x210000, 0x211fff).ram().w(FUNC(gaelco2_state::palette_w)).share(m_paletteram);
-	map(0x218004, 0x218009).ram().w(FUNC(gaelco2_state::vregs_w)).share(m_vregs);
+	map(0x210000, 0x211fff).ram().w(FUNC(saltcrdi_state::palette_w)).share(m_paletteram);
+	map(0x218004, 0x218009).ram().w(FUNC(saltcrdi_state::vregs_w)).share(m_vregs);
 	map(0x300000, 0x300001).portr("IN0");
 	map(0x310000, 0x310001).portr("DSW");
 	map(0x320000, 0x320001).portr("COIN");
+	map(0x500001, 0x500001).select(0x000070).lw8(NAME([this] (offs_t offset, u8 data) { m_mainlatch->write_d0(offset >> 4, data); }));
 	map(0xfe0000, 0xfe7fff).ram();
 	map(0xfe8000, 0xfeffff).ram().share(m_shareram);
 }
 
 // 34'000'000 XTAL for the video?
-void gaelco2_state::saltcrdi(machine_config &config)
+void saltcrdi_state::saltcrdi(machine_config &config)
 {
 	// basic machine hardware
 	M68000(config, m_maincpu, XTAL(24'000'000) / 2); // 12 MHz
-	m_maincpu->set_addrmap(AS_PROGRAM, &gaelco2_state::saltcrdi_map);
-	m_maincpu->set_vblank_int("screen", FUNC(gaelco2_state::irq6_line_hold));
+	m_maincpu->set_addrmap(AS_PROGRAM, &saltcrdi_state::saltcrdi_map);
+	m_maincpu->set_vblank_int("screen", FUNC(saltcrdi_state::irq6_line_hold));
+
+	LS259(config, m_mainlatch);
+	// Q0-Q3: serial links (not emulated)
+	m_mainlatch->q_out_cb<7>().set(FUNC(saltcrdi_state::heart_rate_irq_clear_w));
 
 	// video hardware
 	BUFFERED_SPRITERAM16(config, m_spriteram);
@@ -520,7 +527,7 @@ void gaelco2_state::saltcrdi(machine_config &config)
 	screen.set_vblank_time(ATTOSECONDS_IN_USEC(2500)); // not accurate
 	screen.set_size(64*16, 32*16);
 	screen.set_visarea(0, 384-1, 16, 256-1);
-	screen.set_screen_update(FUNC(gaelco2_state::screen_update));
+	screen.set_screen_update(FUNC(saltcrdi_state::screen_update));
 	screen.screen_vblank().set("spriteram", FUNC(buffered_spriteram16_device::vblank_copy_rising));
 	screen.set_palette(m_palette);
 
@@ -3383,10 +3390,10 @@ GAME( 1999, jungleani,   0,         srollnd,          play2000, gaelco2_state,  
    Pro Reclimber Tele Cardioline has the same PCB and ROMs as Pro Cycle Tele Cardioline.
    There are other devices in Cardioline series but they don't use displays and aren't on Gaelco hardware. */
 
-GAME( 2000, sltpcycl,   0,          saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum 02AB)",      0 ) // 18/Jan/2000
-GAME( 1999, sltpcycla,  sltpcycl,   saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum DECA)",      0 ) // 20/Nov/1999
-GAME( 1997, sltpcyclb,  sltpcycl,   saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum 3523)",      0 ) // 07/Apr/1997
-GAME( 199?, sltpcyclc,  sltpcycl,   saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, unknown version)",           MACHINE_NOT_WORKING ) // missing GFX ROMs
+GAME( 2000, sltpcycl,   0,          saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum 02AB)",      MACHINE_NODEVICE_LAN ) // 18/Jan/2000
+GAME( 1999, sltpcycla,  sltpcycl,   saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum DECA)",      MACHINE_NODEVICE_LAN ) // 20/Nov/1999
+GAME( 1997, sltpcyclb,  sltpcycl,   saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, V.1.0, checksum 3523)",      MACHINE_NODEVICE_LAN ) // 07/Apr/1997
+GAME( 199?, sltpcyclc,  sltpcycl,   saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Cycle Tele Cardioline (Salter fitness bike, unknown version)",           MACHINE_NOT_WORKING | MACHINE_NODEVICE_LAN ) // missing GFX ROMs
 
-GAME( 1998, sltpstep,   0,          saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Stepper Tele Cardioline (Salter fitness stepper, V.1.0, checksum 2B83)", 0 ) // 23/Jan/1998
-GAME( 1997, sltpstepa,  sltpstep,   saltcrdi,         saltcrdi, gaelco2_state,      init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Stepper Tele Cardioline (Salter fitness stepper, V.1.0, checksum F208)", 0 ) // 07/Apr/1997
+GAME( 1998, sltpstep,   0,          saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Stepper Tele Cardioline (Salter fitness stepper, V.1.0, checksum 2B83)", MACHINE_NODEVICE_LAN ) // 23/Jan/1998
+GAME( 1997, sltpstepa,  sltpstep,   saltcrdi,         saltcrdi, saltcrdi_state,     init_play2000,  ROT0, "Salter Fitness / Gaelco", "Pro Stepper Tele Cardioline (Salter fitness stepper, V.1.0, checksum F208)", MACHINE_NODEVICE_LAN ) // 07/Apr/1997
