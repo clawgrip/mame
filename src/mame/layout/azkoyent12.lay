@@ -45,24 +45,18 @@ Azkoyen T12 layout
 
 	<!-- text -->
 
+	<repeat count="17">
+		<param name="n" start="1" increment="1" />
+		<element name="text_key_~n~"><text string="~n~"><color red="0.0" green="0.0" blue="0.0" /></text></element>
+		<element name="text_c_~n~"><text string="~n~"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	</repeat>
+
+	<repeat count="3">
+		<param name="n" start="1" increment="1" />
+		<element name="text_~n~"><text string="~n~" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	</repeat>
+
 	<element name="text_selection"><text string="SELECTION" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_key_1"><text string="1"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_2"><text string="2"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_3"><text string="3"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_4"><text string="4"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_5"><text string="5"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_6"><text string="6"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_7"><text string="7"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_8"><text string="8"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_9"><text string="9"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_10"><text string="10"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_11"><text string="11"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_12"><text string="12"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_13"><text string="13"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_14"><text string="14"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_15"><text string="15"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_16"><text string="16"><color red="0.0" green="0.0" blue="0.0" /></text></element>
-	<element name="text_key_17"><text string="17"><color red="0.0" green="0.0" blue="0.0" /></text></element>
 	<element name="text_c_coin_return"><text string="COIN RETURN"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_control_keys"><text string="CONTROL KEYS" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_service"><text string="SERVICE" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
@@ -76,89 +70,71 @@ Azkoyen T12 layout
 	<element name="text_key_count"><text string="COUNT"><color red="0.0" green="0.0" blue="0.0" /></text></element>
 	<element name="text_key_clear"><text string="CLEAR"><color red="0.0" green="0.0" blue="0.0" /></text></element>
 	<element name="text_hopper_empty_click_to_toggle"><text string="HOPPER EMPTY (click to toggle)" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_1"><text string="1" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_2"><text string="2" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_3"><text string="3" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_latch_outputs"><text string="LATCH OUTPUTS" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_0_hopper_1"><text string="Q0.0 hopper 1" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_0_hopper_3"><text string="Q1.0 hopper 3" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_1_hopper_2"><text string="Q0.1 hopper 2" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_1_coin_lines_stuck"><text string="Q1.1 coin lines stuck" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_2_running"><text string="Q0.2 running" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_2"><text string="Q1.2" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_3_polling_coins"><text string="Q0.3 polling coins" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_3"><text string="Q1.3" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_4_exact_change"><text string="Q0.4 exact change?" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_4_coin_enable"><text string="Q1.4 coin enable?" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_5_sold_out"><text string="Q0.5 sold out?" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_5"><text string="Q1.5" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_6_coin_return"><text string="Q0.6 coin return?" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_q1_6"><text string="Q1.6" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q0_7_after_vend"><text string="Q0.7 after vend" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_0_hopper_3"><text string="Q1.0 hopper 3" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_1_coin_lines_stuck"><text string="Q1.1 coin lines stuck" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_2"><text string="Q1.2" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_3"><text string="Q1.3" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_4_coin_enable"><text string="Q1.4 coin enable?" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_5"><text string="Q1.5" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
+	<element name="text_q1_6"><text string="Q1.6" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_q1_7"><text string="Q1.7" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 	<element name="text_vend_motors"><text string="VEND MOTORS" align="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_1"><text string="1"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_2"><text string="2"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_3"><text string="3"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_4"><text string="4"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_5"><text string="5"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_6"><text string="6"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_7"><text string="7"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_8"><text string="8"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_9"><text string="9"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_10"><text string="10"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_11"><text string="11"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_12"><text string="12"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_13"><text string="13"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_14"><text string="14"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_15"><text string="15"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_16"><text string="16"><color red="0.75" green="0.75" blue="0.75" /></text></element>
-	<element name="text_c_17"><text string="17"><color red="0.75" green="0.75" blue="0.75" /></text></element>
 
 	<view name="Machine">
 		<element ref="panel"><bounds x="0" y="0" width="400" height="424" /></element>
+
+		<!-- display, digit 3 is leftmost -->
 		<element ref="bezel"><bounds x="150" y="10" width="100" height="50" /></element>
-		<element name="digit3" ref="digit"><bounds x="158" y="18" width="18" height="34" /></element>
-		<element name="digit2" ref="digit"><bounds x="180" y="18" width="18" height="34" /></element>
-		<element name="digit1" ref="digit"><bounds x="202" y="18" width="18" height="34" /></element>
-		<element name="digit0" ref="digit"><bounds x="224" y="18" width="18" height="34" /></element>
+		<repeat count="4">
+			<param name="n" start="3" increment="-1" />
+			<param name="x" start="158" increment="22" />
+			<element name="digit~n~" ref="digit"><bounds x="~x~" y="18" width="18" height="34" /></element>
+		</repeat>
+
+		<!-- selections 1-7 are KEY0 bits 1-7, 8-15 KEY1 bits 0-7 and 16-17 KEY2 bits 0-1 -->
 		<element ref="text_selection"><bounds x="10" y="72" width="120" height="10" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x02"><bounds x="20" y="86" width="22" height="22" /></element>
-		<element ref="text_key_1"><bounds x="20" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x04"><bounds x="50" y="86" width="22" height="22" /></element>
-		<element ref="text_key_2"><bounds x="50" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x08"><bounds x="80" y="86" width="22" height="22" /></element>
-		<element ref="text_key_3"><bounds x="80" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x10"><bounds x="110" y="86" width="22" height="22" /></element>
-		<element ref="text_key_4"><bounds x="110" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x20"><bounds x="140" y="86" width="22" height="22" /></element>
-		<element ref="text_key_5"><bounds x="140" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x40"><bounds x="170" y="86" width="22" height="22" /></element>
-		<element ref="text_key_6"><bounds x="170" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY0" inputmask="0x80"><bounds x="200" y="86" width="22" height="22" /></element>
-		<element ref="text_key_7"><bounds x="200" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x01"><bounds x="230" y="86" width="22" height="22" /></element>
-		<element ref="text_key_8"><bounds x="230" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x02"><bounds x="260" y="86" width="22" height="22" /></element>
-		<element ref="text_key_9"><bounds x="260" y="90" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x04"><bounds x="20" y="116" width="22" height="22" /></element>
-		<element ref="text_key_10"><bounds x="20" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x08"><bounds x="50" y="116" width="22" height="22" /></element>
-		<element ref="text_key_11"><bounds x="50" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x10"><bounds x="80" y="116" width="22" height="22" /></element>
-		<element ref="text_key_12"><bounds x="80" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x20"><bounds x="110" y="116" width="22" height="22" /></element>
-		<element ref="text_key_13"><bounds x="110" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x40"><bounds x="140" y="116" width="22" height="22" /></element>
-		<element ref="text_key_14"><bounds x="140" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY1" inputmask="0x80"><bounds x="170" y="116" width="22" height="22" /></element>
-		<element ref="text_key_15"><bounds x="170" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY2" inputmask="0x01"><bounds x="200" y="116" width="22" height="22" /></element>
-		<element ref="text_key_16"><bounds x="200" y="120" width="22" height="14" /></element>
-		<element ref="button" inputtag="KEY2" inputmask="0x02"><bounds x="230" y="116" width="22" height="22" /></element>
-		<element ref="text_key_17"><bounds x="230" y="120" width="22" height="14" /></element>
+		<repeat count="7">
+			<param name="n" start="1" increment="1" />
+			<param name="x" start="20" increment="30" />
+			<param name="mask" start="0x02" lshift="1" />
+			<element ref="button" inputtag="KEY0" inputmask="~mask~"><bounds x="~x~" y="86" width="22" height="22" /></element>
+			<element ref="text_key_~n~"><bounds x="~x~" y="90" width="22" height="14" /></element>
+		</repeat>
+		<repeat count="2">
+			<param name="n" start="8" increment="1" />
+			<param name="x" start="230" increment="30" />
+			<param name="mask" start="0x01" lshift="1" />
+			<element ref="button" inputtag="KEY1" inputmask="~mask~"><bounds x="~x~" y="86" width="22" height="22" /></element>
+			<element ref="text_key_~n~"><bounds x="~x~" y="90" width="22" height="14" /></element>
+		</repeat>
+		<repeat count="6">
+			<param name="n" start="10" increment="1" />
+			<param name="x" start="20" increment="30" />
+			<param name="mask" start="0x04" lshift="1" />
+			<element ref="button" inputtag="KEY1" inputmask="~mask~"><bounds x="~x~" y="116" width="22" height="22" /></element>
+			<element ref="text_key_~n~"><bounds x="~x~" y="120" width="22" height="14" /></element>
+		</repeat>
+		<repeat count="2">
+			<param name="n" start="16" increment="1" />
+			<param name="x" start="200" increment="30" />
+			<param name="mask" start="0x01" lshift="1" />
+			<element ref="button" inputtag="KEY2" inputmask="~mask~"><bounds x="~x~" y="116" width="22" height="22" /></element>
+			<element ref="text_key_~n~"><bounds x="~x~" y="120" width="22" height="14" /></element>
+		</repeat>
+
 		<element ref="button_red" inputtag="KEY0" inputmask="0x01"><bounds x="300" y="82" width="30" height="30" /></element>
 		<element ref="text_c_coin_return"><bounds x="280" y="114" width="70" height="8" /></element>
+
+		<!-- operator keys and service switch -->
 		<element ref="text_control_keys"><bounds x="10" y="160" width="120" height="10" /></element>
 		<element ref="text_service"><bounds x="300" y="160" width="60" height="10" /></element>
 		<element ref="key" inputtag="KEY3" inputmask="0x01"><bounds x="20" y="174" width="26" height="18" /></element>
@@ -180,81 +156,62 @@ Azkoyen T12 layout
 		<element ref="key" inputtag="KEY3" inputmask="0x80"><bounds x="260" y="174" width="26" height="18" /></element>
 		<element ref="text_key_clear"><bounds x="260" y="177" width="26" height="12" /></element>
 		<element ref="switch" inputtag="IN1" inputmask="0x40"><bounds x="300" y="174" width="70" height="18" /></element>
+
+		<!-- hopper empty switches, hopper 1 is IN1 bit 5 -->
 		<element ref="text_hopper_empty_click_to_toggle"><bounds x="10" y="208" width="250" height="10" /></element>
-		<element ref="toggle" inputtag="IN1" inputmask="0x20"><bounds x="20" y="222" width="10" height="8" /></element>
-		<element ref="text_1"><bounds x="34" y="222" width="44" height="8" /></element>
-		<element ref="toggle" inputtag="IN1" inputmask="0x10"><bounds x="80" y="222" width="10" height="8" /></element>
-		<element ref="text_2"><bounds x="94" y="222" width="44" height="8" /></element>
-		<element ref="toggle" inputtag="IN1" inputmask="0x08"><bounds x="140" y="222" width="10" height="8" /></element>
-		<element ref="text_3"><bounds x="154" y="222" width="44" height="8" /></element>
+		<repeat count="3">
+			<param name="n" start="1" increment="1" />
+			<param name="x" start="20" increment="60" />
+			<param name="tx" start="34" increment="60" />
+			<param name="mask" start="0x20" rshift="1" />
+			<element ref="toggle" inputtag="IN1" inputmask="~mask~"><bounds x="~x~" y="222" width="10" height="8" /></element>
+			<element ref="text_~n~"><bounds x="~tx~" y="222" width="44" height="8" /></element>
+		</repeat>
+
+		<!-- latch outputs: latch 0 on the left, latch 1 on the right -->
 		<element ref="text_latch_outputs"><bounds x="10" y="242" width="120" height="10" /></element>
-		<element name="out00" ref="lamp"><bounds x="20" y="256" width="8" height="8" /></element>
+		<repeat count="2">
+			<param name="l" start="0" increment="1" />
+			<param name="x" start="20" increment="180" />
+			<repeat count="8">
+				<param name="q" start="0" increment="1" />
+				<param name="y" start="256" increment="12" />
+				<element name="out~l~~q~" ref="lamp"><bounds x="~x~" y="~y~" width="8" height="8" /></element>
+			</repeat>
+		</repeat>
 		<element ref="text_q0_0_hopper_1"><bounds x="32" y="256" width="160" height="8" /></element>
-		<element name="out10" ref="lamp"><bounds x="200" y="256" width="8" height="8" /></element>
-		<element ref="text_q1_0_hopper_3"><bounds x="212" y="256" width="160" height="8" /></element>
-		<element name="out01" ref="lamp"><bounds x="20" y="268" width="8" height="8" /></element>
 		<element ref="text_q0_1_hopper_2"><bounds x="32" y="268" width="160" height="8" /></element>
-		<element name="out11" ref="lamp"><bounds x="200" y="268" width="8" height="8" /></element>
-		<element ref="text_q1_1_coin_lines_stuck"><bounds x="212" y="268" width="160" height="8" /></element>
-		<element name="out02" ref="lamp"><bounds x="20" y="280" width="8" height="8" /></element>
 		<element ref="text_q0_2_running"><bounds x="32" y="280" width="160" height="8" /></element>
-		<element name="out12" ref="lamp"><bounds x="200" y="280" width="8" height="8" /></element>
-		<element ref="text_q1_2"><bounds x="212" y="280" width="160" height="8" /></element>
-		<element name="out03" ref="lamp"><bounds x="20" y="292" width="8" height="8" /></element>
 		<element ref="text_q0_3_polling_coins"><bounds x="32" y="292" width="160" height="8" /></element>
-		<element name="out13" ref="lamp"><bounds x="200" y="292" width="8" height="8" /></element>
-		<element ref="text_q1_3"><bounds x="212" y="292" width="160" height="8" /></element>
-		<element name="out04" ref="lamp"><bounds x="20" y="304" width="8" height="8" /></element>
 		<element ref="text_q0_4_exact_change"><bounds x="32" y="304" width="160" height="8" /></element>
-		<element name="out14" ref="lamp"><bounds x="200" y="304" width="8" height="8" /></element>
-		<element ref="text_q1_4_coin_enable"><bounds x="212" y="304" width="160" height="8" /></element>
-		<element name="out05" ref="lamp"><bounds x="20" y="316" width="8" height="8" /></element>
 		<element ref="text_q0_5_sold_out"><bounds x="32" y="316" width="160" height="8" /></element>
-		<element name="out15" ref="lamp"><bounds x="200" y="316" width="8" height="8" /></element>
-		<element ref="text_q1_5"><bounds x="212" y="316" width="160" height="8" /></element>
-		<element name="out06" ref="lamp"><bounds x="20" y="328" width="8" height="8" /></element>
 		<element ref="text_q0_6_coin_return"><bounds x="32" y="328" width="160" height="8" /></element>
-		<element name="out16" ref="lamp"><bounds x="200" y="328" width="8" height="8" /></element>
-		<element ref="text_q1_6"><bounds x="212" y="328" width="160" height="8" /></element>
-		<element name="out07" ref="lamp"><bounds x="20" y="340" width="8" height="8" /></element>
 		<element ref="text_q0_7_after_vend"><bounds x="32" y="340" width="160" height="8" /></element>
-		<element name="out17" ref="lamp"><bounds x="200" y="340" width="8" height="8" /></element>
+		<element ref="text_q1_0_hopper_3"><bounds x="212" y="256" width="160" height="8" /></element>
+		<element ref="text_q1_1_coin_lines_stuck"><bounds x="212" y="268" width="160" height="8" /></element>
+		<element ref="text_q1_2"><bounds x="212" y="280" width="160" height="8" /></element>
+		<element ref="text_q1_3"><bounds x="212" y="292" width="160" height="8" /></element>
+		<element ref="text_q1_4_coin_enable"><bounds x="212" y="304" width="160" height="8" /></element>
+		<element ref="text_q1_5"><bounds x="212" y="316" width="160" height="8" /></element>
+		<element ref="text_q1_6"><bounds x="212" y="328" width="160" height="8" /></element>
 		<element ref="text_q1_7"><bounds x="212" y="340" width="160" height="8" /></element>
+
+		<!-- vend motors -->
 		<element ref="text_vend_motors"><bounds x="10" y="360" width="120" height="10" /></element>
-		<element name="motor1" ref="lamp"><bounds x="27" y="374" width="8" height="8" /></element>
-		<element ref="text_c_1"><bounds x="20" y="384" width="22" height="8" /></element>
-		<element name="motor2" ref="lamp"><bounds x="57" y="374" width="8" height="8" /></element>
-		<element ref="text_c_2"><bounds x="50" y="384" width="22" height="8" /></element>
-		<element name="motor3" ref="lamp"><bounds x="87" y="374" width="8" height="8" /></element>
-		<element ref="text_c_3"><bounds x="80" y="384" width="22" height="8" /></element>
-		<element name="motor4" ref="lamp"><bounds x="117" y="374" width="8" height="8" /></element>
-		<element ref="text_c_4"><bounds x="110" y="384" width="22" height="8" /></element>
-		<element name="motor5" ref="lamp"><bounds x="147" y="374" width="8" height="8" /></element>
-		<element ref="text_c_5"><bounds x="140" y="384" width="22" height="8" /></element>
-		<element name="motor6" ref="lamp"><bounds x="177" y="374" width="8" height="8" /></element>
-		<element ref="text_c_6"><bounds x="170" y="384" width="22" height="8" /></element>
-		<element name="motor7" ref="lamp"><bounds x="207" y="374" width="8" height="8" /></element>
-		<element ref="text_c_7"><bounds x="200" y="384" width="22" height="8" /></element>
-		<element name="motor8" ref="lamp"><bounds x="237" y="374" width="8" height="8" /></element>
-		<element ref="text_c_8"><bounds x="230" y="384" width="22" height="8" /></element>
-		<element name="motor9" ref="lamp"><bounds x="267" y="374" width="8" height="8" /></element>
-		<element ref="text_c_9"><bounds x="260" y="384" width="22" height="8" /></element>
-		<element name="motor10" ref="lamp"><bounds x="297" y="374" width="8" height="8" /></element>
-		<element ref="text_c_10"><bounds x="290" y="384" width="22" height="8" /></element>
-		<element name="motor11" ref="lamp"><bounds x="327" y="374" width="8" height="8" /></element>
-		<element ref="text_c_11"><bounds x="320" y="384" width="22" height="8" /></element>
-		<element name="motor12" ref="lamp"><bounds x="357" y="374" width="8" height="8" /></element>
-		<element ref="text_c_12"><bounds x="350" y="384" width="22" height="8" /></element>
-		<element name="motor13" ref="lamp"><bounds x="27" y="396" width="8" height="8" /></element>
-		<element ref="text_c_13"><bounds x="20" y="406" width="22" height="8" /></element>
-		<element name="motor14" ref="lamp"><bounds x="57" y="396" width="8" height="8" /></element>
-		<element ref="text_c_14"><bounds x="50" y="406" width="22" height="8" /></element>
-		<element name="motor15" ref="lamp"><bounds x="87" y="396" width="8" height="8" /></element>
-		<element ref="text_c_15"><bounds x="80" y="406" width="22" height="8" /></element>
-		<element name="motor16" ref="lamp"><bounds x="117" y="396" width="8" height="8" /></element>
-		<element ref="text_c_16"><bounds x="110" y="406" width="22" height="8" /></element>
-		<element name="motor17" ref="lamp"><bounds x="147" y="396" width="8" height="8" /></element>
-		<element ref="text_c_17"><bounds x="140" y="406" width="22" height="8" /></element>
+		<repeat count="12">
+			<param name="n" start="1" increment="1" />
+			<param name="x" start="20" increment="30" />
+			<param name="lx" start="27" increment="30" />
+			<element name="motor~n~" ref="lamp"><bounds x="~lx~" y="374" width="8" height="8" /></element>
+			<element ref="text_c_~n~"><bounds x="~x~" y="384" width="22" height="8" /></element>
+		</repeat>
+		<repeat count="5">
+			<param name="n" start="13" increment="1" />
+			<param name="x" start="20" increment="30" />
+			<param name="lx" start="27" increment="30" />
+			<element name="motor~n~" ref="lamp"><bounds x="~lx~" y="396" width="8" height="8" /></element>
+			<element ref="text_c_~n~"><bounds x="~x~" y="406" width="22" height="8" /></element>
+		</repeat>
 	</view>
 
 </mamelayout>

@@ -27,74 +27,57 @@
     assembly connects to the machine with 4 coin outputs, a general inhibit
     input and drivers for three sorter coils; there is no accept input.
 
-    How to use
-    ----------
-    Use the keyboard or click the buttons drawn on screen:
+    Usage
+    -----
+    The service switch (CS) selects NORMAL (selling) or CONTROL mode.  In
+    control mode the display first repeats any problem found while
+    selling; then each press of Coin Return moves to the next menu and the
+    keypad A-D inside the machine works inside it.  Long menu names scroll
+    by.  The designe selections are numbered as in its D21 preset.
 
-      F2                    service switch (CS): NORMAL (selling) or CONTROL
-      Q W E R T Y           selections 1 to 6 (design6)
-      Q W E R T Y U I O     selections 1 to 9 (designe)
-      A S D F G H J K L     selections 10 to 18 (designe)
-      the key right of L    selection 19 (designe)
-      B                     coin return; in control mode, next menu
-      Z X C V               keypad A, B, C and D (inside the machine)
-      M                     adult access remote (designe)
-      1 2 3 4 5 6 7         coins: 5, 10, 25, 50, 100, 200 and 500 pesetas
-                            (design6); 0.05, 0.10, 0.20, 0.50, 1 and 2 euro
-                            and a token (designe)
-
-    The steps below name keyboard keys.  On screen, Z X C V are the keypad
-    buttons A B C D and B is the round COIN RETURN button.  MAME remembers
-    the position of the service switch: if F2 seems to do nothing, press
-    it again.  In control mode the display first repeats any problem found
-    while selling; then each press of B moves to the next menu and the
-    keypad works inside it.  Long menu names scroll by.
-
-    Setting up a new machine:
-    1. Start the machine.  The display shows FUERA SERVICIO.
-    2. Press F2.  It shows DESPROGRAMADA (designe: also DESCONFIGURADA).
-    3. designe only, choose the model: press B (CONFIGURACION), then V (it
-       shows D6), X five times (D8, D10 RODE, D10/D12, D14, D21) and V
-       four times (ORDEN EJECUTADA).  For the D6, D8 and D10/D12 models
-       also set Hopper Exit Sensors to Active High in the Machine
-       Configuration menu (Tab key).
-    4. Press B until PROGRAMACION PRECIOS scrolls by and PULSE CANAL shows.
-    5. Press a selection.  The display shows CANAL, its number and its
-       price.  Press Z once to set the price to 0, then add to it with Z
-       (1), X (10), C (100) and V (1000); designe counts in cents (0.01,
-       0.10, 1.00 and 10.00 euro).  For 150 pesetas: Z, C, X five times.
-       For 1.30 euro: Z, C, X three times.  Pressing the selection again
+    Setting up a new machine, which shows FUERA SERVICIO:
+    1. Set the service switch to CONTROL.  The display shows DESPROGRAMADA
+       (designe: also DESCONFIGURADA).
+    2. designe only, choose the model: press Coin Return (CONFIGURACION),
+       then D (it shows D6), B five times (D8, D10 RODE, D10/D12, D14,
+       D21) and D four times (ORDEN EJECUTADA).  For the D6, D8 and
+       D10/D12 models also set the Hopper Exit Sensors setting to Active
+       High.
+    3. Press Coin Return until PROGRAMACION PRECIOS scrolls by and PULSE
+       CANAL shows.
+    4. Press a selection.  The display shows CANAL, its number and its
+       price.  Press A once to set the price to 0, then add to it with A
+       (1), B (10), C (100) and D (1000); designe counts in cents (0.01,
+       0.10, 1.00 and 10.00 euro).  For 150 pesetas: A, C, B five times.
+       For 1.30 euro: A, C, B three times.  Pressing the selection again
        starts it over.  Do this for every selection.
-    6. designe only, so coins are accepted without the adult remote: press
-       B until ACCESO ADULTO, then V, X (MANDO ADULTO ON), Z (OFF) and V
-       four times.
-    7. Press F2.  The display shows VERIFICANDO, then *** AZKOYEN *** and
-       the time: the machine is ready.
+    5. designe only, so coins are accepted without the adult remote: press
+       Coin Return until ACCESO ADULTO, then D, B (MANDO ADULTO ON), A
+       (OFF) and D four times.
+    6. Set the service switch to NORMAL.  The display shows VERIFICANDO,
+       then *** AZKOYEN *** and the time: the machine is ready.
 
-    Selling:
-    1. Insert coins.  The display shows the money inserted.  (designe: if
-       it shows SOLO ADULTOS, press M first.)
-    2. Press a selection.  The product falls and the change is paid.
-    3. Or press B to get the coins back.
-    Leave the sensor switches on screen off.
+    Selling: insert coins and press a selection; the product falls and the
+    change is paid.  Coin Return gives the coins back.  designe shows SOLO
+    ADULTOS until the adult access remote is pressed.  The hopper empty
+    and full switches are off on a working machine.
 
-    The menus, in the order B shows them.  Once the machine is set up,
-    control mode starts at the first one.
-    - DESCARGA DEVOLVEDORES: Z, X or C empties a hopper, counting the
-      coins; V stops.
-    - PROGRAMACION PRECIOS: see step 5.
-    - PRODUCTO VENDIDO POR CANAL: a selection shows its sales, Z clears.
+    The menus, in the order Coin Return shows them.  Once the machine is
+    set up, control mode starts at the first one.
+    - DESCARGA DEVOLVEDORES: A, B or C empties a hopper, counting the
+      coins; D stops.
+    - PROGRAMACION PRECIOS: see step 4.
+    - PRODUCTO VENDIDO POR CANAL: a selection shows its sales, A clears.
     - VENTA TOTAL: money taken.
-    - BORRADO TOTAL PRODUCTO VENDIDO: Z clears all the sales.
-    - HORAS / MIN: the clock.  MAME keeps it at the computer's time, so
-      changing it here has no effect.
+    - BORRADO TOTAL PRODUCTO VENDIDO: A clears all the sales.
+    - HORAS / MIN: the clock.
     - PROGRAM. MENSAJE: the message shown while idle.
-    - TEST VENTA: Z switches it on; then, back in normal mode, every
+    - TEST VENTA: A switches it on; then, back in normal mode, every
       selection vends without money.  Switch it off again here.
-    - designe: ACCESO ADULTO (step 6), CONFIGURACION (step 3), MONEDAS
+    - designe: ACCESO ADULTO (step 5), CONFIGURACION (step 2), MONEDAS
       CAMBIO and INHIBICION.
     A fault (AVERIA ..., VACIO DEVOL.) shows when entering control mode and
-    is cleared by leaving it with F2.
+    is cleared by leaving it.
 
     TODO:
     - Coin selector timings, meaning of coin code 0xe
@@ -137,14 +120,6 @@ public:
 		, m_xdata_view(*this, "xdata")
 		, m_io_keys(*this, "KEY%u", 0U)
 		, m_io_flaps(*this, "FLAPS")
-		, m_io_conf(*this, "CONF")
-		, m_out_hopper_motor(*this, "hopper_motor%u", 1U)
-		, m_out_enable(*this, "enable")
-		, m_out_escrow_return(*this, "escrow_return")
-		, m_out_escrow_collect(*this, "escrow_collect")
-		, m_out_recovery_motor(*this, "recovery_motor")
-		, m_out_coin_valid(*this, "coin_valid")
-		, m_out_sorter(*this, "sorter_coil%u", 1U)
 		, m_out_extractor(*this, "extractor%u", 1U)
 		, m_out_flap(*this, "flap")
 	{
@@ -157,7 +132,6 @@ public:
 	DECLARE_INPUT_CHANGED_MEMBER(remote_pressed);
 
 	ioport_value coin_code_r() { return (m_coinsel_code & 0x0f) | (BIT(m_coinsel_code, 4) << 5); }
-	template <unsigned N> int hopper_sensor_r();
 	int recovery_position_r() { return m_recovery_pos || m_remote_pulse; }
 	ioport_value flaps_r();
 
@@ -179,14 +153,6 @@ private:
 	memory_view m_xdata_view;
 	required_ioport_array<4> m_io_keys;
 	required_ioport m_io_flaps;
-	optional_ioport m_io_conf;
-	output_finder<3> m_out_hopper_motor;
-	output_finder<> m_out_enable;
-	output_finder<> m_out_escrow_return;
-	output_finder<> m_out_escrow_collect;
-	output_finder<> m_out_recovery_motor;
-	output_finder<> m_out_coin_valid;
-	output_finder<3> m_out_sorter;
 	output_finder<24> m_out_extractor;
 	output_finder<> m_out_flap;
 
@@ -213,13 +179,8 @@ private:
 	u8 keys_r();
 	void voice_w(u8 data);
 
-	template <unsigned N> void hopper_motor_w(int state);
 	void enable_w(int state);
-	void escrow_return_w(int state);
-	void escrow_collect_w(int state);
 	void recovery_motor_w(int state);
-	void coin_valid_w(int state);
-	template <unsigned N> void sorter_w(int state);
 	template <unsigned N> void extractors_w(u8 data);
 
 	TIMER_CALLBACK_MEMBER(coinsel_update);
@@ -275,9 +236,9 @@ static INPUT_PORTS_START( design )
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 2 Full")
 
 	PORT_START("IN1")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<2>))
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<1>))
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(design_state::hopper_sensor_r<0>))
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper3", FUNC(hopper_device::line_r))
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper2", FUNC(hopper_device::line_r))
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper1", FUNC(hopper_device::line_r))
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 3 Empty") // "VACIO DEVOL."
 	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 2 Empty")
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_OTHER) PORT_TOGGLE PORT_NAME("Hopper 1 Empty")
@@ -331,17 +292,17 @@ static INPUT_PORTS_START( design6 )
 
 	// codes 2/5 are presumably the old 5/25 peseta coins and 8/9 the new ones (assumption)
 	PORT_START("COINS")
-	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
-	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("10 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
-	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
-	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("50 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
-	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("100 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
-	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
-	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("500 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
-	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 2)
-	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 5)
-	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 10)
-	PORT_BIT(0x400, IP_ACTIVE_HIGH, IPT_COIN11) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 11)
+	PORT_BIT(0x001, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("5 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 8)
+	PORT_BIT(0x002, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("10 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 3)
+	PORT_BIT(0x004, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("25 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 9)
+	PORT_BIT(0x008, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("50 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 6)
+	PORT_BIT(0x010, IP_ACTIVE_HIGH, IPT_COIN5) PORT_NAME("100 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 7)
+	PORT_BIT(0x020, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("200 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 4)
+	PORT_BIT(0x040, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("500 Pesetas") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 1)
+	PORT_BIT(0x080, IP_ACTIVE_HIGH, IPT_COIN8) PORT_NAME("5 Pesetas (alt)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 2)
+	PORT_BIT(0x100, IP_ACTIVE_HIGH, IPT_COIN9) PORT_NAME("25 Pesetas (alt)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 5)
+	PORT_BIT(0x200, IP_ACTIVE_HIGH, IPT_COIN10) PORT_NAME("50 Pesetas (alt)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 10)
+	PORT_BIT(0x400, IP_ACTIVE_HIGH, IPT_COIN11) PORT_NAME("200 Pesetas (alt)") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 11)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( designe )
@@ -379,19 +340,27 @@ static INPUT_PORTS_START( designe )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_CODE(KEYCODE_M) PORT_NAME("Adult Access Remote") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::remote_pressed), 0)
 
 	PORT_START("COINS")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_CODE(KEYCODE_1) PORT_NAME("0.05 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x13)
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_CODE(KEYCODE_2) PORT_NAME("0.10 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x14)
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_CODE(KEYCODE_3) PORT_NAME("0.20 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x15)
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_CODE(KEYCODE_4) PORT_NAME("0.50 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x16)
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_COIN5) PORT_CODE(KEYCODE_5) PORT_NAME("1 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x17)
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_COIN6) PORT_CODE(KEYCODE_6) PORT_NAME("2 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x18)
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_COIN7) PORT_CODE(KEYCODE_7) PORT_NAME("Token") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x0c)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_COIN1) PORT_NAME("0.05 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x13)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_COIN2) PORT_NAME("0.10 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x14)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_COIN3) PORT_NAME("0.20 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x15)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("0.50 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x16)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_COIN5) PORT_NAME("1 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x17)
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_COIN6) PORT_NAME("2 Euro") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x18)
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_COIN7) PORT_NAME("Token") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(design_state::coin_inserted), 0x0c)
 
 	// the firmware takes the hopper exit sensor polarity from the model preset
 	PORT_START("CONF")
 	PORT_CONFNAME(0x01, 0x00, "Hopper Exit Sensors")
 	PORT_CONFSETTING(   0x01, "Active High (D6, D8, D10/D12 presets)")
 	PORT_CONFSETTING(   0x00, "Active Low (other presets)")
+
+	PORT_MODIFY("IN1")
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper3", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x01)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper2", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x01)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper1", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x01)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper3", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x00)
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper2", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x00)
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_CUSTOM) PORT_READ_LINE_DEVICE_MEMBER("hopper1", FUNC(hopper_device::line_r)) PORT_CONDITION("CONF", 0x01, EQUALS, 0x00)
 INPUT_PORTS_END
 
 
@@ -426,45 +395,14 @@ void design_state::voice_w(u8 data)
 	LOGVOICE("%s: message %u\n", machine().describe_context(), data);
 }
 
-template <unsigned N>
-int design_state::hopper_sensor_r()
-{
-	const int state = m_hopper[N]->line_r();
-	return (m_io_conf.found() && !BIT(m_io_conf->read(), 0)) ? !state : state;
-}
-
 ioport_value design_state::flaps_r()
 {
 	return m_io_flaps->read() & (m_flap_raised ? 0 : 7);
 }
 
-template <unsigned N>
-void design_state::hopper_motor_w(int state)
-{
-	m_out_hopper_motor[N] = state;
-	m_hopper[N]->motor_w(state);
-}
-
 void design_state::enable_w(int state)
 {
-	m_out_enable = state;
 	m_coinsel_enable = state;
-}
-
-void design_state::escrow_return_w(int state)
-{
-	m_out_escrow_return = state;
-}
-
-void design_state::escrow_collect_w(int state)
-{
-	m_out_escrow_collect = state;
-}
-
-template <unsigned N>
-void design_state::sorter_w(int state)
-{
-	m_out_sorter[N] = state;
 }
 
 template <unsigned N>
@@ -496,8 +434,6 @@ TIMER_CALLBACK_MEMBER(design_state::flap_update)
 
 void design_state::recovery_motor_w(int state)
 {
-	m_out_recovery_motor = state;
-
 	if (bool(state) == m_recovery_motor)
 		return;
 
@@ -564,12 +500,6 @@ INPUT_CHANGED_MEMBER(design_state::coin_inserted)
 	m_coinsel_state = COINSEL_VALIDATE;
 	m_coinsel_code = m_coinsel_coin;
 	m_coinsel_timer->adjust(attotime::from_msec(50));
-}
-
-// pulsed when a valid coin code is read; not a selector input according to the L66S manual
-void design_state::coin_valid_w(int state)
-{
-	m_out_coin_valid = state;
 }
 
 TIMER_CALLBACK_MEMBER(design_state::coinsel_update)
@@ -648,19 +578,24 @@ void design_state::design6(machine_config &config)
 
 	// latch types as on the Azkoyen T series boards (assumption)
 	cd4099_device &outlatch0(CD4099(config, "outlatch0"));
-	outlatch0.q_out_cb<0>().set(FUNC(design_state::hopper_motor_w<0>));
-	outlatch0.q_out_cb<1>().set(FUNC(design_state::hopper_motor_w<1>));
-	outlatch0.q_out_cb<2>().set(FUNC(design_state::hopper_motor_w<2>));
+	outlatch0.q_out_cb<0>().set(m_hopper[0], FUNC(hopper_device::motor_w));
+	outlatch0.q_out_cb<0>().append_output("hopper_motor1");
+	outlatch0.q_out_cb<1>().set(m_hopper[1], FUNC(hopper_device::motor_w));
+	outlatch0.q_out_cb<1>().append_output("hopper_motor2");
+	outlatch0.q_out_cb<2>().set(m_hopper[2], FUNC(hopper_device::motor_w));
+	outlatch0.q_out_cb<2>().append_output("hopper_motor3");
 	outlatch0.q_out_cb<3>().set(FUNC(design_state::enable_w)); // on unless out of service; selector general inhibit (assumption)
-	outlatch0.q_out_cb<4>().set(FUNC(design_state::escrow_return_w)); // on during coin return; escrow (assumption)
-	outlatch0.q_out_cb<5>().set(FUNC(design_state::escrow_collect_w)); // on after a sale; escrow (assumption)
+	outlatch0.q_out_cb<3>().append_output("enable");
+	outlatch0.q_out_cb<4>().set_output("escrow_return"); // on during coin return; escrow (assumption)
+	outlatch0.q_out_cb<5>().set_output("escrow_collect"); // on after a sale; escrow (assumption)
 	outlatch0.q_out_cb<6>().set(FUNC(design_state::recovery_motor_w)); // "AVERIA RECUP."
-	outlatch0.q_out_cb<7>().set(FUNC(design_state::coin_valid_w));
+	outlatch0.q_out_cb<6>().append_output("recovery_motor");
+	outlatch0.q_out_cb<7>().set_output("coin_valid"); // pulsed when a valid coin code is read; not a selector input according to the L66S manual
 
 	cd4099_device &outlatch1(CD4099(config, "outlatch1"));
-	outlatch1.q_out_cb<0>().set(FUNC(design_state::sorter_w<0>)); // sorter coils, order relative to the manual's numbering unknown
-	outlatch1.q_out_cb<1>().set(FUNC(design_state::sorter_w<1>));
-	outlatch1.q_out_cb<2>().set(FUNC(design_state::sorter_w<2>));
+	outlatch1.q_out_cb<0>().set_output("sorter_coil1"); // sorter coils, order relative to the manual's numbering unknown
+	outlatch1.q_out_cb<1>().set_output("sorter_coil2");
+	outlatch1.q_out_cb<2>().set_output("sorter_coil3");
 	outlatch1.q_out_cb<5>().set("vfd", FUNC(roc10937_device::data));
 	outlatch1.q_out_cb<6>().set("vfd", FUNC(roc10937_device::sclk));
 	outlatch1.q_out_cb<7>().set("vfd", FUNC(roc10937_device::por));
@@ -698,16 +633,16 @@ ROM_START( design6 )
 	ROM_REGION(0x8000, "maincpu", 0)
 	ROM_LOAD("1.bin", 0x0000, 0x8000, CRC(d3823da8) SHA1(bc1661727643c63e2ed94841f2e7c0a305333a10))
 
-	ROM_REGION(0x4000, "coinsel", 0)
-	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4000, NO_DUMP)
+	ROM_REGION16_LE(0x4010, "coinsel", ROMREGION_ERASEFF)
+	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4010, NO_DUMP)
 ROM_END
 
 ROM_START( designe )
 	ROM_REGION(0x8000, "maincpu", 0)
 	ROM_LOAD("designe.bin", 0x0000, 0x8000, CRC(693d40bd) SHA1(9596bbf9c367bc919393923460da15563d9447ca))
 
-	ROM_REGION(0x4000, "coinsel", 0)
-	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4000, NO_DUMP)
+	ROM_REGION16_LE(0x4010, "coinsel", ROMREGION_ERASEFF)
+	ROM_LOAD("pic16x76_l56s-l66s.bin", 0x0000, 0x4010, NO_DUMP)
 ROM_END
 
 
