@@ -29,9 +29,9 @@
   control=1 data=1                        idle
 
   The game polls the lines and only acts on a value after reading it
-  twice in a row.  If both machines start sending at the same time,
-  the one that didn't select the "2 CONTRINCANTES" option backs off and
-  receives the other machine's byte.
+  twice in a row.  If both machines start sending at the same time, a
+  machine backs off and receives the other machine's byte, unless it's
+  the one that selected the "2 CONTRINCANTES" option.
 
   Relaying every change of the lines over the network would make each
   bit cost several round trips.  Instead, this device simulates the
