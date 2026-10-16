@@ -1194,13 +1194,7 @@ TIMER_CALLBACK_MEMBER(z80scc_channel::brg_tick)
 //-------------------------------------------------
 void z80scc_channel::tra_callback()
 {
-	if (!(m_wr5 & WR5_TX_ENABLE))
-	{
-		LOGTX("%s: transmit mark 1 m_wr5:%02x\n", FUNCNAME, m_wr5);
-		// transmit mark
-		out_txd_cb(1);
-	}
-	else if (m_wr5 & WR5_SEND_BREAK)
+	if (m_wr5 & WR5_SEND_BREAK)
 	{
 		LOGTX("%s: send break 1 m_wr5:%02x\n", FUNCNAME, m_wr5);
 		// transmit break
@@ -1208,6 +1202,7 @@ void z80scc_channel::tra_callback()
 	}
 	else if (!is_transmit_register_empty())
 	{
+		// a character that started is completed even if the transmitter has been disabled since
 		int db = transmit_register_get_data_bit();
 
 		LOGTX("%s: transmit data bit %d m_wr5:%02x\n", FUNCNAME, db, m_wr5);
@@ -1219,7 +1214,9 @@ void z80scc_channel::tra_callback()
 	}
 	else
 	{
-		logerror("%s: Failed to transmit m_wr5:%02x\n", FUNCNAME, m_wr5);
+		LOGTX("%s: transmit mark 1 m_wr5:%02x\n", FUNCNAME, m_wr5);
+		// transmit mark
+		out_txd_cb(1);
 	}
 }
 
@@ -1236,29 +1233,29 @@ void z80scc_channel::tra_complete()
 		LOGTX("Delayed Init - Baud Rate Generator: %d mode: %dx\n", m_brg_rate, get_clock_mode() );
 	}
 
+	bool const pending = !(m_rr0 & RR0_TX_BUFFER_EMPTY) || // Takes care of the NMOS/CMOS 1 slot TX FIFO
+			m_tx_fifo_rp != m_tx_fifo_wp; // or there are more characters to send in a longer FIFO.
+	if (!pending)
+	{
+		// this also applies to a character that completes after the transmitter was disabled
+		LOGTX("%s: done sending, setting all sent bit\n", FUNCNAME);
+		m_rr1 |= RR1_ALL_SENT;
+
+		// when the RTS bit is reset, the _RTS output goes high after the transmitter empties
+		if (!m_rts) // TODO: Clean up RTS handling
+			set_rts(1);
+	}
+
 	if ((m_wr5 & WR5_TX_ENABLE) && !(m_wr5 & WR5_SEND_BREAK))
 	{
-		if ( (m_rr0 & RR0_TX_BUFFER_EMPTY) == 0 || // Takes care of the NMOS/CMOS 1 slot TX FIFO
-			 m_tx_fifo_rp != m_tx_fifo_wp) // or there are more characters to send in a longer FIFO.
+		// in Auto Enables mode, /CTS going inactive holds back the next character
+		if (pending && transmit_allowed())
 		{
-			// in Auto Enables mode, /CTS going inactive holds back the next character
-			if (transmit_allowed())
-			{
-				LOGTX("%s: done sending, loading data from fifo:%02x '%c'\n", FUNCNAME,
-					   m_tx_data_fifo[m_tx_fifo_rp], isascii(m_tx_data_fifo[m_tx_fifo_rp]) ? m_tx_data_fifo[m_tx_fifo_rp] : ' ');
-				transmit_register_setup(m_tx_data_fifo[m_tx_fifo_rp]); // Reload the shift register
-				m_tx_fifo_rp_step();
-				m_rr0 |= RR0_TX_BUFFER_EMPTY; // Now here is room in the tx fifo again
-			}
-		}
-		else
-		{
-			LOGTX("%s: done sending, setting all sent bit\n", FUNCNAME);
-			m_rr1 |= RR1_ALL_SENT;
-
-			// when the RTS bit is reset, the _RTS output goes high after the transmitter empties
-			if (!m_rts) // TODO: Clean up RTS handling
-				set_rts(1);
+			LOGTX("%s: done sending, loading data from fifo:%02x '%c'\n", FUNCNAME,
+				   m_tx_data_fifo[m_tx_fifo_rp], isascii(m_tx_data_fifo[m_tx_fifo_rp]) ? m_tx_data_fifo[m_tx_fifo_rp] : ' ');
+			transmit_register_setup(m_tx_data_fifo[m_tx_fifo_rp]); // Reload the shift register
+			m_tx_fifo_rp_step();
+			m_rr0 |= RR0_TX_BUFFER_EMPTY; // Now here is room in the tx fifo again
 		}
 
 		check_dma_request();
@@ -2052,11 +2049,6 @@ void z80scc_channel::do_sccreg_wr5(uint8_t data)
 		LOG("- Send Break %d\n", (data & WR5_SEND_BREAK) ? 1 : 0);
 		LOG("- Request to Send %d\n", (data & WR5_RTS) ? 1 : 0);
 		LOG("- Data Terminal Ready %d\n", (data & WR5_DTR) ? 1 : 0);
-		if (changed & ~(WR5_RTS | WR5_DTR | WR5_SEND_BREAK))
-		{
-			update_serial();
-			safe_transmit_register_reset();
-		}
 		if (changed & WR5_SEND_BREAK)
 		{
 			out_txd_cb((data & WR5_SEND_BREAK) ? 0 : 1);
@@ -2863,7 +2855,7 @@ void z80scc_channel::rxc_w(int state)
 void z80scc_channel::txc_w(int state)
 {
 	//LOG("Transmitter Clock Pulse\n");
-	if (m_wr5 & WR5_TX_ENABLE)
+	if ((m_wr5 & WR5_TX_ENABLE) || !is_transmit_register_empty())
 	{
 		int clocks = get_clock_mode();
 		if (clocks == 1)
@@ -3168,8 +3160,9 @@ void z80scc_channel::check_dma_request()
 		}
 		else
 		{
-			// assert /W//REQ if transmit buffer is empty and transmitter is enabled
-			m_uart->m_out_wreq_cb[m_index](((m_rr0 & RR0_TX_BUFFER_EMPTY) && (m_wr5 & WR5_TX_ENABLE)) ? 0 : 1);
+			// assert /W//REQ if transmit buffer is empty: it "will follow the state of the transmit buffer even
+			// though the transmitter is disabled"
+			m_uart->m_out_wreq_cb[m_index]((m_rr0 & RR0_TX_BUFFER_EMPTY) ? 0 : 1);
 		}
 	}
 }
