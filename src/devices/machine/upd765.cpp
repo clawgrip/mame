@@ -291,6 +291,7 @@ void upd765_family_device::device_start()
 	save_item(NAME(mfm));
 	save_item(NAME(scan_done));
 	save_item(NAME(base_mode_pending));
+	save_item(NAME(xfer_in_progress));
 	save_item(NAME(fifo_write));
 	save_item(NAME(fifo_pos));
 	save_item(NAME(fifo_expected));
@@ -2571,6 +2572,7 @@ void upd765_family_device::format_track_continue(floppy_info &fi)
 		case WAIT_INDEX_DONE:
 			LOGSTATE("WAIT_INDEX_DONE\n");
 			fi.sub_state = TRACK_DONE;
+			xfer_in_progress = true;
 			LOGSTATE("WRITE_TRACK_PRE_SECTORS\n");
 			live_start(fi, WRITE_TRACK_PRE_SECTORS);
 			cur_live.pll.start_writing(machine().time(), cur_live.fi->dev);
@@ -2578,6 +2580,7 @@ void upd765_family_device::format_track_continue(floppy_info &fi)
 
 		case TRACK_DONE:
 			LOGSTATE("TRACK_DONE\n");
+			xfer_in_progress = false;
 			main_phase = PHASE_RESULT;
 			result[0] = fi.st0;
 			result[1] = st1;
