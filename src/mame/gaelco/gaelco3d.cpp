@@ -148,6 +148,8 @@ REF. 970429
 #include "emu.h"
 #include "gaelco3d.h"
 
+#include "gaelco_cred2x1.h"
+
 #include "cpu/m68000/m68000.h"
 #include "cpu/m68000/m68020.h"
 
@@ -750,7 +752,7 @@ static INPUT_PORTS_START( speedup )
 
 	PORT_START("IN2")
 	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )        // verified
+	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred2x1", FUNC(gaelco_cred2x1_device::credit_r<1>)) // COIN1, verified
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)   // checked after reading analog from port 1
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)   // checked after reading analog from port 2
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)   // checked after reading analog from port 3
@@ -760,7 +762,7 @@ static INPUT_PORTS_START( speedup )
 	PORT_BIT( 0x8000, IP_ACTIVE_HIGH, IPT_CUSTOM) PORT_READ_LINE_MEMBER(FUNC(gaelco3d_state::analog_bit_r<3>))
 
 	PORT_START("IN3")
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN2 )        // verified
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNUSED )       // COIN2, verified, not wired with the credit distributor
 	PORT_SERVICE_NO_TOGGLE( 0x0200, IP_ACTIVE_LOW )     // verified
 	PORT_BIT( 0xfc00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
@@ -989,6 +991,11 @@ void gaelco3d_state::speedup(machine_config &config)
 	DMADAC(config.replace(), m_dmadac[1]).add_route(ALL_OUTPUTS, "rear", 1.00, 1);  // right rear
 	DMADAC(config.replace(), m_dmadac[2]).add_route(ALL_OUTPUTS, "seat_floor", 1.00);  // seat speaker
 	DMADAC(config.replace(), m_dmadac[3]).add_route(ALL_OUTPUTS, "mono", 1.00 );  // front mono
+
+	// the credits come from a 2x1 credit distributor, JP2 in a single cabinet
+	gaelco_cred2x1_device &cred(GAELCO_CRED2X1(config, "cred2x1"));
+	cred.lamp_callback().set_output("credit_lamp");
+	cred.digit_callback().set_output("credit_digit");
 }
 
 void gaelco3d_state::gaelco3d2(machine_config &config)
@@ -1024,27 +1031,6 @@ Gaelco was notorious for using the same ROM labels even when ROM data changed. T
  Occasionally PCBs have been observed with a handwritten version on the labels, but it's unknown if it's a factory or operator addition.
 */
 
-/*
-Speed Up uses a small external PCB with a PIC for credit distribution:
-  ________________________
- |         ____  ____    |
- |         ····  ····    |
- |  ______   _________ ·||
- | LM340T5  |PIC16C54| ·||
- |                 ___ ·||
- |     _________  |  | ·||
- |    |ULN2003A1| |  |   |
- | ___            |  <-74HCT245N
- ||  |  _________ |__|   |
- ||  | |_DIPSx8_|      ·||
- ||  <-CD74HCT174E     ·||
- ||__|  _________      ·||
- |     |74HCT245N      ·||
- |_______________________|
-
-Manuals with dip switches setup and schematics can be downloaded from https://www.recreativas.org/manuales/videojuegos
-*/
-
 ROM_START( speedup ) // Version 2.20 - REF. 960717 ROM board
 	ROM_REGION( 0x200000, "maincpu", 0 )    // 68000 code
 	ROM_LOAD16_BYTE( "sup_2.2_10.ic10", 0x000000, 0x80000, CRC(ee781e64) SHA1(d90fa9319982fa389c2032e13d59850971078006) ) // 2.2 is handwritten between SUP and 10
@@ -1069,9 +1055,6 @@ ROM_START( speedup ) // Version 2.20 - REF. 960717 ROM board
 	// These 2 are copies of the previous 2 at different IC locations
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
-
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
 
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )
@@ -1104,9 +1087,6 @@ ROM_START( speedup21 ) // Version 2.10
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
 
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
-
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )
 	ROM_LOAD( "m.b_48f6_pal16l8.bin",  0x000, 0x104, CRC(4c298505) SHA1(5a4f57e3d3cd5e329426d6d469b0fdd614812b25) )
@@ -1137,9 +1117,6 @@ ROM_START( speedup20 ) // Version 2.00 (18/Feb)
 	// These 2 are copies of the previous 2 at different IC locations
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
-
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
 
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )
@@ -1172,9 +1149,6 @@ ROM_START( speedup20a ) // Version 2.00 (17/Feb)
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
 
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
-
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )
 	ROM_LOAD( "m.b_48f6_pal16l8.bin",  0x000, 0x104, CRC(4c298505) SHA1(5a4f57e3d3cd5e329426d6d469b0fdd614812b25) )
@@ -1206,9 +1180,6 @@ ROM_START( speedup12 ) // Version 1.20 - REF. 960717 ROM board
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
 
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
-
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )
 	ROM_LOAD( "m.b_48f6_pal16l8.bin",  0x000, 0x104, CRC(4c298505) SHA1(5a4f57e3d3cd5e329426d6d469b0fdd614812b25) )
@@ -1239,9 +1210,6 @@ ROM_START( speedup10 ) // Version 1.00 - REF. 960717 ROM board
 	// These 2 are copies of the previous 2 at different IC locations
 //  ROM_LOAD( "ic43.bin", 0x0000000, 0x020000, CRC(34737d1d) SHA1(e9109a88e211aa49851e72a6fa3417f1cad1cb8b) ) // nondescript green dot label
 //  ROM_LOAD( "ic42.bin", 0x0020000, 0x020000, CRC(e89e829b) SHA1(50c99bd9667d78a61252eaad5281a2e7f57be85a) ) // nondescript white dot label
-
-	ROM_REGION( 0x407, "coin", 0 ) // Credit distribution PCB
-	ROM_LOAD( "m.2x1_covi_152b6_pic16c54.bin", 0x000, 0x407, CRC(3e6f76fd) SHA1(c271a31043c9792bf0571489487bbde1141ad273) ) // For Covielsa cabinet. Twin or other cabinets use different PIC programs
 
 	ROM_REGION( 0x104, "plds", 0 )
 	ROM_LOAD( "a1_a_4426_pal16l8.bin", 0x000, 0x104, CRC(94e4f59c) SHA1(3bc0c77c77ef763400372d3aabdb15d46da2bc29) )

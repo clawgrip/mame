@@ -15,7 +15,7 @@ class gaelco_cred4x4_device : public device_t
 public:
 	gaelco_cred4x4_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock = 0);
 
-	// meters of the two coin mechanisms
+	// coins or credits, depending on the program
 	template <unsigned N> auto meter_callback() { return m_meter_cb[N].bind(); }
 
 	// lamps that blink out the number of credits

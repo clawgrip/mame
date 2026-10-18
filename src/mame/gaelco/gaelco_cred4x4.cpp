@@ -22,12 +22,10 @@
 
  - The main loop is paced by TMR0 with a 1:32 prescaler, waiting for it to
    reach 0xa0.  The oscillator cannot be identified on the photograph; 4 MHz,
-   the most the XT mode in the config word allows, gives a 5.12 ms loop.  Each
-   input is sampled once per loop and counts after six consecutive low
-   samples, about 31 ms, and has to read high again before it can count again.
-
- - The coin table for coin mechanism 1 in the ROM matches the manual row for
-   row.
+   the most the XT mode in the config word and the PIC16C54-XT/P parts allow,
+   gives a 5.12 ms loop.  Each input is sampled once per loop and counts after
+   six consecutive low samples, about 31 ms, and has to read high again before
+   it can count again.
 
  - Every START press adds a pending transfer for that player.  The outputs
    advance in steps: a transfer with credits in the pool pulses that player's
@@ -44,10 +42,8 @@
    fits a shift register on the display picking one segment at a time, with the
    data line powering the digit.  No photograph of the display has turned up.
 
- - The config word that survives in all four dumps is 0xff9: XT oscillator,
-   watchdog off, code protection off.  The checksums in the file names are the
-   sum of the program bytes plus the four ID nibbles plus one in all four, and
-   all four programs are coherent from the reset vector on.
+ - The config word in all the dumps is 0xff9: XT oscillator, watchdog off, code
+   protection off.
 
  Differences between the programs:
 
@@ -77,10 +73,20 @@
    SW10 off the pool is not kept: each credit is pulsed straight out on MON1,
    and START presses only pass through while the pool is empty.
 
- The DIP switch settings below follow the manual, which matches 4x4.N.
+ - 4x4 DFN is 4x4.N with the meters counting the credits handed out, the first
+   one for players 1 and 2 and the second one for players 3 and 4, instead of
+   the coins from each coin mechanism.  After each MON pulse it holds both
+   players of that pair for one more step, so the meter they share never gets
+   two pulses back to back.
+
+ - The DC02 program is 4x4 DFN giving 10 credits instead of 4 for the 1C_4C
+   setting of coin mechanism 2.
+
+ The DIP switch settings below follow the manual, which matches 4x4.N and
+ the coin table in its ROM.
 
  TODO:
-  - Hook the credit display up in a host and create a layout for it.
+  - Create a layout for the credit display.
 
 *******************************************************************************/
 
@@ -93,6 +99,8 @@ DEFINE_DEVICE_TYPE(GAELCO_CRED4X4, gaelco_cred4x4_device, "gcred4x4", "Gaelco 4x
 
 namespace {
 
+// programmer images: program words, ID words at 0x400 and the low byte of the
+// config word at 0x1ffe
 ROM_START(gcred4x4)
 	ROM_REGION(0x1fff, "pic", 0)
 	ROM_DEFAULT_BIOS("vn")
@@ -108,6 +116,12 @@ ROM_START(gcred4x4)
 
 	ROM_SYSTEM_BIOS(3, "vn", "4x4.N")
 	ROMX_LOAD("m._4x4.n_e684_pic16c54.bin", 0x0000, 0x1fff, CRC(e56608ba) SHA1(b45518c6807e4dda064abcdfa9f148a7b074de39), ROM_BIOS(3))
+
+	ROM_SYSTEM_BIOS(4, "dfn", "4x4 DFN")
+	ROMX_LOAD("m.4x4_deb3_dfn_pic16c54.bin", 0x0000, 0x1fff, CRC(593a2e6d) SHA1(f5f462a58e683afa9f75fbabc21ad26311d897ab), ROM_BIOS(4))
+
+	ROM_SYSTEM_BIOS(5, "dc02", "4x4 (checksum DC02)")
+	ROMX_LOAD("m.4x4_dc02_pic16c54.bin", 0x0000, 0x1fff, CRC(b6295a6b) SHA1(7bef95604f51dfb1f9f2365a6f2e7643753dcc6e), ROM_BIOS(5))
 ROM_END
 
 

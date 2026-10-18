@@ -38,6 +38,7 @@
 #include "emu.h"
 #include "gaelco2.h"
 
+#include "gaelco_cred4x4.h"
 #include "gaelco_ds5002fp.h"
 
 #include "cpu/mcs51/ds5002fp.h"
@@ -1969,7 +1970,7 @@ static INPUT_PORTS_START( touchgo )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::start_r<0>))
 	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(      0x0200, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x0300, DEF_STR( Normal ) )
@@ -1998,7 +1999,7 @@ static INPUT_PORTS_START( touchgo )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::start_r<1>))
 	PORT_DIPNAME( 0x0f00, 0x0f00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x0000, "Disabled or Free Play (if Coin B too)" ) PORT_DIPLOCATION("SW1:1,2,3,4")
 	PORT_DIPSETTING(      0x0300, DEF_STR( 4C_1C ) )
@@ -2042,11 +2043,11 @@ static INPUT_PORTS_START( touchgo )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(3)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START3 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN3 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN4 )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::start_r<2>))
+	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::coin_r<0>))
+	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::coin_r<1>))
+	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::coin_r<2>))
+	PORT_BIT( 0x0800, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::coin_r<3>))
 	PORT_BIT( 0xf000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN3")
@@ -2057,7 +2058,7 @@ static INPUT_PORTS_START( touchgo )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(4)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(4)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(4)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START4 )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("cred4x4", FUNC(gaelco_cred4x4_device::start_r<3>))
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_SERVICE3 ) // go to test mode NOW
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_SERVICE2 )
@@ -2079,6 +2080,12 @@ void gaelco2_dual_state::touchgo(machine_config &config)
 	m_mainlatch->q_out_cb<1>().set(FUNC(gaelco2_dual_state::coin_counter_w<1>));
 	m_mainlatch->q_out_cb<2>().set(FUNC(gaelco2_dual_state::coin_counter_w<2>));
 	m_mainlatch->q_out_cb<3>().set(FUNC(gaelco2_dual_state::coin_counter_w<3>));
+
+	// four player cabinets share the coins out through a 4x4 credit adapter
+	gaelco_cred4x4_device &cred(GAELCO_CRED4X4(config, "cred4x4"));
+	cred.lamp_callback<0>().set_output("credit_lamp0");
+	cred.lamp_callback<1>().set_output("credit_lamp1");
+	cred.digit_callback().set_output("credit_digit");
 
 	// video hardware
 	BUFFERED_SPRITERAM16(config, m_spriteram);
