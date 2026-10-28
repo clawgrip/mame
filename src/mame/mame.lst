@@ -23238,6 +23238,9 @@ vc4000
 vc6000
 vmdtbase
 
+@source:irem/loht_ms.cpp
+loht_ms
+
 @source:irem/m10.cpp
 andromed
 greenber
@@ -23332,7 +23335,6 @@ imgfightjb
 kengo
 kengoj
 loht
-loht_ms
 lohtb
 lohtb2
 lohtb3
