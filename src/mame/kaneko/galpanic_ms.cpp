@@ -25,16 +25,15 @@
 
 
 #include "emu.h"
+
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
+
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
-#include "cpu/z80/z80.h"
-#include "sound/ymopn.h"
-#include "machine/gen_latch.h"
-#include "machine/bankdev.h"
-#include "sound/msm5205.h"
 
 
 namespace {
@@ -45,9 +44,7 @@ public:
 	galspanic_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
-		m_soundcpu(*this, "soundcpu"),
-		m_ym1(*this, "ym1"),
-		m_ym2(*this, "ym2"),
+		m_mod1(*this, "mod1"),
 		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
@@ -56,10 +53,7 @@ public:
 		m_bg_rgb555_pixram(*this, "bg_rgb555ram"),
 		m_videoram2(*this, "videoram2"),
 		m_scrollram(*this, "scrollram"),
-		m_gfxdecode(*this, "gfxdecode"),
-		m_msm(*this, "msm"),
-		m_soundrom(*this, "soundrom"),
-		m_soundlatch(*this, "soundlatch")
+		m_gfxdecode(*this, "gfxdecode")
 	{ }
 
 	void newquiz(machine_config &config);
@@ -67,9 +61,7 @@ public:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_soundcpu;
-	required_device<ym2203_device> m_ym1;
-	required_device<ym2203_device> m_ym2;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -80,28 +72,15 @@ private:
 	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint16_t> m_scrollram;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_device<msm5205_device> m_msm;
-	required_device<address_map_bank_device> m_soundrom;
-	required_device<generic_latch_8_device> m_soundlatch;
 
 	virtual void machine_start() override ATTR_COLD;
-	virtual void machine_reset() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
 	void galspanic_ms_palette(palette_device &palette) const;
 
 	uint32_t screen_update_backgrounds(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
-	// comad
-	uint16_t comad_timer_r();
 	void newquiz_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
-	void soundrom_map(address_map &map) ATTR_COLD;
-
-	uint8_t unk_r()
-	{
-		return machine().rand();
-	}
 
 	uint16_t vram2_r(offs_t offset, uint16_t mem_mask);
 	void vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask);
@@ -109,11 +88,6 @@ private:
 	TILE_GET_INFO_MEMBER(get_tile_info_tilemap2);
 
 	tilemap_t *m_bg_tilemap2 = nullptr;
-
-	void splash_msm5205_int(int state);
-	[[maybe_unused]] void splash_adpcm_data_w(uint8_t data);
-	[[maybe_unused]] void splash_adpcm_control_w(uint8_t data);
-	int m_adpcm_data = 0;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
@@ -143,11 +117,6 @@ void galspanic_ms_state::vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask
 }
 
 
-uint16_t galspanic_ms_state::comad_timer_r()
-{
-	return (m_screen->vpos() & 0x07) << 8;
-}
-
 // lots of bad / leftover reads/writes from the original code in here
 void galspanic_ms_state::newquiz_map(address_map &map)
 {
@@ -173,11 +142,7 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 
 	map(0x780000, 0x78001f).ram();
 
-	map(0x800000, 0x800001).portr("DSW1");
-	map(0x800002, 0x800003).portr("DSW2");
-	map(0x800004, 0x800005).portr("SYSTEM");
-
-	map(0x80000e, 0x80000f).r(FUNC(galspanic_ms_state::comad_timer_r)).w(m_soundlatch, FUNC(generic_latch_8_device::write));
+	map(0x800000, 0x80000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 
 	map(0x840000, 0x840001).ram();
 
@@ -195,61 +160,6 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 
 void galspanic_ms_state::machine_start()
 {
-}
-
-
-void galspanic_ms_state::machine_reset()
-{
-	m_soundrom->set_bank(2);
-}
-
-void galspanic_ms_state::splash_adpcm_data_w(uint8_t data)
-{
-	m_adpcm_data = data;
-}
-
-void galspanic_ms_state::splash_adpcm_control_w(uint8_t data)
-{
-	m_msm->reset_w(BIT(data, 7));
-
-	int bank = data & 0x7f;
-
-	if ((bank != 0x02) &&
-		(bank != 0x04) && (bank != 0x05) && (bank != 0x06) && (bank != 0x07) &&
-		(bank != 0x0c) && (bank != 0x0d) && (bank != 0x0e) && (bank != 0x0f))
-	{
-		logerror("splash_adpcm_control_w %02x\n", data);
-	}
-
-	m_soundrom->set_bank(bank & 0xf);
-}
-
-void galspanic_ms_state::splash_msm5205_int(int state)
-{
-	m_msm->data_w(m_adpcm_data >> 4);
-	m_adpcm_data = (m_adpcm_data << 4) & 0xf0;
-}
-void galspanic_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0x8fff).ram();
-	map(0x9000, 0x97ff).ram().mirror(0x0800);
-
-
-	map(0xc000, 0xc000).nopw();
-
-	//map(0x8000, 0xbfff).m(m_soundrom, FUNC(address_map_bank_device::amap8));
-
-//  map(0xe000, 0xe000).w(FUNC(galspanic_ms_state::splash_adpcm_control_w));
-//  map(0xe400, 0xe400).w(FUNC(galspanic_ms_state::splash_adpcm_data_w));
-
-	map(0xa000, 0xa001).rw(m_ym1, FUNC(ym2203_device::read), FUNC(ym2203_device::write)).mirror(0x0008);
-	map(0xa002, 0xa003).rw(m_ym2, FUNC(ym2203_device::read), FUNC(ym2203_device::write)).mirror(0x0008);
-}
-
-void galspanic_ms_state::soundrom_map(address_map &map)
-{
-	map(0x00000, 0x3ffff).rom().region("soundcpu", 0x000000);
 }
 
 
@@ -348,79 +258,44 @@ uint32_t galspanic_ms_state::screen_update(screen_device &screen, bitmap_ind16 &
 
 
 
-static INPUT_PORTS_START( newquiz ) // copied from Gals Panic, might not be correct
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )   PORT_DIPLOCATION("SWA:1,2")
-	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x000C, 0x000C, DEF_STR( Lives ) )    PORT_DIPLOCATION("SWA:3,4")
-	PORT_DIPSETTING(      0x0004, "2" )
-	PORT_DIPSETTING(      0x000C, "3" )
-	PORT_DIPSETTING(      0x0008, "4" )
-	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Demo_Sounds ) )  PORT_DIPLOCATION("SWA:5")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0020, 0x0020, "Use Button" )        PORT_DIPLOCATION("SWA:6")
-	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
-	PORT_DIPSETTING(      0x0020, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x0040, 0x0040, "Censored Girls" )    PORT_DIPLOCATION("SWA:7")
-	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "Show Ending Picture" )   PORT_DIPLOCATION("SWA:8")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( On ) )
+static INPUT_PORTS_START( newquiz ) // the program reads the DIP switches like galsnew
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)   /* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 0-3
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW1:1" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:2" ) // flip screen on galsnew
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW1:3" ) // service mode on galsnew
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:4" ) // coin A on galsnew, with SW1:5,6
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:7,8")
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )
 
-	PORT_START("DSW2")
-	PORT_DIPUNUSED_DIPLOC( 0x0001, 0x0001, "SWB:1" )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION("SWB:2")
-	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_SERVICE_DIPLOC( 0x0004, IP_ACTIVE_LOW, "SWB:3" )
-	PORT_DIPNAME( 0x0038, 0x0038, DEF_STR( Coin_A ) )   PORT_DIPLOCATION("SWB:4,5,6")
-	PORT_DIPSETTING(      0x0028, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0038, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )   PORT_DIPLOCATION("SWB:7,8")
-	PORT_DIPSETTING(      0x0080, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )
-
-
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)   /* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:3" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW2:4" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x10, "2" )
+	PORT_DIPSETTING(    0x30, "3" )
+	PORT_DIPSETTING(    0x20, "4" )
+	PORT_DIPSETTING(    0x00, "5" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Show Ending Picture" ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -466,27 +341,14 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	/* sound hardware */
 	SPEAKER(config, "mono").front_center();
 
-	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
-	m_soundcpu->set_addrmap(AS_PROGRAM, &galspanic_ms_state::sound_map);
-//  m_soundcpu->set_periodic_int(FUNC(galspanic_ms_state::nmi_line_pulse), attotime::from_hz(60*64)); // no NMI here, just retn
-
-	ADDRESS_MAP_BANK(config, m_soundrom).set_map(&galspanic_ms_state::soundrom_map).set_options(ENDIANNESS_LITTLE, 8, 18, 0x4000);
-
-	GENERIC_LATCH_8(config, m_soundlatch);
-	//m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
-
-	YM2203(config, m_ym1, XTAL(20'000'000)/16).add_route(ALL_OUTPUTS, "mono", 0.40);
-	m_ym1->port_a_read_callback().set(FUNC(galspanic_ms_state::unk_r));
-	m_ym1->port_b_read_callback().set(FUNC(galspanic_ms_state::unk_r));
-
-	YM2203(config, m_ym2, XTAL(20'000'000)/16).add_route(ALL_OUTPUTS, "mono", 0.40);
-	m_ym2->port_a_read_callback().set(FUNC(galspanic_ms_state::unk_r));
-	m_ym2->port_b_read_callback().set(FUNC(galspanic_ms_state::unk_r));
-
-	MSM5205(config, m_msm, XTAL(384'000));
-	m_msm->vck_legacy_callback().set(FUNC(galspanic_ms_state::splash_msm5205_int));
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.80);
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 16_MHz_XTAL / 4);
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::GALSPANIC);
+	m_mod1->set_ym_clock(20_MHz_XTAL / 16);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.80);
 }
 
 
@@ -495,7 +357,7 @@ ROM_START( galpanicms )
 	ROM_LOAD16_BYTE( "cpu_ic17.bin",  0x000000, 0x80000, CRC(c65104e1) SHA1(189dde2a34b949bd1763d8ee0d74c86fead549b9) ) // AM27C040
 	ROM_LOAD16_BYTE( "cpu_ic8.bin",   0x000001, 0x20000, CRC(e2e201e5) SHA1(2a8257f66139178af951d701fd263144aacf2808) ) // AM27C010
 
-	ROM_REGION( 0x40000, "soundcpu", 0 ) // Z80 code
+	ROM_REGION( 0x10000, "mod1", 0 ) // Z80 code
 	ROM_LOAD( "snd_1.ic12", 0x000000, 0x10000, CRC(409e9233) SHA1(f13de7ddc00857c889250621ebccdae1b494cfd0) ) // TMS27C512
 
 	ROM_REGION16_BE( 0x100000, "userx", ROMREGION_ERASEFF ) // 68000 data @ 0x200000
@@ -585,4 +447,4 @@ void galspanic_ms_state::init_galpanicms()
 } // anonymous namespace
 
 
-GAME( 1991, galpanicms, galsnew, newquiz, newquiz, galspanic_ms_state, init_galpanicms, ROT90, "bootleg (Kaenko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING | MACHINE_NO_SOUND )
+GAME( 1991, galpanicms, galsnew, newquiz, newquiz, galspanic_ms_state, init_galpanicms, ROT90, "bootleg (Kaneko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING )

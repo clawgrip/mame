@@ -67,11 +67,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -86,6 +84,7 @@ public:
 	ffantasy_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen")
 	{ }
 
@@ -97,6 +96,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<screen_device> m_screen;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -123,23 +123,27 @@ uint32_t ffantasy_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 }
 
 static INPUT_PORTS_START( ffantasym )
-	PORT_START("DSW")
-	PORT_DIPUNKNOWN_DIPLOC(0x0001, 0x0001, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0002, 0x0002, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0004, 0x0004, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0008, 0x0008, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x0010, 0x0010, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x0020, 0x0020, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x0040, 0x0040, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x0080, 0x0080, "SW1:8")
-	PORT_DIPUNKNOWN_DIPLOC(0x0100, 0x0100, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0200, 0x0200, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0400, 0x0400, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0800, 0x0800, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x1000, 0x1000, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x2000, 0x2000, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x4000, 0x4000, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x8000, 0x8000, "SW2:8")
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
 INPUT_PORTS_END
 
 static GFXDECODE_START( gfx_ffantasy_ms )
@@ -150,8 +154,6 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::ffantasym_map);
-
-	Z80(config, "audiocpu", 20_MHz_XTAL / 5).set_disable(); // divisor unknown
 
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
@@ -169,13 +171,13 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	MSM5205(config, "msm", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 void ffantasy_ms_state::secretagm(machine_config &config)
@@ -193,7 +195,7 @@ ROM_START( automatm )
 	ROM_LOAD16_BYTE( "mod_6-1_automat_2au_602.ic20", 0x20000, 0x10000, CRC(9d7b79e0) SHA1(e0d901b9b3cd62f7c947da04f7447ebfa88bf44a) )
 	ROM_LOAD16_BYTE( "mod_6-1_automat_2au_605.ic11", 0x20001, 0x10000, CRC(e655f9c3) SHA1(d5e99d542303d009277ccfc245f877e4e28603c9) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/5 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/5 board
 	ROM_LOAD( "mod_1-5_automat_2au_101.ic12", 0x00000, 0x10000, CRC(fc80cac1) SHA1(0f31d6c3f2ca1aa1c6d9ac5da28b75a6fbf8444b) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on MOD 8 board
@@ -232,7 +234,7 @@ ROM_START( drgninjam )
 	ROM_LOAD16_BYTE( "6-1_cpu_dn_603.ic17", 0x00000, 0x20000, CRC(1c3670df) SHA1(0e287a0b4494e702080e80a911c4762bbc6a5815) )
 	ROM_LOAD16_BYTE( "6-1_cpu_dn_606.ic8",  0x00001, 0x20000, CRC(07669458) SHA1(c5dcf72eba5e345228ee3f9e0228cba526e1156a) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/2 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "1-4_snd_dn_101.ic12", 0x00000, 0x10000, CRC(0b82c205) SHA1(0be243b19693c54914eccefbf6a8b8b513eec299) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
@@ -283,7 +285,7 @@ ROM_START( ffantasym )
 	ROM_LOAD16_BYTE( "ff_6-1_5fa_602.ic20", 0x20000, 0x10000, CRC(68d50c5d) SHA1(d4a96c9ecb565c3c84ca76537492101264007cc1) )
 	ROM_LOAD16_BYTE( "ff_6-1_5fa_605.ic11", 0x20001, 0x10000, CRC(dee5475e) SHA1(57a063834dc2fe97f4372eee06114f873a372786) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/2 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "ff_1-5_5fa_101.ic12", 0x00000, 0x10000, CRC(891bc223) SHA1(737248ea23c42076da9ce6c4abb9506f396892a0) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
@@ -338,7 +340,7 @@ ROM_START( secretagm )
 	ROM_LOAD16_BYTE( "mod_6-1_ag_602.ic20", 0x20000, 0x10000, CRC(bc67dfa0) SHA1(0e32ab1ef9008e95c2e0b8a6916766b255681987) )
 	ROM_LOAD16_BYTE( "mod_6-1_ag_605.ic11", 0x20001, 0x10000, CRC(ba149ce8) SHA1(6c405a670983a5c3b5c98248298924b87c350274) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/2 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "mod_1-2_ag_110.ic12", 0x00000, 0x10000, CRC(7446d17e) SHA1(be0c2c5359af20e17f76c0a5ea59de9357735ab8) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards

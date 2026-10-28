@@ -25,11 +25,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -45,6 +43,7 @@ public:
 	pspikes_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_tileram(*this, "tileram"),
 		m_scrollram(*this, "scrollram"),
@@ -59,6 +58,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint16_t> m_tileram;
@@ -67,7 +67,6 @@ private:
 
 	tilemap_t *m_tilemap = nullptr;
 	uint8_t m_gfxbank = 0;
-	uint8_t m_palbank = 0;
 
 	TILE_GET_INFO_MEMBER(get_tile_info);
 	void tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
@@ -86,7 +85,7 @@ void pspikes_ms_state::video_start()
 TILE_GET_INFO_MEMBER(pspikes_ms_state::get_tile_info)
 {
 	int const tile = (m_tileram[tile_index] & 0xfff) | (m_gfxbank << 12);
-	int const color = ((tile & 0xf000) >> 12) | (m_palbank << 4); // TODO: wrong
+	int const color = BIT(tile, 12, 4); // TODO: wrong
 	tileinfo.set(0, tile, color, 0);
 }
 
@@ -144,7 +143,6 @@ uint32_t pspikes_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bi
 void pspikes_ms_state::machine_start()
 {
 	save_item(NAME(m_gfxbank));
-	save_item(NAME(m_palbank));
 }
 
 
@@ -161,83 +159,53 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0xffe000, 0xffe3ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0xffe400, 0xffe7ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0xffe800, 0xffefff).ram(); // only initialized at start?
-	map(0xfff000, 0xfff001).portr("IN0");
-	map(0xfff002, 0xfff003).portr("IN1");
-	map(0xfff004, 0xfff005).portr("DSW");
-	map(0xfff006, 0xfff007).nopr(); // read? sound related?
-	map(0xfff007, 0xfff007).lw8(NAME([this] (uint8_t data) { { if (data & 0xfd) logerror("palbank_w %02x\n", data); } m_palbank = (data & 0x02); })); // TODO: probably wrong
+	map(0xfff000, 0xfff00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 	//map(0xfff400, 0xfff403).nopw(); // leftover of the original chips
 }
 
 
 static INPUT_PORTS_START( pspikesm )
-	PORT_START("IN0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPSETTING(    0x04, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:6" )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
 
-	PORT_START("DSW")
-	// Dips bank 1
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Coin_A ) )           PORT_DIPLOCATION("SW1:1,2")
-	PORT_DIPSETTING(      0x0001, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Coin_B ) )           PORT_DIPLOCATION("SW1:3,4")
-	PORT_DIPSETTING(      0x0004, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x000c, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_2C ) )
-	PORT_DIPUNUSED_DIPLOC( 0x0010, 0x0010, "SW1:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x0020, 0x0020, "SW1:6" )
-	PORT_DIPNAME( 0x0040, 0x0000, DEF_STR( Demo_Sounds ) )      PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x0080, 0x0080, "SW1:8" )
-	// Dips bank 2
-	PORT_DIPUNUSED_DIPLOC( 0x0100, 0x0100, "SW2:1" )
-	PORT_DIPNAME( 0x0600, 0x0600, "1 Player Starting Score" )   PORT_DIPLOCATION("SW2:2,3")
-	PORT_DIPSETTING(      0x0600, "12-12" )
-	PORT_DIPSETTING(      0x0400, "11-11" )
-	PORT_DIPSETTING(      0x0200, "11-12" )
-	PORT_DIPSETTING(      0x0000, "10-12" )
-	PORT_DIPNAME( 0x1800, 0x1800, "2 Players Starting Score" )  PORT_DIPLOCATION("SW2:4,5")
-	PORT_DIPSETTING(      0x1800, "9-9" )
-	PORT_DIPSETTING(      0x1000, "7-7" )
-	PORT_DIPSETTING(      0x0800, "5-5" )
-	PORT_DIPSETTING(      0x0000, "0-0" )
-	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Difficulty ) )       PORT_DIPLOCATION("SW2:6")
-	PORT_DIPSETTING(      0x2000, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x4000, 0x4000, "2 Players Time Per Credit" ) PORT_DIPLOCATION("SW2:7")
-	PORT_DIPSETTING(      0x4000, "3 min" )
-	PORT_DIPSETTING(      0x0000, "2 min" )
-	PORT_DIPNAME( 0x8000, 0x8000, "Debug" )                     PORT_DIPLOCATION("SW2:8")
-	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:1" )
+	PORT_DIPNAME( 0x06, 0x06, "1 Player Starting Score" ) PORT_DIPLOCATION("SW2:2,3")
+	PORT_DIPSETTING(    0x06, "12-12" )
+	PORT_DIPSETTING(    0x04, "11-11" )
+	PORT_DIPSETTING(    0x02, "11-12" )
+	PORT_DIPSETTING(    0x00, "10-12" )
+	PORT_DIPNAME( 0x18, 0x18, "2 Players Starting Score" ) PORT_DIPLOCATION("SW2:4,5")
+	PORT_DIPSETTING(    0x18, "9-9" )
+	PORT_DIPSETTING(    0x10, "7-7" )
+	PORT_DIPSETTING(    0x08, "5-5" )
+	PORT_DIPSETTING(    0x00, "0-0" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
+	PORT_DIPNAME( 0x40, 0x40, "2 Players Time Per Credit" ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x40, "3 min" )
+	PORT_DIPSETTING(    0x00, "2 min" )
+	PORT_DIPNAME( 0x80, 0x80, "Debug" ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -266,8 +234,6 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &pspikes_ms_state::main_map);
 	m_maincpu->set_vblank_int("screen", FUNC(pspikes_ms_state::irq1_line_hold));
 
-	Z80(config, "audiocpu", 20_MHz_XTAL / 5).set_disable(); // divisor unknown
-
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_refresh_hz(60);
@@ -284,11 +250,13 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.75); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.75); // divisor unknown
-
-	MSM5205(config, "msm", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.75); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P105);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 1.5);
 }
 
 
@@ -297,7 +265,7 @@ ROM_START( pspikesm )
 	ROM_LOAD16_BYTE( "mod_6-1_ps_617.ic17", 0x00000, 0x20000, CRC(e963c91d) SHA1(f3e5e2243d1ae5c0cbc0fa55bec099a4048c2776) )
 	ROM_LOAD16_BYTE( "mod_6-1_ps_608.ic8",  0x00001, 0x20000, CRC(a6ef3123) SHA1(b2e31a1f4182b324065d06feef96f63ebcfa9daf) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/4 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod_1-4_ps_101.ic12",        0x00000, 0x10000, CRC(2f6f7f94) SHA1(49ba5b97807b9488ab485f67ca37795935b8bed0) )
 
 	ROM_REGION( 0x80000, "tiles", ROMREGION_INVERT ) // on MOD 4/2 board
@@ -342,4 +310,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 199?, pspikesm, pspikes, pspikesm, pspikesm, pspikes_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Power Spikes (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, pspikesm, pspikes, pspikesm, pspikesm, pspikes_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Power Spikes (Modular System)", MACHINE_NOT_WORKING )

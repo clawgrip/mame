@@ -198,11 +198,11 @@ _|_  74LS86PC  74LS299N |RD4B3  | 74LS153PC|V||  _|_  74LS86PC  74LS299N |RD4A3 
 */
 
 #include "emu.h"
+
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/nec/nec.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
+
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
@@ -218,39 +218,30 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
-		m_audiocpu(*this, "audiocpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
-		m_ym1(*this, "ym1"),
-		m_ym2(*this, "ym2"),
-		m_msm(*this, "msm5205"),
 		m_spriteram(*this, "spriteram"),
 		m_scrollram1(*this, "scrollram1"),
 		m_scrollram2(*this, "scrollram2"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_videoram(*this, "videoram"),
 		m_videoram2(*this, "videoram2"),
-		m_videoram3(*this, "videoram3"),
-		m_soundlatch(*this, "soundlatch%u", 1),
-		m_soundbank(*this, "sound_bank")
+		m_videoram3(*this, "videoram3")
 	{ }
 
 	void raidenm(machine_config &config);
 	void init_raidenm();
 
 protected:
-	virtual void machine_start() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
-	required_device<cpu_device> m_audiocpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
-	required_device<ym2203_device> m_ym1;
-	required_device<ym2203_device> m_ym2;
-	required_device<msm5205_device> m_msm;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_scrollram1;
 	required_shared_ptr<uint16_t> m_scrollram2;
@@ -258,8 +249,6 @@ private:
 	required_shared_ptr<uint16_t> m_videoram;
 	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint16_t> m_videoram3;
-	required_device_array<generic_latch_8_device, 2> m_soundlatch;
-	required_memory_bank m_soundbank;
 
 	uint16_t pal_read16(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16(offset); return swapendian_int16(data); };
 	uint16_t pal_read16_ext(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16_ext(offset); return swapendian_int16(data);  };
@@ -270,17 +259,6 @@ private:
 
 	void raidenm_map(address_map &map) ATTR_COLD;
 	void raidenm_sub_map(address_map &map) ATTR_COLD;
-
-	u8 sound_status_r();
-	void adpcm_w(u8 data);
-	void ym_w(offs_t offset, u8 data);
-	void audio_map(address_map &map) ATTR_COLD;
-	void adpcm_int(int state);
-	bool m_audio_select;
-	u8 m_adpcm_data;
-
-	void unk_snd_dffx_w(offs_t offset, u8 data);
-	void soundlatch_w(u8 data);
 
 	IRQ_CALLBACK_MEMBER( vector_r );
 	void vblank_irq(int state);
@@ -307,12 +285,7 @@ void raiden_ms_state::raidenm_map(address_map &map)
 	map(0x07000, 0x07fff).ram();
 	map(0x0a000, 0x0afff).ram().share("shared_ram");
 
-	map(0x0b000, 0x0b001).portr("P1");
-	map(0x0b002, 0x0b003).portr("P2");
-	map(0x0b004, 0x0b005).portr("P3");
-	map(0x0b006, 0x0b007).nopw();
-	map(0x0b008, 0x0b008).w(m_soundlatch[0], FUNC(generic_latch_8_device::write)).umask16(0x00ff);
-	map(0x0b009, 0x0b009).r(FUNC(raiden_ms_state::sound_status_r)).w(m_soundlatch[1], FUNC(generic_latch_8_device::write)).umask16(0xff00);
+	map(0x0b000, 0x0b00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 
 	map(0x0c000, 0x0cfff).ram().w(FUNC(raiden_ms_state::vram_w)).share("videoram");
 	map(0x0d800, 0x0dfff).ram().share("spriteram");
@@ -341,77 +314,6 @@ void raiden_ms_state::raidenm_sub_map(address_map &map)
 	map(0x0e800, 0x0e801).nopw();
 
 	map(0xc0000, 0xfffff).rom();
-}
-
-
-u8 raiden_ms_state::sound_status_r()
-{
-	return 0;
-}
-
-
-void raiden_ms_state::adpcm_w(u8 data)
-{
-	m_audio_select = BIT(data, 7);
-	m_soundbank->set_entry(m_audio_select ? 1 : 0);
-	m_msm->reset_w(BIT(data, 4));
-
-	m_adpcm_data = data & 0xf;
-}
-
-void raiden_ms_state::ym_w(offs_t offset, u8 data)
-{
-	if (!m_audio_select)
-	{
-		if (!BIT(offset, 1))
-			m_ym1->write(offset & 1, data);
-		else
-			m_ym2->write(offset & 1, data);
-	}
-	else
-	{
-		// ??? (written during ADPCM IRQ)
-	}
-}
-
-void raiden_ms_state::unk_snd_dffx_w(offs_t offset, u8 data)
-{
-
-}
-
-void raiden_ms_state::soundlatch_w(u8 data)
-{
-	m_soundlatch[0]->clear_w(data);
-	m_soundlatch[1]->clear_w(data);
-}
-
-void raiden_ms_state::audio_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0x8000).w(FUNC(raiden_ms_state::adpcm_w));
-	map(0x8000, 0xbfff).bankr("sound_bank");
-	map(0xc000, 0xc7ff).ram();
-	map(0xd000, 0xd7ff).ram();
-	// area 0xdff0-5 is never ever readback, applying a RAM mirror causes sound to go significantly worse,
-	// what they are even for?  (offset select bankswitch rather than data select?)
-	map(0xdff0, 0xdff7).w(FUNC(raiden_ms_state::unk_snd_dffx_w));
-	map(0xdff8, 0xdff8).r(m_soundlatch[1], FUNC(generic_latch_8_device::read)).w(FUNC(raiden_ms_state::soundlatch_w));
-	map(0xdff9, 0xdff9).r(m_soundlatch[0], FUNC(generic_latch_8_device::read));
-	map(0xe000, 0xe003).w(FUNC(raiden_ms_state::ym_w));
-	map(0xe008, 0xe009).r(m_ym1, FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r(m_ym2, FUNC(ym2203_device::read));
-}
-
-void raiden_ms_state::adpcm_int(int state)
-{
-	m_msm->data_w(m_adpcm_data);
-	m_audiocpu->set_input_line(0, HOLD_LINE);
-}
-
-
-void raiden_ms_state::machine_start()
-{
-	m_soundbank->configure_entries(0, 2, memregion("audiocpu")->base() + 0x8000, 0x4000);
 }
 
 
@@ -520,95 +422,70 @@ uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bit
 }
 
 static INPUT_PORTS_START( raidenm )
-	PORT_START("P1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_START("P2")
-	PORT_DIPNAME( 0x0001, 0x0001, "Coin Mode" ) PORT_DIPLOCATION("SW1:1")
-	PORT_DIPSETTING(      0x0001, "A" )
-	PORT_DIPSETTING(      0x0000, "B" )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 6-7
+	PORT_DIPNAME( 0x01, 0x01, "Coin Mode" ) PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x01, "A" )
+	PORT_DIPSETTING(    0x00, "B" )
 	// Coin Mode A
-	PORT_DIPNAME( 0x001e, 0x001e, DEF_STR( Coinage ) ) PORT_CONDITION("P2", 0x0001, EQUALS, 0x0001) PORT_DIPLOCATION("SW1:2,3,4,5")
-	PORT_DIPSETTING(      0x0014, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(      0x0016, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0018, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x001a, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( 8C_3C ) )
-	PORT_DIPSETTING(      0x001c, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( 5C_3C ) )
-	PORT_DIPSETTING(      0x0006, DEF_STR( 3C_2C ) )
-	PORT_DIPSETTING(      0x001e, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(      0x0012, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x000e, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x000c, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x000a, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x1e, 0x1e, DEF_STR( Coinage ) ) PORT_CONDITION("SW1", 0x01, EQUALS, 0x01) PORT_DIPLOCATION("SW1:2,3,4,5")
+	PORT_DIPSETTING(    0x14, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x16, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x1a, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 8C_3C ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 5C_3C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x1e, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x12, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 	// Coin Mode B
-	PORT_DIPNAME( 0x0006, 0x0006, DEF_STR( Coin_A ) ) PORT_CONDITION("P2", 0x0001, NOTEQUALS, 0x0001) PORT_DIPLOCATION("SW1:2,3")
-	PORT_DIPSETTING(      0x0000, "5C/1C or Free if Coin B too" )
-	PORT_DIPSETTING(      0x0002, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0006, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Coin_B ) ) PORT_CONDITION("P2", 0x0001, NOTEQUALS, 0x0001) PORT_DIPLOCATION("SW1:4,5")
-	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x0000, "1C/6C or Free if Coin A too" )
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Coin_A ) ) PORT_CONDITION("SW1", 0x01, NOTEQUALS, 0x01) PORT_DIPLOCATION("SW1:2,3")
+	PORT_DIPSETTING(    0x00, "5C/1C or Free if Coin B too" )
+	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) ) PORT_CONDITION("SW1", 0x01, NOTEQUALS, 0x01) PORT_DIPLOCATION("SW1:4,5")
+	PORT_DIPSETTING(    0x18, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x00, "1C/6C or Free if Coin A too" )
 
-	PORT_DIPNAME( 0x0020, 0x0020, "Credits to Start" ) PORT_DIPLOCATION("SW1:6")
-	PORT_DIPSETTING(      0x0020, "1" )
-	PORT_DIPSETTING(      0x0000, "2" )
-	PORT_DIPUNUSED_DIPLOC( 0x0040, 0x0040, "SW1:7")
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
-	PORT_DIPSETTING(      0x0200, "1" )
-	PORT_DIPSETTING(      0x0100, "2" )
-	PORT_DIPSETTING(      0x0300, "3" )
-	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0c00, 0x0c00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(      0x0800, "80000 300000" )
-	PORT_DIPSETTING(      0x0c00, "150000 400000" )
-	PORT_DIPSETTING(      0x0400, "300000 1000000" )
-	PORT_DIPSETTING(      0x0000, "1000000 5000000" )
-	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(      0x2000, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x3000, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
-	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x8000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "Credits to Start" ) PORT_DIPLOCATION("SW1:6")
+	PORT_DIPSETTING(    0x20, "1" )
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
 
-	PORT_START("P3")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0xfc00, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("P4")
-	PORT_BIT( 0xffff, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x02, "1" )
+	PORT_DIPSETTING(    0x01, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x00, "5" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x08, "80000 300000" )
+	PORT_DIPSETTING(    0x0c, "150000 400000" )
+	PORT_DIPSETTING(    0x04, "300000 1000000" )
+	PORT_DIPSETTING(    0x00, "1000000 5000000" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 static const gfx_layout tiles16x16x4_layout =
@@ -669,9 +546,6 @@ void raiden_ms_state::raidenm(machine_config &config)
 	m_subcpu->set_addrmap(AS_PROGRAM, &raiden_ms_state::raidenm_sub_map);
 	m_subcpu->set_irq_acknowledge_callback(FUNC(raiden_ms_state::vector_r));
 
-	Z80(config, m_audiocpu, XTAL(4'000'000));
-	m_audiocpu->set_addrmap(AS_PROGRAM, &raiden_ms_state::audio_map);
-
 	// Video hardware
 	SCREEN(config, m_screen); // all wrong
 	m_screen->set_refresh_hz(60);
@@ -686,28 +560,18 @@ void raiden_ms_state::raidenm(machine_config &config)
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_raiden_ms);
 
-	GENERIC_LATCH_8(config, m_soundlatch[0]);
-	GENERIC_LATCH_8(config, m_soundlatch[1]);
-
 	// Sound hardware
 	SPEAKER(config, "mono").front_center();
-	YM2203(config, m_ym1, XTAL(4'000'000)/4); // unknown clock
-	m_ym1->add_route(0, "mono", 0.15);
-	m_ym1->add_route(1, "mono", 0.15);
-	m_ym1->add_route(2, "mono", 0.15);
-	m_ym1->add_route(3, "mono", 0.40);
 
-	YM2203(config, m_ym2, XTAL(4'000'000)/4); // unknown clock
-	m_ym2->add_route(0, "mono", 0.15);
-	m_ym2->add_route(1, "mono", 0.15);
-	m_ym2->add_route(2, "mono", 0.15);
-	m_ym2->add_route(3, "mono", 0.40);
-
-	MSM5205(config, m_msm, XTAL(384'000)); // unknown clock
-	m_msm->vck_legacy_callback().set(FUNC(raiden_ms_state::adpcm_int));
-	m_msm->set_prescaler_selector(msm5205_device::S96_4B); // unverified
-	m_msm->add_route(ALL_OUTPUTS, "mono", 1.00);
-
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
+	m_mod1->set_ym_clock(1'000'000); // unknown clock
+	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 // reorganize graphics into something we can decode with a single pass
@@ -745,7 +609,7 @@ ROM_START( raidenm )
 	ROM_LOAD16_BYTE( "msraid_6-1-8086-1_rd606b.u19", 0x0c0001, 0x20000, CRC(58eac0b6) SHA1(618813c7593d13271d2826739f24e08dda400b0d) )
 	ROM_LOAD16_BYTE( "msraid_6-1-8086-1_rd605b.u18", 0x0c0000, 0x20000, CRC(251fef93) SHA1(818095a77cb94fd4acc9eb26954615ee93e8432c) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/5 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/5 board
 	ROM_LOAD( "msraid_1-5_rd101.ic12",  0x00000, 0x10000, CRC(2b76e371) SHA1(4c9732950f576e498d02fde485ba92fb293d5594) )
 
 	// dumper's note: ROMs [rd4b1, rd4b2, rb4b3, rd4b4] and [rd4a1, rd4a2, rb4a3, rd4a4] have a strange setup

@@ -24,11 +24,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -44,6 +42,7 @@ public:
 	badlands_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen")
 	{ }
 
@@ -54,6 +53,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<screen_device> m_screen;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -76,28 +76,35 @@ void badlands_ms_state::machine_start()
 void badlands_ms_state::main_map(address_map &map)
 {
 	map(0x000000, 0x03ffff).rom();
+	map(0xfe4000, 0xfe400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0xffc000, 0xffc3ff).ram(); // palette in the original, filled at boot
+	map(0xffe000, 0xffefff).ram(); // playfield in the original, tested at boot
 	map(0xfff000, 0xffffff).ram();
 }
 
 
 static INPUT_PORTS_START( badlandsm )
-	PORT_START("DSW")
-	PORT_DIPUNKNOWN_DIPLOC(0x0001, 0x0001, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0002, 0x0002, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0004, 0x0004, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0008, 0x0008, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x0010, 0x0010, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x0020, 0x0020, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x0040, 0x0040, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x0080, 0x0080, "SW1:8")
-	PORT_DIPUNKNOWN_DIPLOC(0x0100, 0x0100, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0200, 0x0200, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0400, 0x0400, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0800, 0x0800, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x1000, 0x1000, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x2000, 0x2000, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x4000, 0x4000, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x8000, 0x8000, "SW2:8")
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
 INPUT_PORTS_END
 
 
@@ -124,8 +131,6 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &badlands_ms_state::main_map);
 
-	Z80(config, "audiocpu", 20_MHz_XTAL / 5).set_disable(); // divisor unknown
-
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
 	m_screen->set_refresh_hz(60);
@@ -142,13 +147,13 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	MSM5205(config, "msm", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P105);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( badlandsm )
@@ -158,7 +163,7 @@ ROM_START( badlandsm )
 	ROM_LOAD16_BYTE( "mod-6-1_cpu_ba_602.ic20",  0x20000, 0x10000, CRC(0e2e807f) SHA1(5b61de066dca12c44335aa68a13c821845657866) )
 	ROM_LOAD16_BYTE( "mod-6-1_cpu_ba_605.ic11",  0x20001, 0x10000, CRC(99a20c2c) SHA1(9b0a5a5dafb8816e72330d302c60339b600b49a8) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/4 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod-1-4_sound_ba_401.ic12",  0x00000, 0x10000, CRC(6cddace7) SHA1(f53c3d6fdec22bc2d39814d482db76aa0fc18af7) )
 
 	ROM_REGION( 0x80000, "tiles", ROMREGION_INVERT ) // on MOD 4/2 board, different format from original and other bootlegs
@@ -199,4 +204,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 199?, badlandsm, badlands, badlandsm, badlandsm, badlands_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Bad Lands (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, badlandsm, badlands, badlandsm, badlandsm, badlands_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Bad Lands (Modular System)", MACHINE_NOT_WORKING )

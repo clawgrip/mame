@@ -20,7 +20,6 @@
     maybe make it worthwhile to leave it as a separate driver.
 
     TODO:
-    - sound;
     - tilemaps y scroll needs slight adjustment;
     - sprites positioning may be slightly off.
 */
@@ -28,11 +27,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -48,9 +45,9 @@ public:
 	shadoww_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_screen(*this, "screen"),
-		m_msm(*this, "msm5205"),
 		m_spriteram(*this, "spriteram"),
 		m_videoram(*this, "videoram%u", 1)
 	{ }
@@ -64,9 +61,9 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<screen_device> m_screen;
-	required_device<msm5205_device> m_msm;
 
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr_array<uint16_t, 3> m_videoram;
@@ -85,7 +82,6 @@ private:
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -205,9 +201,7 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x078000, 0x0783ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0x078400, 0x0787ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0x078800, 0x079fff).ram();
-	map(0x07a000, 0x07a001).portr("SYSTEM");
-	map(0x07a002, 0x07a003).portr("P1_P2");
-	map(0x07a004, 0x07a005).portr("DSW");
+	map(0x07a000, 0x07a00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 	map(0x07e000, 0x07e000).lw8(NAME([this] (uint8_t data) { m_maincpu->set_input_line(5, CLEAR_LINE); }));
 	map(0x07f000, 0x07f001).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrollx(0, (0x33 - data) & 0x3ff); }));
 	map(0x07f002, 0x07f003).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrolly(0, -data & 0x1ff); })); // not 100% correct
@@ -215,90 +209,57 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x07f006, 0x07f007).lw16(NAME([this] (uint16_t data) { m_background->set_scrolly(0, -data & 0x1ff); })); // not 100% correct
 }
 
-void shadoww_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	// map(0x8000, 0x8000).w() // MSM5205?
-	map(0xc000, 0xc001).w("ym1", FUNC(ym2203_device::write));
-	map(0xc002, 0xc003).w("ym2", FUNC(ym2203_device::write));
-	map(0xc008, 0xc009).r("ym1", FUNC(ym2203_device::read));
-	map(0xc00a, 0xc00b).r("ym2", FUNC(ym2203_device::read));
-	map(0xf000, 0xffff).ram();
-}
-
-
 static INPUT_PORTS_START( shadowwm )
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_INCLUDE( gaelco_ms_mod1 ) // the sound program also passes the start buttons as button 1
 
-	PORT_START("P1_P2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_MODIFY("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
 
-	PORT_START("DSW") // from manual
-	PORT_DIPNAME( 0x00e0, 0x00e0, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:3,2,1")
-	PORT_DIPSETTING(      0x0000, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0020, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x00e0, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0060, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x00a0, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_4C ) )
-	PORT_DIPNAME( 0x001c, 0x001c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5,4")
-	PORT_DIPSETTING(      0x0000, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x001c, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x000c, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0014, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_4C ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unused ) ) PORT_DIPLOCATION("SW1:7") // Flip Screen on original, listed empty in this game manual
-	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( On ) )
-	PORT_DIPNAME( 0xc000, 0xc000, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:2,1")
-	PORT_DIPSETTING(      0x0000, "0" )
-	PORT_DIPSETTING(      0xc000, "1" )
-	PORT_DIPSETTING(      0x4000, "2" )
-	PORT_DIPSETTING(      0x8000, "3" )
-	PORT_DIPNAME( 0x3000, 0x3000, "Energy" ) PORT_DIPLOCATION("SW2:4,3")
-	PORT_DIPSETTING(      0x0000, "2" )
-	PORT_DIPSETTING(      0x3000, "3" )
-	PORT_DIPSETTING(      0x1000, "4" )
-	PORT_DIPSETTING(      0x2000, "5" )
-	PORT_DIPNAME( 0x0c00, 0x0c00, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
-	PORT_DIPSETTING(      0x0c00, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0400, "TBL 1" )
-	PORT_DIPSETTING(      0x0800, "TBL 2" )
-	PORT_DIPSETTING(      0x0000, "TBL 3" )
-	PORT_DIPUNUSED_DIPLOC( 0x0200, 0x0200, "SW2:7" ) // listed as 'don't change'
-	PORT_DIPUNUSED_DIPLOC( 0x0100, 0x0100, "SW2:8" ) // listed as 'don't change'
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, from manual
+	PORT_DIPNAME( 0xe0, 0xe0, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:3,2,1")
+	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
+	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5,4")
+	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x14, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( 1C_4C ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unused ) ) PORT_DIPLOCATION("SW1:7") // Flip Screen on original, listed empty in this game manual
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
 
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A, from manual
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:2,1")
+	PORT_DIPSETTING(    0x00, "0" )
+	PORT_DIPSETTING(    0xc0, "1" )
+	PORT_DIPSETTING(    0x40, "2" )
+	PORT_DIPSETTING(    0x80, "3" )
+	PORT_DIPNAME( 0x30, 0x30, "Energy" ) PORT_DIPLOCATION("SW2:4,3")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x30, "3" )
+	PORT_DIPSETTING(    0x10, "4" )
+	PORT_DIPSETTING(    0x20, "5" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x04, "TBL 1" )
+	PORT_DIPSETTING(    0x08, "TBL 2" )
+	PORT_DIPSETTING(    0x00, "TBL 3" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:7" ) // listed as 'don't change'
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:8" ) // listed as 'don't change'
 INPUT_PORTS_END
 
 
@@ -340,9 +301,6 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &shadoww_ms_state::main_map);
 	m_maincpu->set_vblank_int("screen", FUNC(shadoww_ms_state::irq5_line_assert));
 
-	z80_device &audiocpu(Z80(config, "audiocpu", 20_MHz_XTAL / 5)); // divisor unknown
-	audiocpu.set_addrmap(AS_PROGRAM, &shadoww_ms_state::sound_map);
-
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
 	m_screen->set_refresh_hz(60);
@@ -359,15 +317,13 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	MSM5205(config, m_msm, XTAL(384'000)); // unknown clock
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B); // unverified
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.25);
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P105); // PROM not dumped, the program fits this layout
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 
@@ -379,7 +335,7 @@ ROM_START( shadowwm )
 	ROM_LOAD16_BYTE( "mod_6-1_3sw_602.ic20", 0x30001, 0x08000, CRC(e642241b) SHA1(7abcda6b86595ba86ae12874d6787ef8dcd64f84) )
 	ROM_CONTINUE(                            0x20000, 0x08000 ) // some weird addressing
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/3 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/3 board
 	ROM_LOAD( "mod_1-3_3sw_415.ic12", 0x00000, 0x10000, CRC(4dba665b) SHA1(8d068cd588f31cbe944a2f07dbbb81a74d80bcac) )
 
 	ROM_REGION( 0x10000, "txtiles", 0 ) // on MOD 8 board
@@ -466,4 +422,4 @@ void shadoww_ms_state::init_gfx()
 } // anonymous namespace
 
 
-GAME( 1988, shadowwm, shadoww, shadowwm, shadowwm, shadoww_ms_state, init_gfx, ROT0, "bootleg (Gaelco / Ervisa)", "Shadow Warriors (Modular System)", MACHINE_IMPERFECT_GRAPHICS | MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 1988, shadowwm, shadoww, shadowwm, shadowwm, shadoww_ms_state, init_gfx, ROT0, "bootleg (Gaelco / Ervisa)", "Shadow Warriors (Modular System)", MACHINE_NOT_WORKING )

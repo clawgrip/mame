@@ -23,15 +23,18 @@
     - tiles
     - palette
     - banking: seems to work by accident, tweaking the ROM loading. Pretty sure it's wrong.
-    - where are the sound latch and the other functions that the original has mapped in the io space?
+    - what the other bank latch values select at 0xc000-0xc7ff (0x00 is read and written at boot,
+      0xc000 is read with 0x06 once per frame)
     - lots of other stuff
 */
 
 
 #include "emu.h"
+
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/ymopn.h"
+
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
@@ -46,6 +49,7 @@ public:
 	blktiger_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
@@ -64,6 +68,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
@@ -78,7 +83,6 @@ private:
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
 
 	tilemap_t *m_tx_tilemap = nullptr;
 };
@@ -89,39 +93,21 @@ void blktiger_ms_state::main_map(address_map &map)
 	map(0x0000, 0x7fff).rom().region("maincpu", 0);
 	map(0x8000, 0xbfff).bankr("mainbank");
 	map(0xc000, 0xcfff).view(m_bg_view);
-	m_bg_view[0](0xc000, 0xc000).portr("IN0");
-	m_bg_view[0](0xc001, 0xc001).portr("IN1");
-	m_bg_view[0](0xc002, 0xc002).portr("IN2");
-	m_bg_view[0](0xc003, 0xc003).portr("DSW0");
-	m_bg_view[0](0xc004, 0xc004).portr("DSW1");
-	m_bg_view[0](0xc008, 0xc008).w("soundlatch", FUNC(generic_latch_8_device::write));
-	// TODO: c0xx/c1xx also shared RAM with sound?
+	// 0x07 in the bank latch selects the MOD 1 board, 0x04 the sprite board (copied from 0xfe00 every frame)
+	m_bg_view[0](0xc000, 0xc00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
 	m_bg_view[0](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
 	m_bg_view[0](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-
 	m_bg_view[1](0xc000, 0xcfff).ram(); // background tiles, banked?
+	m_bg_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
+	m_bg_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
 	map(0xd000, 0xd7ff).ram().w(FUNC(blktiger_ms_state::txvideoram_w)).share(m_txvideoram);
 	map(0xd800, 0xd800).lw8(NAME([this] (u8 data) {
 		// TODO: may bitswap, cfr. background collision detection
 		membank("mainbank")->set_entry(data & 0x0f);
-		m_bg_view.select(BIT(data, 4));
+		m_bg_view.select(BIT(data, 4) ? 1 : ((data & 0x0f) == 0x07) ? 0 : 2);
 	}));
 	map(0xe000, 0xfdff).ram();
 	map(0xfe00, 0xffff).ram().share(m_spriteram);
-}
-
-void blktiger_ms_state::sound_map(address_map &map) // seems similar to toki_ms.cpp and raiden_ms.cpp
-{
-	map(0x0000, 0x7fff).rom().region("audiocpu", 0);
-	map(0xa000, 0xa000).w("soundlatch", FUNC(generic_latch_8_device::clear_w));
-	map(0xc000, 0xc7ff).ram();
-	map(0xc900, 0xc900).ram(); // what lives here?
-	map(0xdff8, 0xdff8).r("soundlatch", FUNC(generic_latch_8_device::read));
-	map(0xdff0, 0xdfff).nopw(); // what lives here?
-	map(0xe000, 0xe001).w("ym1", FUNC(ym2203_device::write));
-	map(0xe002, 0xe003).w("ym2", FUNC(ym2203_device::write));
-	map(0xe008, 0xe009).r("ym1", FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r("ym2", FUNC(ym2203_device::read));
 }
 
 void blktiger_ms_state::machine_start()
@@ -188,38 +174,10 @@ TILE_GET_INFO_MEMBER(blktiger_ms_state::get_tx_tile_info)
 }
 
 static INPUT_PORTS_START( blktigerm )
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("DSW0")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )       PORT_DIPLOCATION( "SW1:1,2,3" )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 6-7
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
@@ -228,7 +186,7 @@ static INPUT_PORTS_START( blktigerm )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x38, 0x38, DEF_STR( Coin_B ) )       PORT_DIPLOCATION( "SW1:4,5,6" )
+	PORT_DIPNAME( 0x38, 0x38, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:4,5,6")
 	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
@@ -237,20 +195,16 @@ static INPUT_PORTS_START( blktigerm )
 	PORT_DIPSETTING(    0x28, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION( "SW1:7" )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Test ) )         PORT_DIPLOCATION( "SW1:8" )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
 
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )        PORT_DIPLOCATION( "SW2:1,2" )
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A, the sound program clears bit 7
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x02, "2" )
 	PORT_DIPSETTING(    0x03, "3" )
 	PORT_DIPSETTING(    0x01, "5" )
 	PORT_DIPSETTING(    0x00, "7")
-	PORT_DIPNAME( 0x1c, 0x0c, DEF_STR( Difficulty ) )   PORT_DIPLOCATION( "SW2:3,4,5" )
+	PORT_DIPNAME( 0x1c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:3,4,5")
 	PORT_DIPSETTING(    0x1c, "1 (Easiest)")
 	PORT_DIPSETTING(    0x18, "2" )
 	PORT_DIPSETTING(    0x14, "3" )
@@ -259,15 +213,13 @@ static INPUT_PORTS_START( blktigerm )
 	PORT_DIPSETTING(    0x08, "6" )
 	PORT_DIPSETTING(    0x04, "7" )
 	PORT_DIPSETTING(    0x00, "8 (Hardest)" )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) )  PORT_DIPLOCATION( "SW2:6" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) )   PORT_DIPLOCATION( "SW2:7" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) )      PORT_DIPLOCATION( "SW2:8" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Cocktail ) )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" )
 INPUT_PORTS_END
 
 static const gfx_layout charlayout =
@@ -306,10 +258,6 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &blktiger_ms_state::main_map);
 	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_hold));
 
-	z80_device &audiocpu(Z80(config, "audiocpu", 24_MHz_XTAL / 8)); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-	audiocpu.set_addrmap(AS_PROGRAM, &blktiger_ms_state::sound_map);
-	audiocpu.set_periodic_int(FUNC(blktiger_ms_state::irq0_line_hold), attotime::from_hz(60));
-
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
 	m_screen->set_refresh_hz(60);
@@ -327,11 +275,15 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch").data_pending_callback().set_inputline("audiocpu", INPUT_LINE_NMI);
-
-	YM2203(config, "ym1", 24_MHz_XTAL / 8).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-
-	YM2203(config, "ym2", 24_MHz_XTAL / 8).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
+	GAELCO_MS_MOD1(config, m_mod1, 24_MHz_XTAL / 8); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0101);
+	m_mod1->set_int_period(attotime::from_hz(60)); // unknown source
+	m_mod1->set_host_nmi(true);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( blktigerm )
@@ -342,7 +294,7 @@ ROM_START( blktigerm )
 	ROM_LOAD( "3_bl_302_c.ic13", 0x30000, 0x10000, CRC(c943415f) SHA1(08e82d2557de01c979a0a58b5433e9bdcdb118cb) )
 	ROM_LOAD( "3_bl_303_b.ic12", 0x40000, 0x10000, CRC(72114f6b) SHA1(049e747431cd95db2e7414467754424f68a8d757) )
 
-	ROM_REGION( 0x8000, "audiocpu", 0 )
+	ROM_REGION( 0x8000, "mod1", 0 )
 	ROM_LOAD( "1_bl_101.ic12",  0x0000, 0x8000, CRC(14028686) SHA1(64dc219d906f1bdd0c2bc05aff5aa73e001a6901) )
 
 	ROM_REGION( 0x10000, "chars", 0 ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
@@ -395,4 +347,4 @@ void blktiger_ms_state::init_blktigerm()
 } // Anonymous namespace
 
 
-GAME( 1991, blktigerm,  blktiger,  blktigerm,  blktigerm,  blktiger_ms_state, init_blktigerm, ROT0, "bootleg (Gaelco / Ervisa)", "Black Tiger (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 1991, blktigerm,  blktiger,  blktigerm,  blktigerm,  blktiger_ms_state, init_blktigerm, ROT0, "bootleg (Gaelco / Ervisa)", "Black Tiger (Modular System)", MACHINE_NOT_WORKING )

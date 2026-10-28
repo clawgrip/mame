@@ -26,10 +26,10 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/z80/z80.h"
 #include "machine/74259.h"
-#include "machine/gen_latch.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -45,7 +45,7 @@ public:
 	slapfght_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
-		m_audiocpu(*this, "audiocpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_videoram(*this, "videoram"),
@@ -66,7 +66,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_audiocpu;
+	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 
@@ -98,7 +98,6 @@ private:
 
 	void main_io_map(address_map &map) ATTR_COLD;
 	void main_prg_map(address_map &map) ATTR_COLD;
-	void sound_prg_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -218,7 +217,7 @@ void slapfght_ms_state::irq_enable_w(int state)
 
 void slapfght_ms_state::sound_reset_w(int state)
 {
-	m_audiocpu->set_input_line(INPUT_LINE_RESET, state ? CLEAR_LINE : ASSERT_LINE);
+	m_mod1->reset_w(!state);
 
 	if (state == 0)
 		m_sound_nmi_enabled = false;
@@ -240,7 +239,7 @@ void slapfght_ms_state::main_prg_map(address_map &map)
 	map(0x0000, 0x7fff).rom();
 	map(0x8000, 0xbfff).bankr(m_mainbank);
 	map(0xc000, 0xc7ff).ram();
-	map(0xc800, 0xc80f).ram().share("main_sound");
+	map(0xc800, 0xc80f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
 	map(0xc810, 0xcfff).ram();
 	map(0xd000, 0xd7ff).ram().w(FUNC(slapfght_ms_state::videoram_w)).share(m_videoram);
 	map(0xd800, 0xdfff).ram().w(FUNC(slapfght_ms_state::colorram_w)).share(m_colorram);
@@ -257,40 +256,10 @@ void slapfght_ms_state::main_io_map(address_map &map)
 	map(0x00, 0x0f).w("mainlatch", FUNC(ls259_device::write_a0));
 }
 
-void slapfght_ms_state::sound_prg_map(address_map &map)
-{
-	map(0x0000, 0x3fff).rom();
-	map(0xc800, 0xc9ff).ram();
-	map(0xdff0, 0xdfff).ram().share("main_sound");
-	map(0xe000, 0xe001).w("ym1", FUNC(ym2203_device::write));
-	map(0xe002, 0xe003).w("ym2", FUNC(ym2203_device::write));
-	map(0xe008, 0xe009).r("ym1", FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r("ym2", FUNC(ym2203_device::read));
-}
-
-
 static INPUT_PORTS_START( slapfighm )
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP    ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN  ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT  ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP    ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN  ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT  ) PORT_8WAY PORT_COCKTAIL
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
-
-	PORT_START("SW1")
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
 	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
 	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
 	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
@@ -300,7 +269,7 @@ static INPUT_PORTS_START( slapfighm )
 	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
 	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
 
-	PORT_START("SW2")
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
 	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
 	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
 	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
@@ -359,9 +328,6 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &slapfght_ms_state::main_prg_map);
 	m_maincpu->set_addrmap(AS_IO, &slapfght_ms_state::main_io_map);
 
-	Z80(config, m_audiocpu, 20_MHz_XTAL / 5); // divisor unknown
-	m_audiocpu->set_addrmap(AS_PROGRAM, &slapfght_ms_state::sound_prg_map);
-
 	ls259_device &mainlatch(LS259(config, "mainlatch"));
 	mainlatch.q_out_cb<0>().set(FUNC(slapfght_ms_state::sound_reset_w));
 	//mainlatch.q_out_cb<1>().set(FUNC(slapfght_ms_state::flipscreen_w));
@@ -384,19 +350,14 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	ym2203_device &ym1(YM2203(config, "ym1", 20_MHz_XTAL / 5)); // divisor unknown
-	ym1.port_a_read_callback().set_ioport("IN0");
-	ym1.port_b_read_callback().set_ioport("IN1");
-	ym1.irq_handler().set([this](int state) { if (state) logerror("ym 1 IRQ\n"); });
-	ym1.add_route(ALL_OUTPUTS, "mono", 0.15);
-
-	ym2203_device &ym2(YM2203(config, "ym2", 20_MHz_XTAL / 5)); // divisor unknown
-	ym2.port_a_read_callback().set_ioport("SW1");
-	ym2.port_b_read_callback().set_ioport("SW2");
-	ym2.irq_handler().set([this](int state) { if (state) logerror("ym 2 IRQ\n"); });
-	ym2.add_route(ALL_OUTPUTS, "mono", 0.15);
+	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0102);
+	m_mod1->set_int_period(attotime::from_hz(180)); // unknown source and rate
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( slapfighm )
@@ -405,7 +366,7 @@ ROM_START( slapfighm )
 	ROM_LOAD( "3_cpu_fi_302.ic13-512", 0x8000,  0x8000, CRC(97403de3) SHA1(b96acd3b4bbe6e6dc060255aaa1b237100c41847) ) // 27256
 	ROM_LOAD( "3_cpu_fi_301.ic14-513", 0x10000, 0x4000, CRC(c63b02fe) SHA1(8d1991780b7aed718f60b6a8f5de7571682fb713) ) // 27128, identical to the original once decrypted
 
-	ROM_REGION( 0x4000, "audiocpu", 0 ) // on MOD 1 board
+	ROM_REGION( 0x4000, "mod1", 0 ) // on MOD 1 board
 	ROM_LOAD( "1_snd_fi_0101.ic12", 0x0000, 0x4000, CRC(4e3ae13e) SHA1(4ab29064f3a4cb4fd70a9eb8ddbffb4f5ee74057) ) // 1xxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION( 0x4000, "chars", 0 ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
@@ -461,4 +422,4 @@ void slapfght_ms_state::init_decryption() // same as the one for blktiger_ms
 } // anonymous namespace
 
 
-GAME( 199?, slapfighm, alcon, slapfighm, slapfighm, slapfght_ms_state, init_decryption, ROT270, "bootleg (Gaelco / Ervisa)", "Slap Fight (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, slapfighm, alcon, slapfighm, slapfighm, slapfght_ms_state, init_decryption, ROT270, "bootleg (Gaelco / Ervisa)", "Slap Fight (Modular System)", MACHINE_NOT_WORKING )

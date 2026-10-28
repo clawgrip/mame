@@ -253,16 +253,16 @@ IC46->PAL16V8H 74LS393N 74LS368AP 74LS377B1|U||    |   |                        
 */
 
 #include "emu.h"
+
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
+#include "video/bufsprite.h"
+
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
-#include "video/bufsprite.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 
 namespace {
@@ -273,7 +273,7 @@ public:
 	toki_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
-		, m_audiocpu(*this, "audiocpu")
+		, m_mod1(*this, "mod1")
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
@@ -282,10 +282,6 @@ public:
 		, m_vram(*this, "vram")
 		, m_spriteram(*this, "spriteram")
 		, m_scrollram(*this, "scrollram")
-		, m_ym1(*this, "ym1")
-		, m_ym2(*this, "ym2")
-		, m_msm(*this, "msm5205")
-		, m_soundlatch(*this, "soundlatch")
 	{ }
 
 	void tokims(machine_config &config);
@@ -293,7 +289,7 @@ public:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_audiocpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -303,12 +299,7 @@ private:
 	required_shared_ptr<u16> m_vram;
 	required_device<buffered_spriteram16_device> m_spriteram;
 	required_shared_ptr<u16> m_scrollram;
-	required_device<ym2203_device> m_ym1;
-	required_device<ym2203_device> m_ym2;
-	required_device<msm5205_device> m_msm;
-	required_device<generic_latch_8_device> m_soundlatch;
 
-	virtual void machine_start() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
 
 	TILE_GET_INFO_MEMBER(get_bk1_info);
@@ -329,13 +320,6 @@ private:
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void tokims_map(address_map &map) ATTR_COLD;
-	void audio_map(address_map &map) ATTR_COLD;
-
-	u8 sound_status_r();
-	void sound_command_w(u8 data);
-	void adpcm_w(u8 data);
-	void adpcm_int(int state);
-	u8 m_adpcm_data = 0;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
@@ -497,19 +481,6 @@ void toki_ms_state::palette_w(offs_t offset, u8 data)
 	m_palette->set_pen_color(pal_entry, pal4bit(r),pal4bit(g),pal4bit(b));
 }
 
-u8 toki_ms_state::sound_status_r()
-{
-	// if non-zero skips new command, either soundlatch readback or audiocpu handshake
-	return 0;
-}
-
-// TODO: remove this trampoline after confirming it just writes to the sound latch
-// (definitely it isn't tied to irq 0)
-void toki_ms_state::sound_command_w(u8 data)
-{
-	m_soundlatch->write(data & 0xff);
-}
-
 void toki_ms_state::tokims_map(address_map &map)
 {
 	map(0x000000, 0x05ffff).rom();
@@ -522,123 +493,60 @@ void toki_ms_state::tokims_map(address_map &map)
 	map(0x072000, 0x072001).nopr(); // irq ack?
 	map(0x073000, 0x07300f).ram().share("scrollram");
 	map(0x0a0000, 0x0a005f).nopw(); // scrollram left-over?
-	map(0x0c0000, 0x0c0001).portr("DSW");
-	map(0x0c0002, 0x0c0003).portr("INPUTS");
-	map(0x0c0004, 0x0c0005).portr("SYSTEM");
-	map(0x0c000e, 0x0c000f).rw(FUNC(toki_ms_state::sound_status_r), FUNC(toki_ms_state::sound_command_w)).umask16(0x00ff);
-}
-
-void toki_ms_state::adpcm_w(u8 data)
-{
-//  membank("sound_bank")->set_entry(((data & 0x10) >> 4) ^ 1);
-	m_msm->reset_w(BIT(data, 4));
-
-	m_adpcm_data = data & 0xf;
-	//m_msm->data_w(data & 0xf);
-//  m_msm->vclk_w(BIT(data, 7));
-	//m_msm->vclk_w(1);
-	//m_msm->vclk_w(0);
-}
-
-
-void toki_ms_state::audio_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0x8000).w(FUNC(toki_ms_state::adpcm_w));
-	map(0x8000, 0xbfff).bankr("sound_bank");
-	map(0xc000, 0xc7ff).ram();
-	map(0xd000, 0xd7ff).ram();
-	// area 0xdff0-5 is never ever readback, applying a RAM mirror causes sound to go significantly worse,
-	// what they are even for?  (offset select bankswitch rather than data select?)
-	map(0xdfff, 0xdfff).r(m_soundlatch, FUNC(generic_latch_8_device::read));
-	map(0xe000, 0xe001).w(m_ym1, FUNC(ym2203_device::write));
-	map(0xe002, 0xe003).w(m_ym2, FUNC(ym2203_device::write));
-	map(0xe008, 0xe009).r(m_ym1, FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r(m_ym2, FUNC(ym2203_device::read));
+	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 }
 
 static INPUT_PORTS_START( tokims )
-	// TODO: same as tokib, subclass into tokib_io_device
-	PORT_START("DSW")
-	PORT_DIPNAME( 0x001f, 0x001f, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2,3,4,5")
-	PORT_DIPSETTING(      0x0015, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(      0x0017, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0019, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x001b, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( 8C_3C ) )
-	PORT_DIPSETTING(      0x001d, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0005, DEF_STR( 5C_3C ) )
-	PORT_DIPSETTING(      0x0007, DEF_STR( 3C_2C ) )
-	PORT_DIPSETTING(      0x001f, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0009, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(      0x0013, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0011, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x000f, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x000d, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x000b, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(      0x001e, "A 1/1 B 1/2" )
-	PORT_DIPSETTING(      0x0014, "A 2/1 B 1/3" )
-	PORT_DIPSETTING(      0x000a, "A 3/1 B 1/5" )
-	PORT_DIPSETTING(      0x0000, "A 5/1 B 1/6" )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0020, 0x0000, "Joysticks" ) PORT_DIPLOCATION("SW1:6")
-	PORT_DIPSETTING(      0x0020, "1" )
-	PORT_DIPSETTING(      0x0000, "2" )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(      0x0040, DEF_STR( Upright ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Lives ) )  PORT_DIPLOCATION("SW2:1,2")
-	PORT_DIPSETTING(      0x0200, "2" )
-	PORT_DIPSETTING(      0x0300, "3" )
-	PORT_DIPSETTING(      0x0100, "5" )
-	PORT_DIPSETTING(      0x0000, "Infinite (Cheat)")
-	PORT_DIPNAME( 0x0c00, 0x0c00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(      0x0800, "50000 150000" )
-	PORT_DIPSETTING(      0x0000, "70000 140000 210000" )
-	PORT_DIPSETTING(      0x0c00, "70000" )
-	PORT_DIPSETTING(      0x0400, "100000 200000" )
-	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(      0x2000, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x3000, DEF_STR( Medium ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
-	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x8000, DEF_STR( On ) )
+	PORT_INCLUDE( gaelco_ms_mod1 )
 
-	PORT_START("INPUTS")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW,  IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW,  IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW,  IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW,  IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW,  IPT_BUTTON1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW,  IPT_BUTTON2 )
-	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW,  IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW,  IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW,  IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW,  IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW,  IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW,  IPT_BUTTON2 ) PORT_COCKTAIL
-	PORT_BIT( 0x4000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 5-7
+	PORT_DIPNAME( 0x1f, 0x1f, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2,3,4,5")
+	PORT_DIPSETTING(    0x15, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x17, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x19, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x1b, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 8C_3C ) )
+	PORT_DIPSETTING(    0x1d, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 5C_3C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x1f, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x13, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x11, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x1e, "A 1/1 B 1/2" )
+	PORT_DIPSETTING(    0x14, "A 2/1 B 1/3" )
+	PORT_DIPSETTING(    0x0a, "A 3/1 B 1/5" )
+	PORT_DIPSETTING(    0x00, "A 5/1 B 1/6" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Free_Play ) )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_SERVICE1 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_START1 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_START2 )
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x01, "5" )
+	PORT_DIPSETTING(    0x00, "Infinite (Cheat)")
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x08, "50000 150000" )
+	PORT_DIPSETTING(    0x00, "70000 140000 210000" )
+	PORT_DIPSETTING(    0x0c, "70000" )
+	PORT_DIPSETTING(    0x04, "100000 200000" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -675,26 +583,12 @@ static GFXDECODE_START( gfx_toki_ms )
 GFXDECODE_END
 
 
-void toki_ms_state::machine_start()
-{
-	membank("sound_bank")->configure_entries(0, 2, memregion("audiocpu")->base() + 0x8000, 0x4000);
-}
-
-void toki_ms_state::adpcm_int(int state)
-{
-	m_msm->data_w(m_adpcm_data);
-	m_audiocpu->set_input_line(0, HOLD_LINE);
-}
-
 void toki_ms_state::tokims(machine_config &config)
 {
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &toki_ms_state::tokims_map);
 	m_maincpu->set_vblank_int("screen", FUNC(toki_ms_state::irq1_line_hold));
-
-	Z80(config, m_audiocpu, XTAL(4'000'000));
-	m_audiocpu->set_addrmap(AS_PROGRAM, &toki_ms_state::audio_map);
 
 	// video hardware
 	SCREEN(config, m_screen);
@@ -709,26 +603,17 @@ void toki_ms_state::tokims(machine_config &config)
 
 	BUFFERED_SPRITERAM16(config, m_spriteram);
 
-	GENERIC_LATCH_8(config, m_soundlatch);
-
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
-	YM2203(config, m_ym1, XTAL(4'000'000)/4); // unknown clock
-	m_ym1->add_route(0, "mono", 0.15);
-	m_ym1->add_route(1, "mono", 0.15);
-	m_ym1->add_route(2, "mono", 0.15);
-	m_ym1->add_route(3, "mono", 0.10);
 
-	YM2203(config, m_ym2, XTAL(4'000'000)/4); // unknown clock
-	m_ym2->add_route(0, "mono", 0.15);
-	m_ym2->add_route(1, "mono", 0.15);
-	m_ym2->add_route(2, "mono", 0.15);
-	m_ym2->add_route(3, "mono", 0.10);
-
-	MSM5205(config, m_msm, XTAL(384'000)); // unknown clock
-	m_msm->vck_legacy_callback().set(FUNC(toki_ms_state::adpcm_int));
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B); // unverified
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.25);
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
+	m_mod1->set_ym_clock(1'000'000); // unknown clock
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 
@@ -741,7 +626,7 @@ ROM_START( tokims )
 	ROM_LOAD16_BYTE( "6_tk_604.ic25",  0x040001, 0x010000, CRC(9879fde6) SHA1(79f8020bbc8e1545466bd12c81117f736c985afe) )
 	ROM_LOAD16_BYTE( "6_tk_601.ic26",  0x040000, 0x010000, CRC(9810f8f0) SHA1(5a3fa4599058a3ff3a97d20764005e6d530187f8) )
 
-	ROM_REGION( 0x010000, "audiocpu", 0 )    // Z80 code
+	ROM_REGION( 0x010000, "mod1", 0 )    // Z80 code
 	ROM_LOAD( "1_tk_101.c19", 0x000000, 0x10000, CRC(a447a394) SHA1(ccaa6aca5c2afc7c05035cb551b8368b18188dd6) )
 
 	ROM_REGION( 0x040000, "gfx1", 0 )

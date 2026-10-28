@@ -28,11 +28,9 @@ TODO:
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -48,14 +46,10 @@ public:
 	bloodbro_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
-		m_audiocpu(*this, "audiocpu"),
+		m_mod1(*this, "mod1"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_soundlatch(*this, "soundlatch%u", 0U),
-		m_ym(*this, "ym%u", 0U),
-		m_msm(*this, "msm"),
 		m_spriteram(*this, "spriteram"),
-		m_tileram(*this, "tileram%u", 0U),
-		m_soundbank(*this, "sound_bank")
+		m_tileram(*this, "tileram%u", 0U)
 	{ }
 
 	void bloodbrom(machine_config &config) ATTR_COLD;
@@ -68,26 +62,14 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_audiocpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_device_array<generic_latch_8_device, 2> m_soundlatch;
-	required_device_array<ym2203_device, 2> m_ym;
-	required_device<msm5205_device> m_msm;
 
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr_array<uint16_t, 3> m_tileram; // 0 bg, 1 fg, 2 tx
-	required_memory_bank m_soundbank;
-
-	bool m_audio_select = false;
-	uint8_t m_adpcm_data = 0;
 
 	tilemap_t *m_tilemap[3] {};
 	uint16_t m_scrollreg[2] {};
-
-	void adpcm_w(uint8_t data);
-	void ym_w(offs_t offset, uint8_t data);
-	void adpcm_int(int state);
-	void soundlatch_w(uint8_t data);
 
 	template <uint8_t Which> TILE_GET_INFO_MEMBER(get_tile_info);
 	template <uint8_t Which> void tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask);
@@ -95,7 +77,6 @@ private:
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_program_map(address_map &map) ATTR_COLD;
-	void sound_program_map(address_map &map) ATTR_COLD;
 
 	void descramble_16x16tiles(uint8_t *src, int len) ATTR_COLD;
 };
@@ -103,50 +84,9 @@ private:
 
 void bloodbro_ms_state::machine_start()
 {
-	m_soundbank->configure_entries(0, 2, memregion("audiocpu")->base() + 0x8000, 0x4000);
-	m_soundbank->set_entry(0);
-
-	save_item(NAME(m_audio_select));
-	save_item(NAME(m_adpcm_data));
 	save_item(NAME(m_scrollreg));
 }
 
-
-void bloodbro_ms_state::adpcm_w(uint8_t data)
-{
-	m_audio_select = BIT(data, 7);
-	m_soundbank->set_entry(m_audio_select);
-	m_msm->reset_w(BIT(data, 4));
-
-	m_adpcm_data = data & 0x0f;
-}
-
-void bloodbro_ms_state::ym_w(offs_t offset, uint8_t data)
-{
-	if (!m_audio_select)
-	{
-		if (!BIT(offset, 1))
-			m_ym[0]->write(offset & 1, data);
-		else
-			m_ym[1]->write(offset & 1, data);
-	}
-	else
-	{
-		// ??? (written during ADPCM IRQ)
-	}
-}
-
-void bloodbro_ms_state::soundlatch_w(uint8_t data)
-{
-	m_soundlatch[0]->clear_w(data);
-	m_soundlatch[1]->clear_w(data);
-}
-
-void bloodbro_ms_state::adpcm_int(int state)
-{
-	m_msm->data_w(m_adpcm_data);
-	m_audiocpu->set_input_line(0, HOLD_LINE);
-}
 
 void bloodbro_ms_state::video_start()
 {
@@ -232,8 +172,7 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x08e000, 0x08ffff).ram();
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
 	map(0x0c0100, 0x0c0101).nopw(); // ??? written once
-	map(0x0e000e, 0x0e000e).w(m_soundlatch[1], FUNC(generic_latch_8_device::write));
-	map(0x0e000f, 0x0e000f).w(m_soundlatch[0], FUNC(generic_latch_8_device::write));
+	map(0x0e0000, 0x0e000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 	map(0x100000, 0x1003ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0x100400, 0x1007ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0x100800, 0x100fff).ram();
@@ -242,115 +181,73 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x102000, 0x102001).nopw(); // ??? written often
 	map(0x18d000, 0x18d7ff).w(FUNC(bloodbro_ms_state::tileram_w<1>)).share(m_tileram[1]);
 	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, uint16_t data) { m_scrollreg[offset] = data; }));
-	map(0x0e0000, 0x0e0001).portr("DSW");
-	map(0x0e0002, 0x0e0003).portr("IN0");
-	map(0x0e0004, 0x0e0005).portr("IN1");
 }
-
-void bloodbro_ms_state::sound_program_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0x8000).w(FUNC(bloodbro_ms_state::adpcm_w));
-	map(0x8000, 0xbfff).bankr(m_soundbank);
-	map(0xc000, 0xc7ff).ram();
-	map(0xd000, 0xd7ff).ram();
-	map(0xdff0, 0xdff5).noprw(); // ???
-	map(0xdffe, 0xdffe).r(m_soundlatch[1], FUNC(generic_latch_8_device::read)).w(FUNC(bloodbro_ms_state::soundlatch_w));
-	map(0xdfff, 0xdfff).r(m_soundlatch[0], FUNC(generic_latch_8_device::read));
-	map(0xe000, 0xe003).w(FUNC(bloodbro_ms_state::ym_w));
-	map(0xe008, 0xe009).r(m_ym[0], FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r(m_ym[1], FUNC(ym2203_device::read));
-}
-
 
 static INPUT_PORTS_START( bloodbrom )
-	PORT_START("IN0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_INCLUDE( gaelco_ms_mod1 ) // the sound program also passes the start buttons as button 3
 
-	PORT_START("IN1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x00e0, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("DSW")
-	PORT_DIPNAME( 0x0001, 0x0001, "Coin Mode" ) PORT_DIPLOCATION("SW1:1")
-	PORT_DIPSETTING(      0x0001, "Mode 1" )
-	PORT_DIPSETTING(      0x0000, "Mode 2" )
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPNAME( 0x01, 0x01, "Coin Mode" ) PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x01, "Mode 1" )
+	PORT_DIPSETTING(    0x00, "Mode 2" )
 	// Coin Mode 1
-	PORT_DIPNAME( 0x001e, 0x001e, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:2,3,4,5") PORT_CONDITION("DSW", 0x0001, EQUALS, 0x0001)
-	PORT_DIPSETTING(      0x0014, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(      0x0016, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0018, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x001a, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( 8C_3C ) )
-	PORT_DIPSETTING(      0x001c, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( 5C_3C ) )
-	PORT_DIPSETTING(      0x0006, DEF_STR( 3C_2C ) )
-	PORT_DIPSETTING(      0x001e, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(      0x0012, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x000e, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x000c, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x000a, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x1e, 0x1e, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:2,3,4,5") PORT_CONDITION("SW1", 0x01, EQUALS, 0x01)
+	PORT_DIPSETTING(    0x14, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x16, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x1a, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 8C_3C ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 5C_3C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x1e, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x12, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 	// Coin Mode 2
-	PORT_DIPNAME( 0x0006, 0x0006, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:2,3") PORT_CONDITION("DSW", 0x0001, EQUALS, 0x0000)
-	PORT_DIPSETTING(      0x0000, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0006, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:4,5") PORT_CONDITION("DSW", 0x0001, EQUALS, 0x0000)
-	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0020, 0x0020, "Starting Coin" ) PORT_DIPLOCATION("SW1:6")
-	PORT_DIPSETTING(      0x0020, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0000, "x2" )
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:2,3") PORT_CONDITION("SW1", 0x01, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:4,5") PORT_CONDITION("SW1", 0x01, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x18, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x20, 0x20, "Starting Coin" ) PORT_DIPLOCATION("SW1:6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x00, "x2" )
 
-	PORT_DIPUNKNOWN_DIPLOC( 0x0040, IP_ACTIVE_LOW, "SW1:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0080, IP_ACTIVE_LOW, "SW1:8" )
-	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
-	PORT_DIPSETTING(      0x0000, "1" )
-	PORT_DIPSETTING(      0x0200, "2" )
-	PORT_DIPSETTING(      0x0300, "3" )
-	PORT_DIPSETTING(      0x0100, "5" )
-	PORT_DIPNAME( 0x0c00, 0x0c00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(      0x0c00, "300K 500K+" )
-	PORT_DIPSETTING(      0x0800, "500K+" )
-	PORT_DIPSETTING(      0x0400, "500K" )
-	PORT_DIPSETTING(      0x0000, DEF_STR( None ) )
-	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(      0x2000, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x3000, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
-	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x8000, DEF_STR( On ) )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW1:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW1:8" )
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x00, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x01, "5" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x0c, "300K 500K+" )
+	PORT_DIPSETTING(    0x08, "500K+" )
+	PORT_DIPSETTING(    0x04, "500K" )
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -381,9 +278,6 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &bloodbro_ms_state::main_program_map);
 	m_maincpu->set_vblank_int("screen", FUNC(bloodbro_ms_state::irq4_line_hold));
 
-	Z80(config, m_audiocpu, 24_MHz_XTAL / 8); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-	m_audiocpu->set_addrmap(AS_PROGRAM, &bloodbro_ms_state::sound_program_map);
-
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_refresh_hz(60);
@@ -400,17 +294,16 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, m_soundlatch[0]);
-	GENERIC_LATCH_8(config, m_soundlatch[1]);
-
-	YM2203(config, m_ym[0], 24_MHz_XTAL / 12).add_route(ALL_OUTPUTS, "mono", 0.75); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-
-	YM2203(config, m_ym[1], 24_MHz_XTAL / 12).add_route(ALL_OUTPUTS, "mono", 0.75); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-
-	MSM5205(config, m_msm, 24_MHz_XTAL / 64); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-	m_msm->vck_legacy_callback().set(FUNC(bloodbro_ms_state::adpcm_int));
-	m_msm->set_prescaler_selector(msm5205_device::S96_4B); // unverified
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.75);
+	// divisors unknown, no XTAL on the PCB, might also use the 20 MHz one
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 24_MHz_XTAL / 8);
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110); // PROM not dumped, the program fits this layout
+	m_mod1->set_ym_clock(24_MHz_XTAL / 12);
+	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 1.5);
 }
 
 
@@ -423,7 +316,7 @@ ROM_START( bloodbrom )
 	ROM_LOAD16_BYTE( "6-1_bb604.ic25",    0x40001, 0x10000, CRC(cc069a40) SHA1(314b27cde5427b285272840f41da097326b39ee9) )
 	ROM_LOAD16_BYTE( "6-1_bb601.ic26",    0x40000, 0x10000, CRC(d06bf68d) SHA1(7df7a99805aa7dd2ad91fb3d641e369c058cc6ae) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/2 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "1-2_bb101.ic12",  0x00000, 0x10000, CRC(3e184e74) SHA1(031cd37fe6d09daf8c9e88562da99fde03f52109) )
 
 	// dumper's note: ROMs [bb4b1, bb4b2, bb4b3, bb4b4] and [bb4a1, bb4a2, bb4a3, bb4a4] have a strange setup

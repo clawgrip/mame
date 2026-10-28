@@ -33,9 +33,10 @@
 
 #include "emu.h"
 
+#include "gaelco_ms_mod1.h"
+
 #include "cpu/z80/z80.h"
 #include "machine/nvram.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -54,8 +55,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_tileram(*this, "tileram.%u", 0U),
 		m_maincpu(*this, "maincpu"),
-		m_audiocpu(*this, "audiocpu"),
-		m_ym(*this, "ym%u", 1U),
+		m_mod1(*this, "mod1"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
 		m_rombank(*this, "rombank")
@@ -73,8 +73,7 @@ protected:
 private:
 	required_shared_ptr_array<uint8_t, 2> m_tileram;
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_audiocpu;
-	required_device_array<ym2203_device, 2> m_ym;
+	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
 	required_memory_bank m_rombank;
@@ -82,7 +81,6 @@ private:
 	tilemap_t *m_tilemap = nullptr;
 
 	void main_program_map(address_map &map) ATTR_COLD;
-	void sound_program_map(address_map &map) ATTR_COLD;
 
 	template<uint8_t Which> void tileram_w(offs_t offset, uint8_t data);
 	void rombank_w(uint8_t data);
@@ -149,23 +147,11 @@ void mastboyo_ms_state::main_program_map(address_map &map)
 	map(0x5400, 0x57ff).ram().w(FUNC(mastboyo_ms_state::tileram_w<1>)).share(m_tileram[1]);
 	map(0x5800, 0x5803).nopw(); // MOD 4 scroll registers
 	map(0x6000, 0x6000).w(FUNC(mastboyo_ms_state::rombank_w));
-	map(0x6400, 0x640f).ram().share("comm");
+	map(0x6400, 0x640f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
 	map(0x6800, 0x68ff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
 	map(0x6c00, 0x6cff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
 	map(0x7000, 0x7000).r(FUNC(mastboyo_ms_state::irq_ack_r));
 	map(0x8000, 0xffff).bankr(m_rombank);
-}
-
-void mastboyo_ms_state::sound_program_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0xc000, 0xdfef).ram();
-	map(0xdff0, 0xdfff).ram().share("comm");
-	map(0xe000, 0xe001).w(m_ym[0], FUNC(ym2203_device::write));
-	map(0xe002, 0xe003).w(m_ym[1], FUNC(ym2203_device::write));
-	map(0xe004, 0xe004).lw8(NAME([this] (uint8_t data) { m_audiocpu->set_input_line(0, CLEAR_LINE); }));
-	map(0xe008, 0xe009).r(m_ym[0], FUNC(ym2203_device::read));
-	map(0xe00a, 0xe00b).r(m_ym[1], FUNC(ym2203_device::read));
 }
 
 
@@ -220,11 +206,6 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &mastboyo_ms_state::main_program_map);
 	m_maincpu->set_vblank_int("screen", FUNC(mastboyo_ms_state::irq0_line_assert));
 
-	Z80(config, m_audiocpu, 20_MHz_XTAL / 5); // Unknown clock and divisor
-	m_audiocpu->set_addrmap(AS_PROGRAM, &mastboyo_ms_state::sound_program_map);
-	// unknown source, 4 times the 256.244 Hz measured on the single board version gives its music tempo
-	m_audiocpu->set_periodic_int(FUNC(mastboyo_ms_state::irq0_line_assert), attotime::from_hz(4 * 256.244));
-
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0);
 
 	// video hardware
@@ -243,15 +224,16 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	// Unknown clocks and divisors, 2.5 MHz gives the pitch of the single board version with the prescaler the program selects
-	YM2203(config, m_ym[0], 20_MHz_XTAL / 8);
-	m_ym[0]->port_a_read_callback().set_ioport("IN0");
-	m_ym[0]->port_b_read_callback().set_ioport("IN1");
-	m_ym[0]->add_route(ALL_OUTPUTS, "mono", 0.50);
-
-	YM2203(config, m_ym[1], 20_MHz_XTAL / 8);
-	m_ym[1]->port_b_read_callback().set_ioport("DSW");
-	m_ym[1]->add_route(ALL_OUTPUTS, "mono", 0.50);
+	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // Unknown clock and divisor
+	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0101); // PROM not dumped, the program fits this layout
+	// Unknown clock and divisor, 2.5 MHz gives the pitch of the single board version with the prescaler the program selects
+	m_mod1->set_ym_clock(20_MHz_XTAL / 8);
+	// unknown source, 4 times the 256.244 Hz measured on the single board version gives its music tempo
+	m_mod1->set_int_period(attotime::from_hz(4 * 256.244));
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<3>().set_ioport("DSW");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 1.0);
 }
 
 void mastboyo_ms_state::mastboyoma(machine_config &config)
@@ -259,7 +241,7 @@ void mastboyo_ms_state::mastboyoma(machine_config &config)
 	mastboyo_ms(config);
 
 	// the sound program waits for 2 interrupts per update instead of 4, half the rate keeps the same tempo
-	m_audiocpu->set_periodic_int(FUNC(mastboyo_ms_state::irq0_line_assert), attotime::from_hz(2 * 256.244));
+	m_mod1->set_int_period(attotime::from_hz(2 * 256.244));
 }
 
 
@@ -271,7 +253,7 @@ ROM_START( mastboyom )
 	ROM_LOAD( "ma_302_27512.bin", 0x00000, 0x10000, CRC(871d4a70) SHA1(20126ca9887d51f488847540d23264bc1c9a8233) ) // decrypted: mastboyo mastboy_27256.ic10 + mastboy_27256.ic9
 	ROM_LOAD( "ma_301_27512.bin", 0x10000, 0x10000, CRC(3b67c516) SHA1(bf36b143e0df10fc871a7b079c4aa8a2cbdccca0) ) // decrypted: mastboyob mb_1.ic11 + mastboyo mastboy_27256.ic11
 
-	ROM_REGION( 0x8000, "audiocpu", 0 ) // on MOD-1 board
+	ROM_REGION( 0x8000, "mod1", 0 ) // on MOD-1 board
 	ROM_LOAD( "ma_0101_n_27c256.bin", 0x0000, 0x8000, CRC(7c1ae820) SHA1(2922b9094289daa2830acb6aab3b72941eab02b8) ) // 1xxxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
@@ -296,7 +278,7 @@ ROM_START( mastboyoma )
 	ROM_LOAD( "ma_302_27512.bin", 0x00000, 0x10000, CRC(871d4a70) SHA1(20126ca9887d51f488847540d23264bc1c9a8233) ) // decrypted: mastboyo mastboy_27256.ic10 + mastboy_27256.ic9
 	ROM_LOAD( "ma_301_27512.bin", 0x10000, 0x10000, CRC(3b67c516) SHA1(bf36b143e0df10fc871a7b079c4aa8a2cbdccca0) ) // decrypted: mastboyob mb_1.ic11 + mastboyo mastboy_27256.ic11
 
-	ROM_REGION( 0x8000, "audiocpu", 0 ) // on MOD-1 board
+	ROM_REGION( 0x8000, "mod1", 0 ) // on MOD-1 board
 	ROM_LOAD( "ma_0101_v_27c256.bin", 0x0000, 0x8000, CRC(e754176b) SHA1(325415ddc6bbe77493a7ee0130c1fe103f771bb0) ) // 1xxxxxxxxxxxxxx = 0xFF, only differs from ma_0101_n at 0x89 and 0x91
 
 	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
