@@ -38,8 +38,9 @@ protected:
 	virtual void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect, int priority) override;
 
 private:
-	void master_irq_ack_w(uint8_t data);
 	required_shared_ptr<uint8_t> m_bgscroll;
+
+	void master_irq_ack_w(uint8_t data);
 
 	void main_map(address_map &map) ATTR_COLD;
 };
@@ -143,21 +144,21 @@ void euroleag_ms_state::main_map(address_map &map)
 
 void euroleag_ms_state::euroleagm(machine_config &config)
 {
-	// main board XTAL near Z80s is 16Mhz here
-	// sound board has 20Mhz and !6Mhz XTALs
+	// main board XTAL near Z80s is 16 MHz here
+	// sound board has 20 MHz and 16 MHz XTALs
 	// DSWs are on the sound board near the YM2203Cs
 	// use is guessed
 
 	// basic machine hardware
-	Z80(config, m_maincpu, XTAL(16'000'000) / 2);
+	Z80(config, m_maincpu, 16_MHz_XTAL / 2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::main_map);
 	m_maincpu->set_vblank_int("screen", FUNC(euroleag_ms_state::irq0_line_assert));
 
-	Z80(config, m_subcpu, XTAL(16'000'000) / 2);
+	Z80(config, m_subcpu, 16_MHz_XTAL / 2);
 	m_subcpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sub_map);
 	m_subcpu->set_vblank_int("screen", FUNC(euroleag_ms_state::irq0_line_assert));
 
-	Z80(config, m_audiocpu, XTAL(20'000'000) / 4);
+	Z80(config, m_audiocpu, 20_MHz_XTAL / 4);
 	m_audiocpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sound_map);
 	// IRQs are triggered by the main CPU
 
@@ -176,12 +177,12 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch").data_pending_callback().set_inputline(m_audiocpu, 0, HOLD_LINE);
+	GENERIC_LATCH_8(config, "soundlatch").data_pending_callback().set_inputline(m_audiocpu, 0);
 
-	YM2203(config, "ymsnd1", XTAL(16'000'000) / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // YM2203C
-	YM2203(config, "ymsnd2", XTAL(16'000'000) / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // YM2203C
+	YM2203(config, "ymsnd1", 16_MHz_XTAL / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // YM2203C
+	YM2203(config, "ymsnd2", 16_MHz_XTAL / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // YM2203C
 
-	MSM5205(config, m_msm, XTAL(384'000));
+	MSM5205(config, m_msm, 384_kHz_XTAL);
 	m_msm->vck_legacy_callback().set(FUNC(euroleag_ms_state::adpcm_int)); // interrupt function
 	m_msm->set_prescaler_selector(msm5205_device::S96_4B);  // 4KHz 4-bit
 	m_msm->add_route(ALL_OUTPUTS, "mono", 0.20);

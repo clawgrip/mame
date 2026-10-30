@@ -55,6 +55,7 @@ public:
 		m_gfxdecode(*this, "gfxdecode"),
 		m_txvideoram(*this, "txvideoram"),
 		m_spriteram(*this, "spriteram"),
+		m_mainbank(*this, "mainbank"),
 		m_bg_view(*this, "bg_view")
 	{ }
 
@@ -65,6 +66,7 @@ public:
 protected:
 	virtual void machine_start() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
+	virtual void device_post_load() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
@@ -75,10 +77,15 @@ private:
 
 	required_shared_ptr<uint8_t> m_txvideoram;
 	required_shared_ptr<uint8_t> m_spriteram;
+	required_memory_bank m_mainbank;
 	memory_view m_bg_view;
+
+	u8 m_bank_latch = 0;
 
 	TILE_GET_INFO_MEMBER(get_tx_tile_info);
 	void txvideoram_w(offs_t offset, uint8_t data);
+	void bank_w(u8 data);
+	void select_bg_view();
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -91,9 +98,8 @@ private:
 void blktiger_ms_state::main_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom().region("maincpu", 0);
-	map(0x8000, 0xbfff).bankr("mainbank");
+	map(0x8000, 0xbfff).bankr(m_mainbank);
 	map(0xc000, 0xcfff).view(m_bg_view);
-	// 0x07 in the bank latch selects the MOD 1 board, 0x04 the sprite board (copied from 0xfe00 every frame)
 	m_bg_view[0](0xc000, 0xc00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
 	m_bg_view[0](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
 	m_bg_view[0](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
@@ -101,18 +107,35 @@ void blktiger_ms_state::main_map(address_map &map)
 	m_bg_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
 	m_bg_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
 	map(0xd000, 0xd7ff).ram().w(FUNC(blktiger_ms_state::txvideoram_w)).share(m_txvideoram);
-	map(0xd800, 0xd800).lw8(NAME([this] (u8 data) {
-		// TODO: may bitswap, cfr. background collision detection
-		membank("mainbank")->set_entry(data & 0x0f);
-		m_bg_view.select(BIT(data, 4) ? 1 : ((data & 0x0f) == 0x07) ? 0 : 2);
-	}));
+	map(0xd800, 0xd800).w(FUNC(blktiger_ms_state::bank_w));
 	map(0xe000, 0xfdff).ram();
 	map(0xfe00, 0xffff).ram().share(m_spriteram);
 }
 
 void blktiger_ms_state::machine_start()
 {
-	membank("mainbank")->configure_entries(0, 16, memregion("maincpu")->base() + 0x10000, 0x4000);
+	m_mainbank->configure_entries(0, 16, memregion("maincpu")->base() + 0x10000, 0x4000);
+
+	save_item(NAME(m_bank_latch));
+}
+
+void blktiger_ms_state::device_post_load()
+{
+	select_bg_view();
+}
+
+void blktiger_ms_state::bank_w(u8 data)
+{
+	// TODO: may bitswap, cfr. background collision detection
+	m_bank_latch = data;
+	m_mainbank->set_entry(data & 0x0f);
+	select_bg_view();
+}
+
+void blktiger_ms_state::select_bg_view()
+{
+	// 0x07 selects the MOD 1 board, 0x04 the sprite board (copied from 0xfe00 every frame), bit 4 the background tiles
+	m_bg_view.select(BIT(m_bank_latch, 4) ? 1 : ((m_bank_latch & 0x0f) == 0x07) ? 0 : 2);
 }
 
 void blktiger_ms_state::video_start()
@@ -315,12 +338,12 @@ ROM_START( blktigerm )
 	ROM_LOAD32_BYTE( "51_bl_503.ic41",   0x00001, 0x10000, CRC(61e3ae0b) SHA1(cbb83827f027acd6b905f4210476810bcd4b03a9) )
 	ROM_LOAD32_BYTE( "51_bl_504.ic40",   0x00000, 0x10000, CRC(2cb45034) SHA1(b2fd3b7b7b9d68b6ff1985166b106e65b17dbb23) )
 
-	ROM_REGION( 0x0700, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "21_p0201_82s129.ic4",       0x0100, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
-	ROM_LOAD( "21_p0202_82s129.ic12",      0x0200, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0300, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
-	ROM_LOAD( "4_a_bl_82s123.ic13",        0x0500, 0x0020, CRC(671f1183) SHA1(dbc21c3922c5e69340daa9008e1200f1304b3e8f) )
-	ROM_LOAD( "51_p0502_82s129.ic10",      0x0600, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x0600, "proms", 0 )    // PROMs (function unknown)
+	ROM_LOAD( "21_p0201_82s129.ic4",       0x0000, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "21_p0202_82s129.ic12",      0x0100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0200, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
+	ROM_LOAD( "4_a_bl_82s123.ic13",        0x0400, 0x0020, CRC(671f1183) SHA1(dbc21c3922c5e69340daa9008e1200f1304b3e8f) )
+	ROM_LOAD( "51_p0502_82s129.ic10",      0x0500, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "4_p0403_pal16r8a-2cn.ic29",      0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )

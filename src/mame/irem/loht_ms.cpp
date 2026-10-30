@@ -64,6 +64,7 @@ private:
 
 	tilemap_t *m_fg_tilemap = nullptr;
 	tilemap_t *m_bg_tilemap = nullptr;
+	tilemap_t *m_bg_pri_tilemap = nullptr; // the same layer, as the sprite priority pass sees it
 
 	template <unsigned Which> u16 palette_r(offs_t offset);
 	template <unsigned Which> void palette_w(offs_t offset, u16 data, u16 mem_mask = ~0);
@@ -93,26 +94,42 @@ void loht_ms_state::video_start()
 {
 	m_fg_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(loht_ms_state::get_tile_info<0>)), TILEMAP_SCAN_ROWS, 8, 8, 64, 64);
 	m_bg_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(loht_ms_state::get_tile_info<1>)), TILEMAP_SCAN_ROWS, 8, 8, 64, 64);
+	m_bg_pri_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(loht_ms_state::get_tile_info<1>)), TILEMAP_SCAN_ROWS, 8, 8, 64, 64);
 
 	m_fg_tilemap->set_transmask(0, 0xffff, 0x0001);
 	m_fg_tilemap->set_transmask(1, 0x00ff, 0xff01);
 	m_fg_tilemap->set_transmask(2, 0x0001, 0xffff);
 	m_fg_tilemap->set_transmask(3, 0x0001, 0xffff);
 
+	// group 2 background tiles are drawn with the low priority tiles, but their pens 1-15 still go over the sprites
 	m_bg_tilemap->set_transmask(0, 0xffff, 0x0000);
 	m_bg_tilemap->set_transmask(1, 0x00ff, 0xff00);
-	m_bg_tilemap->set_transmask(2, 0x0001, 0xfffe);
+	m_bg_tilemap->set_transmask(2, 0xffff, 0x0000);
 	m_bg_tilemap->set_transmask(3, 0x0001, 0xfffe);
+
+	m_bg_pri_tilemap->set_transmask(0, 0xffff, 0x0000);
+	m_bg_pri_tilemap->set_transmask(1, 0x00ff, 0xff00);
+	m_bg_pri_tilemap->set_transmask(2, 0x0001, 0xfffe);
+	m_bg_pri_tilemap->set_transmask(3, 0x0001, 0xfffe);
 
 	m_fg_tilemap->set_scrolldy(-128, -128);
 	m_bg_tilemap->set_scrolldy(-128, -128);
+	m_bg_pri_tilemap->set_scrolldy(-128, -128);
 }
 
 template <unsigned Which>
 void loht_ms_state::videoram_w(offs_t offset, u16 data, u16 mem_mask)
 {
 	COMBINE_DATA(&m_videoram[Which][offset]);
-	(Which ? m_bg_tilemap : m_fg_tilemap)->mark_tile_dirty(offset >> 1);
+	if (Which)
+	{
+		m_bg_tilemap->mark_tile_dirty(offset >> 1);
+		m_bg_pri_tilemap->mark_tile_dirty(offset >> 1);
+	}
+	else
+	{
+		m_fg_tilemap->mark_tile_dirty(offset >> 1);
+	}
 }
 
 // 5 bits per gun in separate blocks, A9 isn't decoded
@@ -140,16 +157,17 @@ void loht_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, co
 	u16 const *const spriteram = m_spriteram->buffer();
 
 	// the list is drawn backwards for the priority buffer
-	std::vector<unsigned> spritelist;
+	u16 spritelist[0x200 / 4]; // one entry per 4 words of sprite RAM at most
+	unsigned count = 0;
 	for (unsigned i = 0, w = 0; i < m_spriteram->length(); i += w * 4)
 	{
-		spritelist.push_back(i);
+		spritelist[count++] = i;
 		w = 1 << BIT(spriteram[i + 2], 14, 2);
 	}
 
-	for (auto it = spritelist.rbegin(); spritelist.rend() != it; ++it)
+	while (count)
 	{
-		unsigned const offs = *it;
+		unsigned const offs = spritelist[--count];
 		u16 const code = spriteram[offs + 1];
 		u16 const attr = spriteram[offs + 2];
 		u32 const color = attr & 0x0f;
@@ -176,10 +194,8 @@ u32 loht_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, co
 	screen.priority().fill(0, cliprect);
 
 	// prepare the screen priority for the sprites
-	m_bg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 1);
+	m_bg_pri_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 1);
 	m_fg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 1);
-
-	m_bg_tilemap->set_transmask(2, 0xffff, 0x0000);
 
 	// low priority tiles
 	m_bg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 0);
@@ -188,8 +204,6 @@ u32 loht_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, co
 	// high priority tiles
 	m_bg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 0);
 	m_fg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 0);
-
-	m_bg_tilemap->set_transmask(2, 0x0001, 0xfffe);
 
 	draw_sprites(screen, bitmap, cliprect);
 
