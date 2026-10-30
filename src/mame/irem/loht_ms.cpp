@@ -48,7 +48,7 @@ public:
 		m_paletteram(*this, "paletteram%u", 1U)
 	{ }
 
-	void loht_ms(machine_config &config) ATTR_COLD;
+	void lohtm(machine_config &config) ATTR_COLD;
 
 protected:
 	virtual void video_start() override ATTR_COLD;
@@ -216,7 +216,7 @@ void loht_ms_state::io_map(address_map &map)
 }
 
 
-static INPUT_PORTS_START( loht_ms )
+static INPUT_PORTS_START( lohtm )
 	PORT_INCLUDE( gaelco_ms_mod1 )
 
 	PORT_START("SW1") // MOD 1 YM2203 #2 port B
@@ -313,7 +313,7 @@ static GFXDECODE_START( gfx_loht_ms )
 GFXDECODE_END
 
 
-void loht_ms_state::loht_ms(machine_config &config)
+void loht_ms_state::lohtm(machine_config &config)
 {
 	// basic machine hardware
 	V30(config, m_maincpu, 8'000'000); // unknown clock
@@ -569,7 +569,7 @@ IC64->PAL16R6A 74LS393N 74LS368AN 74LS377N |U||    |   |                        
  |_________________________________________________________|
 
 */
-ROM_START( loht_ms ) // really similar to lohtb, even if it runs on 'Modular Hardware'
+ROM_START( lohtm ) // really similar to lohtb, even if it runs on 'Modular Hardware'
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "6_lg_604.ic17", 0x00001, 0x10000, CRC(7e84b6ce) SHA1(a9a54f045917a191b6d6bbe061fc7a3344efb3bb) )
 	ROM_LOAD16_BYTE( "6_lg_605.ic20", 0x20001, 0x10000, CRC(abdcd211) SHA1(6ad79c4ef14d908032e4dbded7696a66fe5d31da) )
@@ -631,4 +631,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 1989, loht_ms, loht, loht_ms, loht_ms, loht_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Legend of Hero Tonma (Gaelco bootleg, Modular System)", MACHINE_NOT_WORKING | MACHINE_NO_COCKTAIL | MACHINE_SUPPORTS_SAVE )
+GAME( 1989, lohtm, loht, lohtm, lohtm, loht_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Legend of Hero Tonma (Gaelco bootleg, Modular System)", MACHINE_NOT_WORKING | MACHINE_NO_COCKTAIL | MACHINE_SUPPORTS_SAVE )

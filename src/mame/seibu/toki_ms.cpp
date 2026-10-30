@@ -284,8 +284,8 @@ public:
 		, m_scrollram(*this, "scrollram")
 	{ }
 
-	void tokims(machine_config &config);
-	void init_tokims();
+	void tokim(machine_config &config);
+	void init_tokim();
 
 private:
 	required_device<cpu_device> m_maincpu;
@@ -319,7 +319,7 @@ private:
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
-	void tokims_map(address_map &map) ATTR_COLD;
+	void tokim_map(address_map &map) ATTR_COLD;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
@@ -481,7 +481,7 @@ void toki_ms_state::palette_w(offs_t offset, u8 data)
 	m_palette->set_pen_color(pal_entry, pal4bit(r),pal4bit(g),pal4bit(b));
 }
 
-void toki_ms_state::tokims_map(address_map &map)
+void toki_ms_state::tokim_map(address_map &map)
 {
 	map(0x000000, 0x05ffff).rom();
 	map(0x060000, 0x06dfff).ram();
@@ -496,7 +496,7 @@ void toki_ms_state::tokims_map(address_map &map)
 	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 }
 
-static INPUT_PORTS_START( tokims )
+static INPUT_PORTS_START( tokim )
 	PORT_INCLUDE( gaelco_ms_mod1 )
 
 	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 5-7
@@ -583,11 +583,11 @@ static GFXDECODE_START( gfx_toki_ms )
 GFXDECODE_END
 
 
-void toki_ms_state::tokims(machine_config &config)
+void toki_ms_state::tokim(machine_config &config)
 {
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2);
-	m_maincpu->set_addrmap(AS_PROGRAM, &toki_ms_state::tokims_map);
+	m_maincpu->set_addrmap(AS_PROGRAM, &toki_ms_state::tokim_map);
 	m_maincpu->set_vblank_int("screen", FUNC(toki_ms_state::irq1_line_hold));
 
 	// video hardware
@@ -617,7 +617,7 @@ void toki_ms_state::tokims(machine_config &config)
 }
 
 
-ROM_START( tokims )
+ROM_START( tokim )
 	ROM_REGION( 0x080000, "maincpu", 0 )    // 68000 code
 	ROM_LOAD16_BYTE( "6_tk_606.ic8",   0x000001, 0x010000, CRC(13ecfa14) SHA1(77b8600e41b6dc51e4ab927c626599e24f9a7853) )
 	ROM_LOAD16_BYTE( "6_tk_603.ic17",  0x000000, 0x010000, CRC(714f76ff) SHA1(f2d13dcba84d5b7dd2f156d63421c511c518fc82) )
@@ -708,7 +708,7 @@ void toki_ms_state::descramble_16x16tiles(uint8_t* src, int len)
 	}
 }
 
-void toki_ms_state::init_tokims()
+void toki_ms_state::init_tokim()
 {
 	descramble_16x16tiles(memregion("gfx3")->base(), memregion("gfx3")->bytes());
 	descramble_16x16tiles(memregion("gfx4")->base(), memregion("gfx4")->bytes());
@@ -718,4 +718,4 @@ void toki_ms_state::init_tokims()
 } // anonymous namespace
 
 
-GAME( 1991, tokims, toki, tokims, tokims, toki_ms_state, init_tokims, ROT0, "bootleg", "Toki (Modular System)", MACHINE_IMPERFECT_SOUND )
+GAME( 1991, tokim, toki, tokim, tokim, toki_ms_state, init_tokim, ROT0, "bootleg", "Toki (Modular System)", MACHINE_IMPERFECT_SOUND )

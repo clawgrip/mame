@@ -425,7 +425,7 @@ void xorworld_ms_state::xorworld_ms(machine_config &config)
 	m_msm->add_route(ALL_OUTPUTS, "mono", 0.80);
 }
 
-ROM_START( xorwldms )
+ROM_START( xorworldm )
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "mod_6-1_xo_608a_27c512.ic8",  0x000001, 0x010000, CRC(cebcd3e7) SHA1(ee6d107dd13e4faa8d5b6ba9815c57919a69568e) )
 	ROM_LOAD16_BYTE( "mod_6-1_xo_617a_27c512.ic17", 0x000000, 0x010000, CRC(47bae292) SHA1(f36e2f80d4da31d7edc7dc8c07abb158ef21cb20) )
@@ -477,7 +477,7 @@ ROM_START( xorwldms )
 	ROM_LOAD( "mod_51-3_503_gal16v8.ic46", 0x0000, 0x117, NO_DUMP )
 ROM_END
 
-ROM_START( xorwldmsa )
+ROM_START( xorworldma )
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "xo_608_27c512.bin", 0x000001, 0x010000, CRC(12ed0ab0) SHA1(dcdd6dccc367fe1084af71001afaa26c4879817e) )
 	ROM_LOAD16_BYTE( "xo_617_27c512.bin", 0x000000, 0x010000, CRC(fea2750f) SHA1(b6ed781514a9c1901372e489ba46a36120bde528) )
@@ -536,5 +536,5 @@ ROM_END
 // make use of them, instead opting for their own, so which really came first?
 
 // due to this being almost an entirely different piece of code on entirely different hardware it isn't set as a clone of xorworld
-GAME( 1990, xorwldms,  0,        xorworld_ms, xorworld_ms, xorworld_ms_state, init_xorworld_ms, ROT0, "Gaelco", "Xor World (Modular System, prototype, set 1)", MACHINE_IMPERFECT_SOUND )
-GAME( 1990, xorwldmsa, xorwldms, xorworld_ms, xorworld_ms, xorworld_ms_state, init_xorworld_ms, ROT0, "Gaelco", "Xor World (Modular System, prototype, set 2)", MACHINE_IMPERFECT_SOUND )
+GAME( 1990, xorworldm,  0,         xorworld_ms, xorworld_ms, xorworld_ms_state, init_xorworld_ms, ROT0, "Gaelco", "Xor World (Modular System, prototype, set 1)", MACHINE_IMPERFECT_SOUND )
+GAME( 1990, xorworldma, xorworldm, xorworld_ms, xorworld_ms, xorworld_ms_state, init_xorworld_ms, ROT0, "Gaelco", "Xor World (Modular System, prototype, set 2)", MACHINE_IMPERFECT_SOUND )

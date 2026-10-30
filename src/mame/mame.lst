@@ -19757,8 +19757,8 @@ splashkr
 splashna
 
 @source:gaelco/splash_ms.cpp
-splashms
-splashmsa
+splashm
+splashma
 
 @source:gaelco/sralslot.cpp
 sralslot
@@ -19793,15 +19793,15 @@ wrallyd
 wrallye
 
 @source:gaelco/wrally_ms.cpp
-wrallymp
+wrallym
 
 @source:gaelco/xorworld.cpp
 xorworld
 xorworlda
 
 @source:gaelco/xorworld_ms.cpp
-xorwldms
-xorwldmsa
+xorworldm
+xorworldma
 
 @source:galaxian/119.cpp
 119
@@ -23242,7 +23242,7 @@ vc6000
 vmdtbase
 
 @source:irem/loht_ms.cpp
-loht_ms
+lohtm
 
 @source:irem/m10.cpp
 andromed
@@ -25495,7 +25495,7 @@ galpanicb
 galpanicc
 
 @source:kaneko/galpanic_ms.cpp
-galpanicms
+galpanicm
 
 @source:kaneko/hvyunit.cpp
 hvyunit
@@ -43160,7 +43160,7 @@ tokiua
 tokip
 
 @source:seibu/toki_ms.cpp
-tokims
+tokim
 
 @source:seibu/wiz.cpp
 finger
@@ -47206,6 +47206,9 @@ bombjackt
 calorie
 calorieb
 
+@source:tecmo/euroleag_ms.cpp
+euroleagm
+
 @source:tecmo/gaiden.cpp
 drgnbowl
 drgnbowla
@@ -47319,7 +47322,6 @@ twcup90c
 twcup90t
 
 @source:tecmo/wc90b.cpp
-eurogael
 twcup90b1
 twcup90b2
 twcup90b3

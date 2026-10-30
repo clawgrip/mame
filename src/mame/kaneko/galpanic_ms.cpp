@@ -57,7 +57,7 @@ public:
 	{ }
 
 	void newquiz(machine_config &config);
-	void init_galpanicms();
+	void init_galpanicm();
 
 private:
 	required_device<cpu_device> m_maincpu;
@@ -352,7 +352,7 @@ void galspanic_ms_state::newquiz(machine_config &config)
 }
 
 
-ROM_START( galpanicms )
+ROM_START( galpanicm )
 	ROM_REGION( 0x100000, "maincpu", 0 ) // yes, one ROM is 4x the size of the other, there is no data to interleave with the extra data, does it actually map anywhere?
 	ROM_LOAD16_BYTE( "cpu_ic17.bin",  0x000000, 0x80000, CRC(c65104e1) SHA1(189dde2a34b949bd1763d8ee0d74c86fead549b9) ) // AM27C040
 	ROM_LOAD16_BYTE( "cpu_ic8.bin",   0x000001, 0x20000, CRC(e2e201e5) SHA1(2a8257f66139178af951d701fd263144aacf2808) ) // AM27C010
@@ -439,7 +439,7 @@ void galspanic_ms_state::descramble_16x16tiles(uint8_t* src, int len)
 	}
 }
 
-void galspanic_ms_state::init_galpanicms()
+void galspanic_ms_state::init_galpanicm()
 {
 	descramble_16x16tiles(memregion("bgtile")->base(), memregion("bgtile")->bytes());
 }
@@ -447,4 +447,4 @@ void galspanic_ms_state::init_galpanicms()
 } // anonymous namespace
 
 
-GAME( 1991, galpanicms, galsnew, newquiz, newquiz, galspanic_ms_state, init_galpanicms, ROT90, "bootleg (Kaneko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING )
+GAME( 1991, galpanicm, galsnew, newquiz, newquiz, galspanic_ms_state, init_galpanicm, ROT90, "bootleg (Kaneko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING )

@@ -476,7 +476,7 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 	MSM5205(config, "msm", 384_kHz_XTAL).add_route(ALL_OUTPUTS, "mono", 0.15);
 }
 
-ROM_START( wrallymp )
+ROM_START( wrallym )
 	ROM_REGION( 0x120000, "maincpu", 0 )
 	// These were a row of 8 ROMs next to the M68000, they appear to form the start of the code, but the initial boot vector is wrong
 	ROM_LOAD16_BYTE( "mod_6-esp-2_z0_e_25-11_27c1001.u8", 0x000000, 0x020000, CRC(a0d200eb) SHA1(fbca9b84d8b010aa0bfb546ddf366ec9812f0bb5) )
@@ -590,4 +590,4 @@ ROM_END
 } // anonymous namespace
 
 // World Rally was originally developed using the Modular System, so this isn't a bootleg, it's the original development version
-GAME( 1992, wrallymp, wrally, wrally_ms, wrally_ms, wrally_ms_state, init_wrally_ms, ROT0, "Gaelco", "World Rallye Championship (prototype on Modular System, 23 Nov 1992)", 0 ) // 23/11/1992
+GAME( 1992, wrallym, wrally, wrally_ms, wrally_ms, wrally_ms_state, init_wrally_ms, ROT0, "Gaelco", "World Rallye Championship (prototype on Modular System, 23 Nov 1992)", 0 ) // 23/11/1992
