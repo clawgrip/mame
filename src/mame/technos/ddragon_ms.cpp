@@ -24,10 +24,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m6809/m6809.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -44,7 +43,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
-		m_soundcpu(*this, "soundcpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen")
 	{ }
 
@@ -56,7 +55,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
-	required_device<cpu_device> m_soundcpu;
+	required_device<gaelco_ms_mod1_6809_adpcm_device> m_mod1;
 	required_device<screen_device> m_screen;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -82,23 +81,27 @@ void ddragon_ms_state::main_map(address_map &map)
 
 
 static INPUT_PORTS_START( ddragonm )
-	PORT_START("DSW")
-	PORT_DIPUNKNOWN_DIPLOC(0x0001, 0x0001, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0002, 0x0002, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0004, 0x0004, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0008, 0x0008, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x0010, 0x0010, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x0020, 0x0020, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x0040, 0x0040, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x0080, 0x0080, "SW1:8")
-	PORT_DIPUNKNOWN_DIPLOC(0x0100, 0x0100, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0200, 0x0200, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0400, 0x0400, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0800, 0x0800, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x1000, 0x1000, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x2000, 0x2000, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x4000, 0x4000, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x8000, 0x8000, "SW2:8")
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
 INPUT_PORTS_END
 
 
@@ -109,8 +112,6 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &ddragon_ms_state::main_map);
 
 	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 3); // MC68B09EP, divisor unknown
-
-	MC6809(config, m_soundcpu, 22.1184_MHz_XTAL / 5).set_disable(); // Motorola SC84014P, divisor unknown, no xtal on the PCB
 
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
@@ -126,13 +127,13 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	MSM5205(config, "msm", 20_MHz_XTAL / 8).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
+	GAELCO_MS_MOD1_6809_ADPCM(config, m_mod1, 22.1184_MHz_XTAL / 5); // divisor unknown, no crystal on the board
+	m_mod1->set_ym_clock(20_MHz_XTAL / 16); // divisor unknown, gives the pitch and about the tempo of the original game
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( ddragonm )
@@ -141,8 +142,11 @@ ROM_START( ddragonm )
 	ROM_LOAD( "mod_3-4_dr302_27c512.ic13", 0x10000, 0x10000, CRC(67321538) SHA1(9dca2ea8bdcf6c0d3657d0d81c8aa02bb34ce4bd) )
 	ROM_LOAD( "mod_3-4_dr301_27c512.ic14", 0x20000, 0x10000, CRC(de8f6f06) SHA1(68de0f757b4a8652ed13ad9802b022a36339d6e1) ) // 1ST AND 2ND HALF IDENTICAL
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/3 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/3 board
 	ROM_LOAD( "mod_1-3_dra101_27c512.ic12", 0x00000, 0x10000, CRC(e75de5a1) SHA1(e59a67b05d8dc723edfd88c52fe75301d345c38c) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-3_p0111_82s123.ic20", 0x00, 0x20, CRC(b3baf409) SHA1(74e378bdb1f265a7067d59ff9514b50263231fa2) )
 
 	ROM_REGION( 0x20000, "tiles1", 0 ) // on MOD 4/3 board
 	ROM_LOAD( "mod_4-3_dr401_27256.ic17", 0x00000, 0x08000, CRC(86dc72eb) SHA1(dc23e884a03e21353ec25e24bc7073dd756408f6) ) //  01xxxxxxxxxxxxx = 0xFF
@@ -168,7 +172,6 @@ ROM_START( ddragonm )
 
 	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
 	ROM_LOAD( "mod_3-4_sub_p0320_82s147.bin", 0x000, 0x200, CRC(9bc0d387) SHA1(bac95901cacf883fcde0662b444c443364227def) )
-	ROM_LOAD( "mod_1-3_p0111_82s123.ic20",    0x000, 0x020, CRC(b3baf409) SHA1(74e378bdb1f265a7067d59ff9514b50263231fa2) )
 	ROM_LOAD( "mod_21-1_p0205_82s129.ic12",   0x000, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 	ROM_LOAD( "mod_21-1_p0201_82s129.ic4",    0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "mod_51_p0502_82s129.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )

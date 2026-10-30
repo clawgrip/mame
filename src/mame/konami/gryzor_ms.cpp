@@ -25,9 +25,9 @@
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
+
 #include "cpu/m6809/m6809.h"
-#include "machine/gen_latch.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -44,7 +44,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
-		m_soundcpu(*this, "soundcpu"),
+		m_mod1(*this, "mod1"),
 		m_screen(*this, "screen")
 	{ }
 
@@ -56,7 +56,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
-	required_device<cpu_device> m_soundcpu;
+	required_device<gaelco_ms_mod1_6809_device> m_mod1;
 	required_device<screen_device> m_screen;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -82,23 +82,27 @@ void gryzor_ms_state::main_map(address_map &map)
 
 
 static INPUT_PORTS_START( gryzorm )
-	PORT_START("DSW")
-	PORT_DIPUNKNOWN_DIPLOC(0x0001, 0x0001, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0002, 0x0002, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0004, 0x0004, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0008, 0x0008, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x0010, 0x0010, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x0020, 0x0020, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x0040, 0x0040, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x0080, 0x0080, "SW1:8")
-	PORT_DIPUNKNOWN_DIPLOC(0x0100, 0x0100, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0200, 0x0200, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0400, 0x0400, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0800, 0x0800, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x1000, 0x1000, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x2000, 0x2000, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x4000, 0x4000, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x8000, 0x8000, "SW2:8")
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
 INPUT_PORTS_END
 
 
@@ -109,8 +113,6 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &gryzor_ms_state::main_map);
 
 	MC6809(config, m_subcpu, 22.1184_MHz_XTAL / 3); // Motorola SC84014P, divisor unknown
-
-	MC6809(config, m_soundcpu, 22.1184_MHz_XTAL / 5).set_disable(); // Motorola SC84014P, divisor unknown, no xtal on the PCB
 
 	// video hardware
 	SCREEN(config, m_screen); // all wrong
@@ -126,11 +128,14 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GENERIC_LATCH_8(config, "soundlatch");
-
-	YM2203(config, "ym1", 22.1184_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 22.1184_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
+	GAELCO_MS_MOD1_6809(config, m_mod1, 22.1184_MHz_XTAL / 5); // divisor unknown, no crystal on the board
+	m_mod1->set_ym_clock(1'322'000); // unknown, gives the pitch of the original game
+	m_mod1->set_int_period(attotime::from_hz(1000)); // unknown source, about 1 kHz gives the tempo of the original game
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( gryzorm )
@@ -138,8 +143,11 @@ ROM_START( gryzorm )
 	ROM_LOAD( "mod_3-2_gz301_27512.ic14", 0x00000, 0x10000, CRC(b25cfc4a) SHA1(c1334b45a38fba8d304a4f96e241dd46222037df) )
 	ROM_LOAD( "mod_3-2_gz302_27512.ic13", 0x10000, 0x10000, CRC(207e5fd0) SHA1(c2846a1d8eb3ad22b841807ececdb511ac1d4d1a) )
 
-	ROM_REGION( 0x8000, "audiocpu", 0 ) // on MOD 1/3 board
+	ROM_REGION( 0x8000, "mod1", 0 ) // on MOD 1/3 board
 	ROM_LOAD( "mod_1-3_gz0101_27256.ic12", 0x0000, 0x8000, CRC(b6106777) SHA1(891a622924f93c58ef2aca4be2cc5d7f3dee815b) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-3_p0109_mmi6331.ic20", 0x00, 0x20, CRC(0c58dcfc) SHA1(a89170754745659d3fad6d25b9f54a4a48d4f26f) )
 
 	ROM_REGION( 0x10000, "tiles1", 0 ) // on MOD 4/3 board
 	ROM_LOAD( "mod_4-3_gz401_27256.ic18", 0x00000, 0x08000, CRC(7dedabc6) SHA1(ce4c6b17844dc54012ce981a3a518e32f87606f5) ) //  0111xxxxxxxxxxx = 0xFF
@@ -168,7 +176,6 @@ ROM_START( gryzorm )
 	ROM_LOAD( "mod_51_sub_gz5a04_27512.bin", 0x70000, 0x10000, CRC(e0b11c30) SHA1(a35c94a2dd48f10eec623356655f25bd9e533eaf) )
 
 	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_1-3_p0109_mmi6331.ic20",      0x000, 0x020, CRC(0c58dcfc) SHA1(a89170754745659d3fad6d25b9f54a4a48d4f26f) )
 	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",      0x000, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 	ROM_LOAD( "mod_21-1_p0206_82s129.ic4",       0x000, 0x100, CRC(a47680d5) SHA1(6475cad53b91f6ef1043e7330b79f58695fd7ec9) )
 	ROM_LOAD( "mod_3-4_sub_p0318_mmi63s481.bin", 0x000, 0x200, CRC(67a4bbc7) SHA1(441be3a810225813bf2667ddf9b2fdc7de35196e) )

@@ -7,7 +7,12 @@
     Z80, 2 x YM2203C + 2 x Y3014B, one EPROM (IC12), 8 KB RAM, 82S123
     decoder PROM (IC20) and two banks of 8 DIP switches. Some games add a
     small sub board with an OKI M5205 and its latch; its VCK is then the
-    interrupt source. Gryzor and Double Dragon use a 6809 version.
+    interrupt source.
+
+    Gryzor and Double Dragon use a 6809 version (Motorola SC84014P). Its
+    interrupt goes to FIRQ, and its PROMs have outputs 6 and 7 the other way
+    round: Double Dragon acknowledges the M5205 interrupt with output 7,
+    where the Z80 programs use output 6.
 
     The memory map comes from the decoder PROM. Deduced from the PROM
     contents and the sound programs: the PROM is addressed by A15, A14, A13,
@@ -42,21 +47,30 @@
     116    0000-bfff         e000-ffff  c000    8000   Last Duel
     -      0000-7fff, c000-ffff banked
                              8000-9fff  a000    c000   Gals Panic (PROM not dumped)
+    P0109  0000-3fff, 8000-ffff
+                             6000-7fff  4000    0000   Gryzor (6809 version)
+    P0111  4000-ffff, 4000-7fff banked
+                             0000-1fff  2000    4000   Double Dragon (6809 version)
 
-    The banked area shows EPROM 8000-bfff or c000-ffff, depending on the
-    latch bank bit.
+    The banked area shows one of two 16 KB EPROM areas (EPROM A14 follows
+    the latch bank bit): 8000-bfff or c000-ffff, 0000-3fff or 4000-7fff with
+    P0111.
 
     TODO:
     - clocks (there's no crystal on the board)
     - interrupt source without the M5205 sub board
     - Cabal's program wants RAM at 2000, the YM2203s at 4000 and EPROM A15
       from the bank bit, which no known PROM or board wiring gives
-    - 6809 version (P0109 and P0111 PROMs)
+    - 6809 version: the NMI acknowledge is a guess, no known program uses
+      the NMI
 
 ***************************************************************************/
 
 #include "emu.h"
 #include "gaelco_ms_mod1.h"
+
+#include "cpu/m6809/m6809.h"
+#include "cpu/z80/z80.h"
 
 
 // player inputs from the 18-pin connector, read through the YM2203 #1 ports
@@ -85,33 +99,31 @@ INPUT_PORTS_END
 
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD1, gaelco_ms_mod1_device, "gaelco_ms_mod1", "Gaelco Modular System MOD 1 sound board")
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD1_ADPCM, gaelco_ms_mod1_adpcm_device, "gaelco_ms_mod1_adpcm", "Gaelco Modular System MOD 1 sound board with M5205 sub board")
+DEFINE_DEVICE_TYPE(GAELCO_MS_MOD1_6809, gaelco_ms_mod1_6809_device, "gaelco_ms_mod1_6809", "Gaelco Modular System MOD 1 sound board (6809 version)")
+DEFINE_DEVICE_TYPE(GAELCO_MS_MOD1_6809_ADPCM, gaelco_ms_mod1_6809_adpcm_device, "gaelco_ms_mod1_6809_adpcm", "Gaelco Modular System MOD 1 sound board (6809 version) with M5205 sub board")
 
 
-gaelco_ms_mod1_device::gaelco_ms_mod1_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
-	gaelco_ms_mod1_device(mconfig, GAELCO_MS_MOD1, tag, owner, clock)
-{
-}
-
-gaelco_ms_mod1_device::gaelco_ms_mod1_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock) :
+gaelco_ms_mod1_device_base::gaelco_ms_mod1_device_base(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock, int int_line, u8 int_ack, u8 nmi_ack) :
 	device_t(mconfig, type, tag, owner, clock),
 	device_mixer_interface(mconfig, *this),
 	m_cpu(*this, "cpu"),
+	m_msm(*this, "msm"),
 	m_ym(*this, "ym%u", 1U),
 	m_rom(*this, DEVICE_SELF),
 	m_prom(*this, "prom"),
 	m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
 	m_view(*this, "view"),
 	m_in_cb(*this, 0xff),
+	m_int_line(int_line),
+	m_int_ack(int_ack),
+	m_nmi_ack(nmi_ack),
 	m_int_period(attotime::zero),
 	m_host_nmi(false)
 {
 }
 
-void gaelco_ms_mod1_device::device_add_mconfig(machine_config &config)
+void gaelco_ms_mod1_device_base::device_add_mconfig(machine_config &config)
 {
-	Z80(config, m_cpu, DERIVED_CLOCK(1, 1));
-	m_cpu->set_addrmap(AS_PROGRAM, &gaelco_ms_mod1_device::program_map);
-
 	YM2203(config, m_ym[0], DERIVED_CLOCK(1, 1));
 	m_ym[0]->port_a_read_callback().set([this] () -> u8 { return m_in_cb[0](); });
 	m_ym[0]->port_b_read_callback().set([this] () -> u8 { return m_in_cb[1](); });
@@ -123,7 +135,15 @@ void gaelco_ms_mod1_device::device_add_mconfig(machine_config &config)
 	m_ym[1]->add_route(ALL_OUTPUTS, *this, 0.50);
 }
 
-void gaelco_ms_mod1_device::device_start()
+void gaelco_ms_mod1_device_base::add_adpcm(machine_config &config)
+{
+	MSM5205(config, m_msm, 384'000); // unverified
+	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
+	m_msm->vck_callback().set(FUNC(gaelco_ms_mod1_device_base::int_w));
+	m_msm->add_route(ALL_OUTPUTS, *this, 0.80);
+}
+
+void gaelco_ms_mod1_device_base::device_start()
 {
 	// one view for each value of the bank bit, built from the PROM in 2 KB pages
 	for (unsigned bank = 0; bank < 2; bank++)
@@ -145,8 +165,8 @@ void gaelco_ms_mod1_device::device_start()
 
 			bool const ym = BIT(sel, 4);
 			bool const latch = BIT(sel, 5);
-			bool const intack = BIT(sel, 3) || BIT(sel, 6);
-			bool const nmiack = BIT(sel, 7);
+			bool const intack = sel & m_int_ack;
+			bool const nmiack = sel & m_nmi_ack;
 
 			if (!BIT(sel, 1) && (ym || intack || nmiack))
 			{
@@ -181,27 +201,27 @@ void gaelco_ms_mod1_device::device_start()
 		}
 	}
 
-	m_int_timer = timer_alloc(FUNC(gaelco_ms_mod1_device::int_tick), this);
+	m_int_timer = timer_alloc(FUNC(gaelco_ms_mod1_device_base::int_tick), this);
 	if (m_int_period != attotime::zero)
 		m_int_timer->adjust(m_int_period, 0, m_int_period);
 
 	save_item(NAME(m_bank));
 }
 
-void gaelco_ms_mod1_device::device_post_load()
+void gaelco_ms_mod1_device_base::device_post_load()
 {
 	m_view.select(m_bank);
 }
 
-void gaelco_ms_mod1_device::device_reset()
+void gaelco_ms_mod1_device_base::device_reset()
 {
 	set_bank(0);
-	m_cpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
+	m_cpu->set_input_line(m_int_line, CLEAR_LINE);
 	m_cpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
-void gaelco_ms_mod1_device::program_map(address_map &map)
+void gaelco_ms_mod1_device_base::program_map(address_map &map)
 {
 	map(0x0000, 0xffff).view(m_view);
 	m_view[0];
@@ -209,24 +229,24 @@ void gaelco_ms_mod1_device::program_map(address_map &map)
 }
 
 
-u8 gaelco_ms_mod1_device::host_r(offs_t offset)
+u8 gaelco_ms_mod1_device_base::host_r(offs_t offset)
 {
 	return m_ram[0x1ff0 + offset];
 }
 
-void gaelco_ms_mod1_device::host_w(offs_t offset, u8 data)
+void gaelco_ms_mod1_device_base::host_w(offs_t offset, u8 data)
 {
 	m_ram[0x1ff0 + offset] = data;
 	if (m_host_nmi)
 		m_cpu->set_input_line(INPUT_LINE_NMI, ASSERT_LINE);
 }
 
-u16 gaelco_ms_mod1_device::host16_r(offs_t offset)
+u16 gaelco_ms_mod1_device_base::host16_r(offs_t offset)
 {
 	return (m_ram[0x1ff0 + (offset << 1)] << 8) | m_ram[0x1ff1 + (offset << 1)];
 }
 
-void gaelco_ms_mod1_device::host16_w(offs_t offset, u16 data, u16 mem_mask)
+void gaelco_ms_mod1_device_base::host16_w(offs_t offset, u16 data, u16 mem_mask)
 {
 	if (ACCESSING_BITS_8_15)
 		host_w(offset << 1, data >> 8);
@@ -235,23 +255,12 @@ void gaelco_ms_mod1_device::host16_w(offs_t offset, u16 data, u16 mem_mask)
 }
 
 
-void gaelco_ms_mod1_device::latch_w(u8 data)
-{
-	// the latch is on the M5205 sub board
-}
-
-void gaelco_ms_mod1_device::set_bank(u8 bank)
-{
-	m_bank = bank;
-	m_view.select(bank);
-}
-
-u8 gaelco_ms_mod1_device::ym_r(offs_t offset)
+u8 gaelco_ms_mod1_device_base::ym_r(offs_t offset)
 {
 	return m_ym[BIT(offset, 1)]->read(offset & 1);
 }
 
-void gaelco_ms_mod1_device::ym_w(offs_t offset, u8 data)
+void gaelco_ms_mod1_device_base::ym_w(offs_t offset, u8 data)
 {
 	if (BIT(offset, 2))
 		int_ack();
@@ -259,52 +268,108 @@ void gaelco_ms_mod1_device::ym_w(offs_t offset, u8 data)
 		m_ym[BIT(offset, 1)]->write(offset & 1, data);
 }
 
-void gaelco_ms_mod1_device::int_w(int state)
+void gaelco_ms_mod1_device_base::latch_w(u8 data)
 {
-	if (state)
-		m_cpu->set_input_line(INPUT_LINE_IRQ0, ASSERT_LINE);
+	// the latch is on the M5205 sub board
+	if (m_msm)
+	{
+		m_msm->data_w(data & 0x0f);
+		m_msm->reset_w(BIT(data, 4));
+		set_bank(BIT(data, 7));
+	}
 }
 
-TIMER_CALLBACK_MEMBER(gaelco_ms_mod1_device::int_tick)
+void gaelco_ms_mod1_device_base::set_bank(u8 bank)
+{
+	m_bank = bank;
+	m_view.select(bank);
+}
+
+void gaelco_ms_mod1_device_base::int_w(int state)
+{
+	if (state)
+		m_cpu->set_input_line(m_int_line, ASSERT_LINE);
+}
+
+TIMER_CALLBACK_MEMBER(gaelco_ms_mod1_device_base::int_tick)
 {
 	int_w(1);
 }
 
-void gaelco_ms_mod1_device::int_ack()
+void gaelco_ms_mod1_device_base::int_ack()
 {
-	m_cpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
+	m_cpu->set_input_line(m_int_line, CLEAR_LINE);
 }
 
-void gaelco_ms_mod1_device::nmi_ack()
+void gaelco_ms_mod1_device_base::nmi_ack()
 {
 	m_cpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
-gaelco_ms_mod1_adpcm_device::gaelco_ms_mod1_adpcm_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
-	gaelco_ms_mod1_device(mconfig, GAELCO_MS_MOD1_ADPCM, tag, owner, clock),
-	m_msm(*this, "msm")
+// Z80 version: INT, acknowledged by PROM outputs 3 and 6, NMI by output 7
+
+gaelco_ms_mod1_device::gaelco_ms_mod1_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_device(mconfig, GAELCO_MS_MOD1, tag, owner, clock)
 {
 }
 
-void gaelco_ms_mod1_adpcm_device::set_adpcm_prescaler(int select)
+gaelco_ms_mod1_device::gaelco_ms_mod1_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_device_base(mconfig, type, tag, owner, clock, INPUT_LINE_IRQ0, 0x48, 0x80)
 {
-	m_msm.lookup()->set_prescaler_selector(select);
+}
+
+void gaelco_ms_mod1_device::device_add_mconfig(machine_config &config)
+{
+	Z80(config, m_cpu, DERIVED_CLOCK(1, 1));
+	m_cpu->set_addrmap(AS_PROGRAM, &gaelco_ms_mod1_device::program_map);
+
+	gaelco_ms_mod1_device_base::device_add_mconfig(config);
+}
+
+
+gaelco_ms_mod1_adpcm_device::gaelco_ms_mod1_adpcm_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_device(mconfig, GAELCO_MS_MOD1_ADPCM, tag, owner, clock)
+{
 }
 
 void gaelco_ms_mod1_adpcm_device::device_add_mconfig(machine_config &config)
 {
 	gaelco_ms_mod1_device::device_add_mconfig(config);
 
-	MSM5205(config, m_msm, 384'000); // unverified
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
-	m_msm->vck_callback().set(FUNC(gaelco_ms_mod1_adpcm_device::int_w));
-	m_msm->add_route(ALL_OUTPUTS, *this, 0.80);
+	add_adpcm(config);
 }
 
-void gaelco_ms_mod1_adpcm_device::latch_w(u8 data)
+
+// 6809 version: FIRQ, acknowledged by PROM outputs 3 and 7, NMI by output 6
+
+gaelco_ms_mod1_6809_device::gaelco_ms_mod1_6809_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_6809_device(mconfig, GAELCO_MS_MOD1_6809, tag, owner, clock)
 {
-	m_msm->data_w(data & 0x0f);
-	m_msm->reset_w(BIT(data, 4));
-	set_bank(BIT(data, 7));
+}
+
+gaelco_ms_mod1_6809_device::gaelco_ms_mod1_6809_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_device_base(mconfig, type, tag, owner, clock, M6809_FIRQ_LINE, 0x88, 0x40)
+{
+}
+
+void gaelco_ms_mod1_6809_device::device_add_mconfig(machine_config &config)
+{
+	MC6809(config, m_cpu, DERIVED_CLOCK(1, 1)); // Motorola SC84014P
+	m_cpu->set_addrmap(AS_PROGRAM, &gaelco_ms_mod1_6809_device::program_map);
+
+	gaelco_ms_mod1_device_base::device_add_mconfig(config);
+}
+
+
+gaelco_ms_mod1_6809_adpcm_device::gaelco_ms_mod1_6809_adpcm_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
+	gaelco_ms_mod1_6809_device(mconfig, GAELCO_MS_MOD1_6809_ADPCM, tag, owner, clock)
+{
+}
+
+void gaelco_ms_mod1_6809_adpcm_device::device_add_mconfig(machine_config &config)
+{
+	gaelco_ms_mod1_6809_device::device_add_mconfig(config);
+
+	add_adpcm(config);
 }
