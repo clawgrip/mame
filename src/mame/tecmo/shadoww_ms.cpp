@@ -318,7 +318,6 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P105); // PROM not dumped, the program fits this layout
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -337,6 +336,21 @@ ROM_START( shadowwm )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/3 board
 	ROM_LOAD( "mod_1-3_3sw_415.ic12", 0x00000, 0x10000, CRC(4dba665b) SHA1(8d068cd588f31cbe944a2f07dbbb81a74d80bcac) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
+	// not dumped, hand-made with the 105 contents, which fit the sound program
+	ROM_FILL( 0x00, 0x08, 0xfc )
+	ROM_FILL( 0x08, 0x08, 0xfd )
+	ROM_FILL( 0x10, 0x02, 0xdc )
+	ROM_FILL( 0x12, 0x02, 0xdd )
+	ROM_FILL( 0x14, 0x02, 0xfc )
+	ROM_FILL( 0x16, 0x02, 0xfd )
+	ROM_FILL( 0x18, 0x01, 0xef )
+	ROM_FILL( 0x19, 0x01, 0xf7 )
+	ROM_FILL( 0x1a, 0x01, 0xbf )
+	ROM_FILL( 0x1b, 0x01, 0xff )
+	ROM_FILL( 0x1c, 0x04, 0xfb )
 
 	ROM_REGION( 0x10000, "txtiles", 0 ) // on MOD 8 board
 	ROM_LOAD( "mod_8_801_3sw.ic15", 0x0000, 0x4000, CRC(8af36af3) SHA1(5fd1e65b9e481cd6135710629d7d74a5edd94378) ) // 1ST AND 2ND HALF IDENTICAL

@@ -296,7 +296,6 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 
 	// divisors unknown, no XTAL on the PCB, might also use the 20 MHz one
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 24_MHz_XTAL / 8);
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110); // PROM not dumped, the program fits this layout
 	m_mod1->set_ym_clock(24_MHz_XTAL / 12);
 	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -318,6 +317,21 @@ ROM_START( bloodbrom )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "1-2_bb101.ic12",  0x00000, 0x10000, CRC(3e184e74) SHA1(031cd37fe6d09daf8c9e88562da99fde03f52109) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
+	// not dumped, hand-made with the 110 contents, which fit the sound program
+	ROM_FILL( 0x00, 0x08, 0xfc )
+	ROM_FILL( 0x08, 0x08, 0xfd )
+	ROM_FILL( 0x10, 0x02, 0xdc )
+	ROM_FILL( 0x12, 0x02, 0xdd )
+	ROM_FILL( 0x14, 0x02, 0xfc )
+	ROM_FILL( 0x16, 0x02, 0xfd )
+	ROM_FILL( 0x18, 0x04, 0xfb )
+	ROM_FILL( 0x1c, 0x01, 0xef )
+	ROM_FILL( 0x1d, 0x01, 0xf7 )
+	ROM_FILL( 0x1e, 0x01, 0xbf )
+	ROM_FILL( 0x1f, 0x01, 0x7f )
 
 	// dumper's note: ROMs [bb4b1, bb4b2, bb4b3, bb4b4] and [bb4a1, bb4a2, bb4a3, bb4a4] have a strange setup
 	// with pins 32, 31 and 30 soldered together and pin 2 connected between all four chips,

@@ -13,21 +13,8 @@
 class gaelco_ms_mod1_device : public device_t, public device_mixer_interface
 {
 public:
-	// layouts programmed in the IC20 decoder PROM
-	enum class decoder : u8
-	{
-		P0101,
-		P0102,
-		P105,
-		P110,
-		P112,
-		P116,
-		GALSPANIC // PROM not dumped
-	};
-
 	gaelco_ms_mod1_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);
 
-	void set_decoder(decoder dec) { m_decoder = dec; }
 	template <typename T> void set_ym_clock(T &&clock)
 	{
 		m_ym[0].lookup()->set_clock(clock);
@@ -54,6 +41,7 @@ protected:
 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
+	virtual void device_post_load() override;
 
 	virtual void latch_w(u8 data);
 
@@ -63,17 +51,17 @@ protected:
 	required_device<z80_device> m_cpu;
 	required_device_array<ym2203_device, 2> m_ym;
 	required_region_ptr<u8> m_rom;
-	required_shared_ptr<u8> m_ram;
-	memory_bank_creator m_rombank;
+	required_region_ptr<u8> m_prom;
+	memory_share_creator<u8> m_ram;
+	memory_view m_view;
 
 private:
 	void program_map(address_map &map) ATTR_COLD;
 
 	u8 ym_r(offs_t offset);
 	void ym_w(offs_t offset, u8 data);
-	u8 int_ack_r();
-	void int_ack_w(u8 data);
-	void nmi_ack_w(u8 data);
+	void int_ack();
+	void nmi_ack();
 
 	TIMER_CALLBACK_MEMBER(int_tick);
 
@@ -81,7 +69,6 @@ private:
 
 	emu_timer *m_int_timer;
 
-	decoder m_decoder;
 	attotime m_int_period;
 	bool m_host_nmi;
 	u8 m_bank;

@@ -607,7 +607,6 @@ void toki_ms_state::tokim(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
 	m_mod1->set_ym_clock(1'000'000); // unknown clock
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -628,6 +627,9 @@ ROM_START( tokim )
 
 	ROM_REGION( 0x010000, "mod1", 0 )    // Z80 code
 	ROM_LOAD( "1_tk_101.c19", 0x000000, 0x10000, CRC(a447a394) SHA1(ccaa6aca5c2afc7c05035cb551b8368b18188dd6) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "1_10110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
 	ROM_REGION( 0x040000, "gfx1", 0 )
 	ROM_LOAD32_BYTE( "8_tk_825.ic9",   0x000003, 0x10000, CRC(6d04def0) SHA1(36f23b0893dfae6cf4c6f4414ff54bb13cfdad41) )
@@ -690,7 +692,6 @@ ROM_START( tokim )
 	ROM_LOAD( "51_502_82s129an.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular bootleg
 	ROM_LOAD( "21_201_82s129.ic4",    0x0100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_202_82s129.ic12",   0x0200, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "1_10110_82s123.ic20",  0x0300, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 ROM_END
 
 // reorganize graphics into something we can decode with a single pass

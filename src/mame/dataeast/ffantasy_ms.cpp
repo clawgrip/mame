@@ -172,7 +172,6 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -198,6 +197,9 @@ ROM_START( automatm )
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/5 board
 	ROM_LOAD( "mod_1-5_automat_2au_101.ic12", 0x00000, 0x10000, CRC(fc80cac1) SHA1(0f31d6c3f2ca1aa1c6d9ac5da28b75a6fbf8444b) )
 
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-5_automat_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
+
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on MOD 8 board
 	ROM_LOAD( "mod_8_automat_2au_301.ic15", 0x00000, 0x10000, CRC(fd3b363b) SHA1(af63d57e362f159c5b54a764e2069ca24849164b) )
 	ROM_LOAD( "mod_8_automat_2au_302.ic22", 0x10000, 0x10000, CRC(05755c02) SHA1(e1fa7d464eb7bbf2f22ca132e7df8e92911a0685) )
@@ -214,9 +216,8 @@ ROM_START( automatm )
 	ROM_LOAD( "mod_51-3_automat_2au_503.ic41", 0x40000, 0x20000, CRC(e174cdaf) SHA1(e66c8adc6df08e30365bd0e360e78397b495582c) )
 	ROM_LOAD( "mod_51-3_automat_2au_504.ic40", 0x60000, 0x20000, CRC(e8662060) SHA1(f59f55fe5bf79be0c66f4984a0ecab17504438c7) )
 
-	ROM_REGION( 0x120, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "mod_1-5_automat_110_82s123.ic20", 0x000, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
-	ROM_LOAD( "mod_51-3_a502_63s141.ic10",       0x020, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x100, "proms", 0 )    // PROMs (function unknown)
+	ROM_LOAD( "mod_51-3_a502_63s141.ic10",       0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_automat_604_gal16v8.ic13", 0x000, 0x117, NO_DUMP )
@@ -236,6 +237,9 @@ ROM_START( drgninjam )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "1-4_snd_dn_101.ic12", 0x00000, 0x10000, CRC(0b82c205) SHA1(0be243b19693c54914eccefbf6a8b8b513eec299) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "1-4_snd_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
 	ROM_LOAD( "4-3_dn_401.ic17", 0x0000, 0x4000, CRC(45ab2822) SHA1(0cf0f74ad5325a66f74fc20cabd6a9d3d8c42f2a) )
@@ -264,7 +268,6 @@ ROM_START( drgninjam )
 	ROM_LOAD( "51-3_dn_504.ic40", 0x60000, 0x20000, CRC(1445dccb) SHA1(fddbb9d136ea6dbb2704ac93e5536ed0e6bfb19c) )
 
 	ROM_REGION( 0x0400, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "1-4_snd_110_82s123.ic20",  0x000, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 	ROM_LOAD( "21-1_p0201_tbp24s10n.ic4", 0x100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21-1_p0205_82s129n.ic12",  0x200, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 	ROM_LOAD( "51-3_502_82s129.ic10",     0x300, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
@@ -287,6 +290,9 @@ ROM_START( ffantasym )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "ff_1-5_5fa_101.ic12", 0x00000, 0x10000, CRC(891bc223) SHA1(737248ea23c42076da9ce6c4abb9506f396892a0) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "ff_1-5_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
 	ROM_LOAD( "ff_4-3_5fa_404.ic14", 0x00000, 0x8000, CRC(819d8197) SHA1(1303d94f6b3048e1108d25662de971a77f6e3ae6) )
@@ -317,7 +323,6 @@ ROM_START( ffantasym )
 	ROM_LOAD( "ff_5-1_5fa_524.ic27", 0xf0000, 0x10000, CRC(1e7351c5) SHA1(88d83b45f25fe58726e5158b97395443cf065564) )
 
 	ROM_REGION( 0x0400, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "ff_1-5_110_82s123.ic20",  0x000, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 	ROM_LOAD( "ff_21-1_201_82s129.ic4",  0x100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "ff_21-1_205_82s129.ic12", 0x200, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 	ROM_LOAD( "ff_51-3_502_82s129.ic10", 0x300, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
@@ -342,6 +347,9 @@ ROM_START( secretagm )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/2 board
 	ROM_LOAD( "mod_1-2_ag_110.ic12", 0x00000, 0x10000, CRC(7446d17e) SHA1(be0c2c5359af20e17f76c0a5ea59de9357735ab8) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-2_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
 	ROM_LOAD( "mod_4-3_0_ag_404.ic14", 0x00000, 0x8000, CRC(4b00d933) SHA1(dd8113f24f8a9f408fbf3e955c8bf61c89744e53) )
@@ -372,7 +380,6 @@ ROM_START( secretagm )
 	ROM_LOAD( "mod_5-1_ag_508.ic27", 0xf0000, 0x10000, CRC(54fcbc39) SHA1(293a6799193b01424c3eac86cf90cc023aa771db) )
 
 	ROM_REGION( 0x0400, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "mod_1-2_110_82s123.ic20",    0x000, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 	ROM_LOAD( "mod_21-1_201_82s129.ic4",    0x100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "mod_21-1_205_82s129.ic12",   0x200, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 	ROM_LOAD( "mod_51-3_p0502_82s129.ic10", 0x300, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )

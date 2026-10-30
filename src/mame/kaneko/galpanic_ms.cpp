@@ -342,7 +342,6 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 16_MHz_XTAL / 4);
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::GALSPANIC);
 	m_mod1->set_ym_clock(20_MHz_XTAL / 16);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -359,6 +358,21 @@ ROM_START( galpanicm )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // Z80 code
 	ROM_LOAD( "snd_1.ic12", 0x000000, 0x10000, CRC(409e9233) SHA1(f13de7ddc00857c889250621ebccdae1b494cfd0) ) // TMS27C512
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
+	// not dumped, hand-made: RAM at 0x8000, YM2203s at 0xa000, latch and EPROM window at 0xc000, as the sound program needs
+	ROM_FILL( 0x00, 0x08, 0xfc )
+	ROM_FILL( 0x08, 0x08, 0xfd )
+	ROM_FILL( 0x10, 0x04, 0xfb )
+	ROM_FILL( 0x14, 0x01, 0xef )
+	ROM_FILL( 0x15, 0x01, 0xff )
+	ROM_FILL( 0x16, 0x01, 0xbf )
+	ROM_FILL( 0x17, 0x01, 0xff )
+	ROM_FILL( 0x18, 0x02, 0xdc )
+	ROM_FILL( 0x1a, 0x02, 0xdd )
+	ROM_FILL( 0x1c, 0x02, 0xfc )
+	ROM_FILL( 0x1e, 0x02, 0xfd )
 
 	ROM_REGION16_BE( 0x100000, "userx", ROMREGION_ERASEFF ) // 68000 data @ 0x200000
 

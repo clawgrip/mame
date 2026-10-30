@@ -564,7 +564,6 @@ void raiden_ms_state::raidenm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P110);
 	m_mod1->set_ym_clock(1'000'000); // unknown clock
 	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -612,6 +611,9 @@ ROM_START( raidenm )
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/5 board
 	ROM_LOAD( "msraid_1-5_rd101.ic12",  0x00000, 0x10000, CRC(2b76e371) SHA1(4c9732950f576e498d02fde485ba92fb293d5594) )
 
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "msraid_1-5_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
+
 	// dumper's note: ROMs [rd4b1, rd4b2, rb4b3, rd4b4] and [rd4a1, rd4a2, rb4a3, rd4a4] have a strange setup
 	// with pins 32, 31 and 30 soldered together and pin 2 connected between all four chips, while the sockets are for 28 pin chips
 	// (with 27C512 silkscreened on the PCB behind the chips)
@@ -640,7 +642,6 @@ ROM_START( raidenm )
 	ROM_LOAD32_BYTE( "msraid_51-3_rd504.ic40",   0x00000, 0x20000, CRC(0452eb10) SHA1(3b998da404bd7133d12aadcadd57ee21a0cfc226) )
 
 	ROM_REGION( 0x0700, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "msraid_1-5_110_82s123.ic20",      0x0000, 0x0020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 	ROM_LOAD( "msraid_21-1_211_82s129.ic4",      0x0100, 0x0100, CRC(4f8c3e63) SHA1(0aa68fa1de6ca945027366a06752e834bbbc8d09) )
 	ROM_LOAD( "msraid_21-1_p0202_82s129.ic12",   0x0200, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 	ROM_LOAD( "msraid_51-3_502_82129.ic10",      0x0600, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )

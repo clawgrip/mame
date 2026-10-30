@@ -351,7 +351,6 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0102);
 	m_mod1->set_int_period(attotime::from_hz(180)); // unknown source and rate
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -368,6 +367,9 @@ ROM_START( slapfighm )
 
 	ROM_REGION( 0x4000, "mod1", 0 ) // on MOD 1 board
 	ROM_LOAD( "1_snd_fi_0101.ic12", 0x0000, 0x4000, CRC(4e3ae13e) SHA1(4ab29064f3a4cb4fd70a9eb8ddbffb4f5ee74057) ) // 1xxxxxxxxxxxxx = 0xFF
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "1_snd_p0102_82s123.ic20", 0x00, 0x20, CRC(6228a653) SHA1(a8cfceba0546875940e9124c5ca2a6c625232856) )
 
 	ROM_REGION( 0x4000, "chars", 0 ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
 	ROM_LOAD( "4-2_fi_401.ic17", 0x0000, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
@@ -390,7 +392,6 @@ ROM_START( slapfighm )
 	ROM_LOAD32_BYTE( "51-1_fi_504.ic40", 0x0000, 0x8000, CRC(b80afe0a) SHA1(02efc3cb0c968d24ae0da4d16515c244f59d1d93) )
 
 	ROM_REGION( 0x0600, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "1_snd_p0102_82s123.ic20",    0x000, 0x020, CRC(6228a653) SHA1(a8cfceba0546875940e9124c5ca2a6c625232856) )
 	ROM_LOAD( "21-1_p0201_82s129.ic5",      0x100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21-1_p0203_82s129.ic12",     0x200, 0x100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
 	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x300, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )

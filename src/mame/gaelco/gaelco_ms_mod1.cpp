@@ -9,26 +9,28 @@
     small sub board with an OKI M5205 and its latch; its VCK is then the
     interrupt source. Gryzor and Double Dragon use a 6809 version.
 
-    Deduced from the decoder PROM contents and the sound programs: the
-    PROM is addressed by A15, A14, A13, latch bit 7 and A11. A12 isn't
-    decoded, so every 2 KB area is mirrored 4 KB above. Outputs:
-      bit 0  EPROM A14 (latch bit 7 in the banked area)
+    The memory map comes from the decoder PROM. Deduced from the PROM
+    contents and the sound programs: the PROM is addressed by A15, A14, A13,
+    latch bit 7 and A11. A12 isn't decoded, so every 2 KB area is mirrored
+    4 KB above. EPROM A15 is CPU A15. Outputs, all but bit 0 active low:
+      bit 0  EPROM A14
       bit 1  EPROM select
       bit 2  RAM select
-      bit 3  strobe (interrupt acknowledge on P0102, read)
+      bit 3  strobe, acknowledges the interrupt (P0102 reads it)
       bit 4  YM2203s: writes +0/+1 #1, +2/+3 #2, +4 interrupt acknowledge;
              reads +8/+9 #1, +A/+B #2
       bit 5  sub board latch: bits 0-3 M5205 data, bit 4 M5205 reset,
              bit 7 bank
-      bit 6  strobe (interrupt acknowledge; with the latch, it's where the
-             YM2203s are when the bank bit is set)
-      bit 7  strobe (NMI acknowledge on P0101)
+      bit 6  strobe, acknowledges the interrupt (with the latch, it's where
+             the YM2203s are when the bank bit is set)
+      bit 7  strobe, acknowledges the NMI (used with P0101)
 
     The top 16 bytes of the RAM are shared with the CPU board. The sound
     programs copy the connector inputs (YM2203 #1 ports) and the DIP
     switches (SW1 on YM2203 #2 port B, SW2 on port A) there and take the
     sound commands from there.
 
+    Known PROMs:
     PROM   ROM               RAM        YM2203  latch  games
     P0101  0000-7fff         c000-dfff  e000    -      Black Tiger, Master Boy (PROM not dumped)
     P0102  0000-3fff         c000-dfff  e000    -      Slap Fight
@@ -47,8 +49,8 @@
     TODO:
     - clocks (there's no crystal on the board)
     - interrupt source without the M5205 sub board
-    - Cabal's program wants RAM at 2000 and the YM2203s at 4000, which
-      doesn't match its 112 PROM
+    - Cabal's program wants RAM at 2000, the YM2203s at 4000 and EPROM A15
+      from the bank bit, which no known PROM or board wiring gives
     - 6809 version (P0109 and P0111 PROMs)
 
 ***************************************************************************/
@@ -96,10 +98,10 @@ gaelco_ms_mod1_device::gaelco_ms_mod1_device(const machine_config &mconfig, devi
 	m_cpu(*this, "cpu"),
 	m_ym(*this, "ym%u", 1U),
 	m_rom(*this, DEVICE_SELF),
-	m_ram(*this, "ram"),
-	m_rombank(*this, "rombank"),
+	m_prom(*this, "prom"),
+	m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
+	m_view(*this, "view"),
 	m_in_cb(*this, 0xff),
-	m_decoder(decoder::P110),
 	m_int_period(attotime::zero),
 	m_host_nmi(false)
 {
@@ -123,14 +125,72 @@ void gaelco_ms_mod1_device::device_add_mconfig(machine_config &config)
 
 void gaelco_ms_mod1_device::device_start()
 {
-	if (m_rom.length() > 0x8000)
-		m_rombank->configure_entries(0, 2, &m_rom[0x8000], 0x4000);
+	// one view for each value of the bank bit, built from the PROM in 2 KB pages
+	for (unsigned bank = 0; bank < 2; bank++)
+	{
+		for (offs_t start = 0x0000; start < 0x10000; start += 0x800)
+		{
+			offs_t const end = start + 0x7ff;
+			u8 const data = m_prom[(BIT(start, 13, 3) << 2) | (bank << 1) | BIT(start, 11)];
+			u8 const sel = ~data;
+
+			if (BIT(sel, 2))
+			{
+				m_view[bank].install_ram(start, end, &m_ram[start & 0x1fff]);
+				continue;
+			}
+
+			if (BIT(sel, 1))
+				m_view[bank].install_rom(start, end, &m_rom[((start & 0xbfff) | (BIT(data, 0) << 14)) & (m_rom.length() - 1)]);
+
+			bool const ym = BIT(sel, 4);
+			bool const latch = BIT(sel, 5);
+			bool const intack = BIT(sel, 3) || BIT(sel, 6);
+			bool const nmiack = BIT(sel, 7);
+
+			if (!BIT(sel, 1) && (ym || intack || nmiack))
+			{
+				m_view[bank].install_read_handler(start, end, read8sm_delegate(*this, [this, ym, intack, nmiack] (offs_t offset) -> u8
+				{
+					u8 const data = ym ? ym_r(offset) : 0xff;
+					if (!machine().side_effects_disabled())
+					{
+						if (intack)
+							int_ack();
+						if (nmiack)
+							nmi_ack();
+					}
+					return data;
+				}, "decoder_r"));
+			}
+
+			if (ym || latch || intack || nmiack)
+			{
+				m_view[bank].install_write_handler(start, end, write8sm_delegate(*this, [this, ym, latch, intack, nmiack] (offs_t offset, u8 data)
+				{
+					if (ym)
+						ym_w(offset, data);
+					if (latch)
+						latch_w(data);
+					if (intack)
+						int_ack();
+					if (nmiack)
+						nmi_ack();
+				}, "decoder_w"));
+			}
+		}
+	}
 
 	m_int_timer = timer_alloc(FUNC(gaelco_ms_mod1_device::int_tick), this);
 	if (m_int_period != attotime::zero)
 		m_int_timer->adjust(m_int_period, 0, m_int_period);
 
 	save_item(NAME(m_bank));
+}
+
+void gaelco_ms_mod1_device::device_post_load()
+{
+	m_view.select(m_bank);
 }
 
 void gaelco_ms_mod1_device::device_reset()
@@ -143,60 +203,9 @@ void gaelco_ms_mod1_device::device_reset()
 
 void gaelco_ms_mod1_device::program_map(address_map &map)
 {
-	switch (m_decoder)
-	{
-	case decoder::P0101:
-		map(0x0000, 0x7fff).rom().region(DEVICE_SELF, 0);
-		map(0xa000, 0xbfff).w(FUNC(gaelco_ms_mod1_device::nmi_ack_w));
-		map(0xc000, 0xdfff).ram().share(m_ram);
-		map(0xe000, 0xe00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		break;
-
-	case decoder::P0102:
-		map(0x0000, 0x3fff).rom().region(DEVICE_SELF, 0);
-		map(0xc000, 0xdfff).ram().share(m_ram);
-		map(0xe000, 0xe00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		map(0xe800, 0xe800).mirror(0x17ff).r(FUNC(gaelco_ms_mod1_device::int_ack_r));
-		break;
-
-	case decoder::P105:
-		map(0x0000, 0x7fff).rom().region(DEVICE_SELF, 0);
-		map(0x8000, 0xbfff).bankr(m_rombank);
-		map(0x8000, 0x8000).mirror(0x1fff).w(FUNC(gaelco_ms_mod1_device::latch_w));
-		map(0xc000, 0xc00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		map(0xe000, 0xffff).ram().share(m_ram);
-		break;
-
-	case decoder::P110:
-		map(0x0000, 0x7fff).rom().region(DEVICE_SELF, 0);
-		map(0x8000, 0xbfff).bankr(m_rombank);
-		map(0x8000, 0x8000).mirror(0x1fff).w(FUNC(gaelco_ms_mod1_device::latch_w));
-		map(0xc000, 0xdfff).ram().share(m_ram);
-		map(0xe000, 0xe00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		break;
-
-	case decoder::P112:
-		map(0x0000, 0x7fff).rom().region(DEVICE_SELF, 0);
-		map(0x8000, 0x9fff).ram().share(m_ram);
-		map(0xa000, 0xa000).mirror(0x17ff).w(FUNC(gaelco_ms_mod1_device::int_ack_w));
-		map(0xc000, 0xc00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		break;
-
-	case decoder::P116:
-		map(0x0000, 0xbfff).rom().region(DEVICE_SELF, 0);
-		map(0x8000, 0x8000).mirror(0x17ff).w(FUNC(gaelco_ms_mod1_device::latch_w));
-		map(0xc000, 0xc00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		map(0xe000, 0xffff).ram().share(m_ram);
-		break;
-
-	case decoder::GALSPANIC:
-		map(0x0000, 0x7fff).rom().region(DEVICE_SELF, 0);
-		map(0x8000, 0x9fff).ram().share(m_ram);
-		map(0xa000, 0xa00f).mirror(0x17f0).rw(FUNC(gaelco_ms_mod1_device::ym_r), FUNC(gaelco_ms_mod1_device::ym_w));
-		map(0xc000, 0xffff).bankr(m_rombank);
-		map(0xc000, 0xc000).mirror(0x1fff).w(FUNC(gaelco_ms_mod1_device::latch_w));
-		break;
-	}
+	map(0x0000, 0xffff).view(m_view);
+	m_view[0];
+	m_view[1];
 }
 
 
@@ -234,8 +243,7 @@ void gaelco_ms_mod1_device::latch_w(u8 data)
 void gaelco_ms_mod1_device::set_bank(u8 bank)
 {
 	m_bank = bank;
-	if (m_rom.length() > 0x8000)
-		m_rombank->set_entry(bank);
+	m_view.select(bank);
 }
 
 u8 gaelco_ms_mod1_device::ym_r(offs_t offset)
@@ -245,8 +253,8 @@ u8 gaelco_ms_mod1_device::ym_r(offs_t offset)
 
 void gaelco_ms_mod1_device::ym_w(offs_t offset, u8 data)
 {
-	if (m_bank || BIT(offset, 2))
-		int_ack_w(data);
+	if (BIT(offset, 2))
+		int_ack();
 	else
 		m_ym[BIT(offset, 1)]->write(offset & 1, data);
 }
@@ -262,19 +270,12 @@ TIMER_CALLBACK_MEMBER(gaelco_ms_mod1_device::int_tick)
 	int_w(1);
 }
 
-u8 gaelco_ms_mod1_device::int_ack_r()
-{
-	if (!machine().side_effects_disabled())
-		m_cpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
-	return 0xff;
-}
-
-void gaelco_ms_mod1_device::int_ack_w(u8 data)
+void gaelco_ms_mod1_device::int_ack()
 {
 	m_cpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
 }
 
-void gaelco_ms_mod1_device::nmi_ack_w(u8 data)
+void gaelco_ms_mod1_device::nmi_ack()
 {
 	m_cpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
 }

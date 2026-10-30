@@ -125,7 +125,6 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P112);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -142,6 +141,9 @@ ROM_START( twincobrm )
 
 	ROM_REGION( 0x08000, "mod1", 0 ) // on MOD 1/3 board
 	ROM_LOAD( "mod_1-3_tw_101.ic12",           0x00000, 0x08000, CRC(e1aafdf5) SHA1(3441fc32c4eba46fa84010a437d5627fe7cdb2d0) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-3_112_82s123.ic20", 0x00, 0x20, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) )
 
 	ROM_REGION( 0x14000, "tiles1", 0 ) // on MOD 4/3 board
 	ROM_LOAD( "mod_4-3_tw_401.ic17",    0x00000, 0x08000, CRC(da1efca2) SHA1(f8685872b266ff7b9bd657bcc538217159938823) )
@@ -167,7 +169,6 @@ ROM_START( twincobrm )
 	ROM_LOAD( "mod_51-3_tw_504.ic40",   0x30000, 0x10000, CRC(f318d76e) SHA1(c124aec667e98489cc7adcfa4b48b5a147101cb7) )
 
 	ROM_REGION( 0x00100, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "mod_1-3_112_82s123.ic20",       0x00000, 0x00020, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) )
 	ROM_LOAD( "mod_21-1_205_tbp24s10.ic12",    0x00000, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 	ROM_LOAD( "mod_21-1_207_tbp24s10.ic4",     0x00000, 0x00100, CRC(7a63d740) SHA1(5b6d73153d0c058e02c55cbcaa40c4f5e5cb5ce4) )
 	ROM_LOAD( "mod_51-3_502_82s129.ic10",      0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )

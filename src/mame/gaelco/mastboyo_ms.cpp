@@ -225,7 +225,6 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // Unknown clock and divisor
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0101); // PROM not dumped, the program fits this layout
 	// Unknown clock and divisor, 2.5 MHz gives the pitch of the single board version with the prescaler the program selects
 	m_mod1->set_ym_clock(20_MHz_XTAL / 8);
 	// unknown source, 4 times the 256.244 Hz measured on the single board version gives its music tempo
@@ -256,6 +255,19 @@ ROM_START( mastboyom )
 	ROM_REGION( 0x8000, "mod1", 0 ) // on MOD-1 board
 	ROM_LOAD( "ma_0101_n_27c256.bin", 0x0000, 0x8000, CRC(7c1ae820) SHA1(2922b9094289daa2830acb6aab3b72941eab02b8) ) // 1xxxxxxxxxxxxxx = 0xFF
 
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
+	// not dumped, hand-made with the P0101 contents, which fit the sound program
+	ROM_FILL( 0x00, 0x08, 0xfc )
+	ROM_FILL( 0x08, 0x08, 0xfd )
+	ROM_FILL( 0x10, 0x04, 0xff )
+	ROM_FILL( 0x14, 0x04, 0x7f )
+	ROM_FILL( 0x18, 0x04, 0xfb )
+	ROM_FILL( 0x1c, 0x01, 0xef )
+	ROM_FILL( 0x1d, 0x01, 0xf7 )
+	ROM_FILL( 0x1e, 0x01, 0xbf )
+	ROM_FILL( 0x1f, 0x01, 0xdf )
+
 	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
 	ROM_LOAD( "ma_0401_27128.bin", 0x00000, 0x02000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL
 	ROM_CONTINUE(                  0x00000, 0x02000)
@@ -280,6 +292,19 @@ ROM_START( mastboyoma )
 
 	ROM_REGION( 0x8000, "mod1", 0 ) // on MOD-1 board
 	ROM_LOAD( "ma_0101_v_27c256.bin", 0x0000, 0x8000, CRC(e754176b) SHA1(325415ddc6bbe77493a7ee0130c1fe103f771bb0) ) // 1xxxxxxxxxxxxxx = 0xFF, only differs from ma_0101_n at 0x89 and 0x91
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
+	// not dumped, hand-made with the P0101 contents, which fit the sound program
+	ROM_FILL( 0x00, 0x08, 0xfc )
+	ROM_FILL( 0x08, 0x08, 0xfd )
+	ROM_FILL( 0x10, 0x04, 0xff )
+	ROM_FILL( 0x14, 0x04, 0x7f )
+	ROM_FILL( 0x18, 0x04, 0xfb )
+	ROM_FILL( 0x1c, 0x01, 0xef )
+	ROM_FILL( 0x1d, 0x01, 0xf7 )
+	ROM_FILL( 0x1e, 0x01, 0xbf )
+	ROM_FILL( 0x1f, 0x01, 0xdf )
 
 	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
 	ROM_LOAD( "ma_0401_27128.bin", 0x00000, 0x02000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL

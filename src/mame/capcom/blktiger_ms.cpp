@@ -276,7 +276,6 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 24_MHz_XTAL / 8); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P0101);
 	m_mod1->set_int_period(attotime::from_hz(60)); // unknown source
 	m_mod1->set_host_nmi(true);
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -297,6 +296,9 @@ ROM_START( blktigerm )
 	ROM_REGION( 0x8000, "mod1", 0 )
 	ROM_LOAD( "1_bl_101.ic12",  0x0000, 0x8000, CRC(14028686) SHA1(64dc219d906f1bdd0c2bc05aff5aa73e001a6901) )
 
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "1_p0101_82s123.ic20", 0x00, 0x20, CRC(3fd60d3a) SHA1(8100fa7453638ac40193b5d92404f41b101ed2cc) )
+
 	ROM_REGION( 0x10000, "chars", 0 ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD( "4_bl_401.ic17",  0x0000, 0x8000, CRC(ab1afb3d) SHA1(555332ccfb69e65b776f94ffac9a4a051fb6f09e) )
 	ROM_LOAD( "4_bl_402.ic16",  0x8000, 0x8000, CRC(89445b11) SHA1(7d9ab6e88d7de3a0e31b3b8a5e57dd39afd7940d) )
@@ -314,7 +316,6 @@ ROM_START( blktigerm )
 	ROM_LOAD32_BYTE( "51_bl_504.ic40",   0x00000, 0x10000, CRC(2cb45034) SHA1(b2fd3b7b7b9d68b6ff1985166b106e65b17dbb23) )
 
 	ROM_REGION( 0x0700, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "1_p0101_82s123.ic20",       0x0000, 0x0020, CRC(3fd60d3a) SHA1(8100fa7453638ac40193b5d92404f41b101ed2cc) )
 	ROM_LOAD( "21_p0201_82s129.ic4",       0x0100, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_p0202_82s129.ic12",      0x0200, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0300, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )

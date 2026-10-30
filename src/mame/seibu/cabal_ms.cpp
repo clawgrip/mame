@@ -19,6 +19,7 @@
 
     TODO:
     - everything,
+    - redump the MOD 1/4 decoder PROM (IC20): the dumped one doesn't fit the sound program,
 */
 
 
@@ -157,7 +158,9 @@ ROM_START( cabalm )
 	ROM_LOAD( "mod_51-3_ca_504.ic40",         0x60000, 0x20000, CRC(3048eb6d) SHA1(7af78233aeef1fcd4edab10bba562502b57a747d) )
 
 	ROM_REGION( 0x320, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) )
+	// the 112 decoder PROM of Twin Cobra, which doesn't fit this sound program (it wants RAM at 0x2000, the YM2203s at
+	// 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), needs a redump to confirm
+	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) BAD_DUMP )
 	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00020, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",   0x00120, 0x00100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 	ROM_LOAD( "mod_21-1_201_82s129.ic4",      0x00220, 0x00100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )

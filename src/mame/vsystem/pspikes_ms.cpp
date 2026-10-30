@@ -251,7 +251,6 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_decoder(gaelco_ms_mod1_device::decoder::P105);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -267,6 +266,9 @@ ROM_START( pspikesm )
 
 	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod_1-4_ps_101.ic12",        0x00000, 0x10000, CRC(2f6f7f94) SHA1(49ba5b97807b9488ab485f67ca37795935b8bed0) )
+
+	ROM_REGION( 0x20, "mod1:prom", 0 )
+	ROM_LOAD( "mod_1-4_105_82s123n.ic20", 0x00, 0x20, CRC(14d72781) SHA1(372dc021d8aaf4aa6fd46e69a3d8f1c68113426f) )
 
 	ROM_REGION( 0x80000, "tiles", ROMREGION_INVERT ) // on MOD 4/2 board
 	ROM_LOAD( "mod_4-3_ps_401.ic17", 0x00000, 0x20000, CRC(a7e00b36) SHA1(2b5e85ec02e8893d7d730aad4d690883b1d236cc) )
@@ -292,11 +294,10 @@ ROM_START( pspikesm )
 	ROM_LOAD32_BYTE( "mod_5-1_ps_521.ic21", 0xc0001, 0x10000, CRC(b652bb25) SHA1(87976d9ac16e2471e7b87b3509ad1ab34e0d9eaa) )
 	ROM_LOAD32_BYTE( "mod_5-1_ps_527.ic27", 0xc0000, 0x10000, CRC(39d9b0a5) SHA1(1396a96fe662bf53a2e86d39518f00a3f9693918) )
 
-	ROM_REGION( 0x320, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_1-4_105_82s123n.ic20",   0x00000, 0x00020, CRC(14d72781) SHA1(372dc021d8aaf4aa6fd46e69a3d8f1c68113426f) )
-	ROM_LOAD( "mod_51-1_p0502_8s2129.ic10", 0x00020, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-	ROM_LOAD( "mod_21-1_209_82s129.ic12",   0x00120, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_21-1_p0204_82s129.ic4",  0x00220, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
+	ROM_REGION( 0x300, "proms", 0 ) // PROMs (function unknown)
+	ROM_LOAD( "mod_51-1_p0502_8s2129.ic10", 0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_LOAD( "mod_21-1_209_82s129.ic12",   0x00100, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
+	ROM_LOAD( "mod_21-1_p0204_82s129.ic4",  0x00200, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_606_gal16v8.ic13",   0x00000, 0x00117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )
