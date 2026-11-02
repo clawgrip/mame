@@ -296,7 +296,7 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 
 	// divisors unknown, no XTAL on the PCB, might also use the 20 MHz one
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 24_MHz_XTAL / 8);
-	m_mod1->set_ym_clock(24_MHz_XTAL / 12);
+	m_mod1->set_ym_clock(1'193'182); // unknown, gives the pitch of the original game (an octave lower)
 	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");

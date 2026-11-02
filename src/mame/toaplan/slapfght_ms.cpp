@@ -351,7 +351,8 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
-	m_mod1->set_int_period(attotime::from_hz(180)); // unknown source and rate
+	m_mod1->set_ym_clock(24_MHz_XTAL / 16); // divisor unknown, gives the pitch of the original game
+	m_mod1->set_int_period(attotime::from_hz(360)); // unknown source, gives the tempo of the original game (music every other interrupt)
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

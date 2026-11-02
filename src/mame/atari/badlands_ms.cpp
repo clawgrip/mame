@@ -148,6 +148,7 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	m_mod1->set_ym_clock(1'750'000); // unknown, gives the pitch and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

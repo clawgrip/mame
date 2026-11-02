@@ -607,7 +607,7 @@ void toki_ms_state::tokim(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
-	m_mod1->set_ym_clock(1'000'000); // unknown clock
+	m_mod1->set_ym_clock(1'193'182); // unknown, gives the pitch (an octave lower) and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

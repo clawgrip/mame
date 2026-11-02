@@ -299,7 +299,8 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 24_MHz_XTAL / 8); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
-	m_mod1->set_int_period(attotime::from_hz(60)); // unknown source
+	m_mod1->set_ym_clock(1'789'773); // unknown, gives the pitch of the original game
+	m_mod1->set_int_period(attotime::from_hz(950)); // unknown source, about 950 Hz gives the tempo of the original game
 	m_mod1->set_host_nmi(true);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
