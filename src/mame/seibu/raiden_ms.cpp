@@ -200,6 +200,7 @@ _|_  74LS86PC  74LS299N |RD4B3  | 74LS153PC|V||  _|_  74LS86PC  74LS299N |RD4A3 
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/nec/nec.h"
 
@@ -219,19 +220,17 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4(*this, "mod4_%u", 1U),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_spriteram(*this, "spriteram"),
 		m_scrollram1(*this, "scrollram1"),
 		m_scrollram2(*this, "scrollram2"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_videoram(*this, "videoram"),
-		m_videoram2(*this, "videoram2"),
-		m_videoram3(*this, "videoram3")
+		m_videoram(*this, "videoram")
 	{ }
 
 	void raidenm(machine_config &config);
-	void init_raidenm();
 
 protected:
 	virtual void video_start() override ATTR_COLD;
@@ -240,6 +239,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device_array<gaelco_ms_mod4_device, 2> m_mod4;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_shared_ptr<uint16_t> m_spriteram;
@@ -247,8 +247,6 @@ private:
 	required_shared_ptr<uint16_t> m_scrollram2;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_shared_ptr<uint16_t> m_videoram;
-	required_shared_ptr<uint16_t> m_videoram2;
-	required_shared_ptr<uint16_t> m_videoram3;
 
 	uint16_t pal_read16(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16(offset); return swapendian_int16(data); };
 	uint16_t pal_read16_ext(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16_ext(offset); return swapendian_int16(data);  };
@@ -263,19 +261,11 @@ private:
 	IRQ_CALLBACK_MEMBER( vector_r );
 	void vblank_irq(int state);
 
-	void descramble_16x16tiles(uint8_t* src, int len);
-
 	void vram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-	void vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-	void vram3_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 
 	TILE_GET_INFO_MEMBER(get_tile_info_tilemap1);
-	TILE_GET_INFO_MEMBER(get_tile_info_tilemap2);
-	TILE_GET_INFO_MEMBER(get_tile_info_tilemap3);
 
 	tilemap_t *m_bg_tilemap;
-	tilemap_t *m_bg_tilemap2;
-	tilemap_t *m_bg_tilemap3;
 };
 
 
@@ -299,8 +289,8 @@ void raiden_ms_state::raidenm_map(address_map &map)
 void raiden_ms_state::raidenm_sub_map(address_map &map)
 {
 	map(0x00000, 0x01fff).ram();
-	map(0x02000, 0x027ff).ram().w(FUNC(raiden_ms_state::vram2_w)).share("videoram2");
-	map(0x02800, 0x02fff).ram().w(FUNC(raiden_ms_state::vram3_w)).share("videoram3");
+	map(0x02000, 0x027ff).rw(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x02800, 0x02fff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x03000, 0x033ff).ram().rw(FUNC(raiden_ms_state::pal_read16), FUNC(raiden_ms_state::pal_write16)).share("palette");
 	map(0x03400, 0x037ff).ram().rw(FUNC(raiden_ms_state::pal_read16_ext), FUNC(raiden_ms_state::pal_write16_ext)).share("palette_ext");
 	map(0x03800, 0x03fff).ram();
@@ -323,37 +313,13 @@ void raiden_ms_state::vram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
 	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-void raiden_ms_state::vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask)
-{
-	COMBINE_DATA(&m_videoram2[offset]);
-	m_bg_tilemap2->mark_tile_dirty(offset);
-}
-
-void raiden_ms_state::vram3_w(offs_t offset, uint16_t data, uint16_t mem_mask)
-{
-	COMBINE_DATA(&m_videoram3[offset]);
-	m_bg_tilemap3->mark_tile_dirty(offset);
-}
-
 TILE_GET_INFO_MEMBER(raiden_ms_state::get_tile_info_tilemap1)
 {
 	int tiledata = m_videoram[tile_index];
 	int tile = (tiledata & 0xff) | ((tiledata >> 6) & 0x300);
 	int color = (tiledata >> 8) & 0x0f;
 
-	tileinfo.set(3, tile, color, 0);
-}
-
-TILE_GET_INFO_MEMBER(raiden_ms_state::get_tile_info_tilemap2)
-{
-	int tile = m_videoram2[tile_index];
-	tileinfo.set(1, tile & 0xfff, tile >> 12, 0);
-}
-
-TILE_GET_INFO_MEMBER(raiden_ms_state::get_tile_info_tilemap3)
-{
-	int tile = m_videoram3[tile_index];
-	tileinfo.set(2, tile & 0xfff, tile >> 12, 0);
+	tileinfo.set(1, tile, color, 0);
 }
 
 
@@ -361,27 +327,20 @@ void raiden_ms_state::video_start()
 {
 	m_bg_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(raiden_ms_state::get_tile_info_tilemap1)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
 	m_bg_tilemap->set_transparent_pen(15);
-
-	m_bg_tilemap2 = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(raiden_ms_state::get_tile_info_tilemap2)), TILEMAP_SCAN_COLS, 16, 16, 32, 32);
-	//m_bg_tilemap2->set_transparent_pen(15);
-
-	m_bg_tilemap3 = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(raiden_ms_state::get_tile_info_tilemap3)), TILEMAP_SCAN_COLS, 16, 16, 32, 32);
-	m_bg_tilemap3->set_transparent_pen(15);
-
 }
 
 uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	bitmap.fill(0, cliprect);
 
-	m_bg_tilemap3->set_scrollx(0, 64 + (((m_scrollram1[0] & 0xff00) >> 8) | ((m_scrollram1[0] & 0x00ff) << 8)));
-	m_bg_tilemap3->set_scrolly(0, 17 + (((m_scrollram1[1] & 0xff00) >> 8) | ((m_scrollram1[1] & 0x00ff) << 8)));
+	m_mod4[1]->set_scrollx(64 + swapendian_int16(m_scrollram1[0]));
+	m_mod4[1]->set_scrolly(17 + swapendian_int16(m_scrollram1[1]));
 
-	m_bg_tilemap2->set_scrollx(0, 64 + (((m_scrollram2[0] & 0xff00) >> 8) | ((m_scrollram2[0] & 0x00ff) << 8)));
-	m_bg_tilemap2->set_scrolly(0, 17 + (((m_scrollram2[1] & 0xff00) >> 8) | ((m_scrollram2[1] & 0x00ff) << 8)));
+	m_mod4[0]->set_scrollx(64 + swapendian_int16(m_scrollram2[0]));
+	m_mod4[0]->set_scrolly(17 + swapendian_int16(m_scrollram2[1]));
 
-	m_bg_tilemap2->draw(screen, bitmap, cliprect, 0, 0);
-	m_bg_tilemap3->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4[0]->draw(screen, bitmap, cliprect);
+	m_mod4[1]->draw(screen, bitmap, cliprect);
 
 
 	// TODO, convert to device, share between Modualar System games
@@ -514,9 +473,6 @@ static const gfx_layout tiles8x8x4_layout =
 
 static GFXDECODE_START( gfx_raiden_ms )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x200, 16 )
-
-	GFXDECODE_ENTRY( "gfx1", 0, tiles16x16x4_layout, 0x300, 16 )
-	GFXDECODE_ENTRY( "gfx2", 0, tiles16x16x4_layout, 0x100, 16 )
 	GFXDECODE_ENTRY( "gfx3", 0, tiles8x8x4_layout, 0x000, 16 )
 GFXDECODE_END
 
@@ -560,6 +516,17 @@ void raiden_ms_state::raidenm(machine_config &config)
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_raiden_ms);
 
+	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_palette(m_palette);
+	m_mod4[0]->set_color_base(0x300);
+	m_mod4[0]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
+
+	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_palette(m_palette);
+	m_mod4[1]->set_color_base(0x100);
+	m_mod4[1]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
+	m_mod4[1]->set_transparent_pen(15);
+
 	// Sound hardware
 	SPEAKER(config, "mono").front_center();
 
@@ -572,30 +539,6 @@ void raiden_ms_state::raidenm(machine_config &config)
 	m_mod1->in_callback<3>().set_ioport("SW1");
 	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
-
-// reorganize graphics into something we can decode with a single pass
-void raiden_ms_state::descramble_16x16tiles(uint8_t* src, int len)
-{
-	std::vector<uint8_t> buffer(len);
-	{
-		for (int i = 0; i < len; i++)
-		{
-			int j = bitswap<20>(i, 19,18,17,16,15,12,11,10,9,8,7,6,5,14,13,4,3,2,1,0);
-			buffer[j] = src[i];
-		}
-
-		std::copy(buffer.begin(), buffer.end(), &src[0]);
-	}
-}
-
-void raiden_ms_state::init_raidenm()
-{
-	descramble_16x16tiles(memregion("gfx1")->base(), memregion("gfx1")->bytes());
-	descramble_16x16tiles(memregion("gfx2")->base(), memregion("gfx2")->bytes());
-	// gfx3 is 8x8 tiles
-}
-
-
 
 ROM_START( raidenm )
 	ROM_REGION( 0x100000, "maincpu", 0 ) // on red board
@@ -617,13 +560,13 @@ ROM_START( raidenm )
 	// dumper's note: ROMs [rd4b1, rd4b2, rb4b3, rd4b4] and [rd4a1, rd4a2, rb4a3, rd4a4] have a strange setup
 	// with pins 32, 31 and 30 soldered together and pin 2 connected between all four chips, while the sockets are for 28 pin chips
 	// (with 27C512 silkscreened on the PCB behind the chips)
-	ROM_REGION( 0x80000, "gfx1", ROMREGION_INVERT ) // on one of the MOD 4/3 boards
+	ROM_REGION( 0x80000, "mod4_1", ROMREGION_INVERT ) // on one of the MOD 4/3 boards
 	ROM_LOAD32_BYTE( "msraid_4-3-1_rd4b1.ic17",  0x00003, 0x20000, CRC(ff35b830) SHA1(fb552b2aa50aed12c3adb6ef9032a438adf6f37f) )
 	ROM_LOAD32_BYTE( "msraid_4-3-1_rd4b2.ic16",  0x00002, 0x20000, CRC(da0b2fca) SHA1(4ffe177587759ea03e73bcc5c36bedc869653ce5) )
 	ROM_LOAD32_BYTE( "msraid_4-3-1_rd4b3.ic15",  0x00001, 0x20000, CRC(00e5953f) SHA1(488ac889a587bf4108be424faa9123abe73b5246) )
 	ROM_LOAD32_BYTE( "msraid_4-3-1_rd4b4.ic14",  0x00000, 0x20000, CRC(932f8407) SHA1(0c7a0b18bbc3ac1f30bdb0ba4466c1e253130305) )
 
-	ROM_REGION( 0x80000, "gfx2", ROMREGION_INVERT ) // on another MOD 4/3 board
+	ROM_REGION( 0x80000, "mod4_2", ROMREGION_INVERT ) // on another MOD 4/3 board
 	ROM_LOAD32_BYTE( "msraid_4-3-2_rd4a1.ic17",  0x00003, 0x20000, CRC(32892554) SHA1(8136626bf7073cdf19a8a38d19f6d0c52405df16) )
 	ROM_LOAD32_BYTE( "msraid_4-3-2_rd4a2.ic16",  0x00002, 0x20000, CRC(cb325246) SHA1(f0a7bf8b1b5145541af78eba0375392a3030e2d9) )
 	ROM_LOAD32_BYTE( "msraid_4-3-2_rd4a3.ic15",  0x00001, 0x20000, CRC(7554acef) SHA1(ec418ef2246c889d0e308925e11b1d3328bd83f9) )
@@ -660,4 +603,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 1990, raidenm,  raiden,  raidenm,  raidenm,  raiden_ms_state, init_raidenm, ROT270, "bootleg (Gaelco / Ervisa)", "Raiden (Modular System)", MACHINE_NOT_WORKING )
+GAME( 1990, raidenm,  raiden,  raidenm,  raidenm,  raiden_ms_state, empty_init,   ROT270, "bootleg (Gaelco / Ervisa)", "Raiden (Modular System)", MACHINE_NOT_WORKING )

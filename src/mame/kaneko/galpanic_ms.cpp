@@ -27,13 +27,13 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/m68000/m68000.h"
 
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -45,23 +45,23 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4(*this, "mod4"),
 		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
 		m_spriteram(*this, "spriteram"),
 		m_fg_ind8_pixram(*this, "fg_ind8ram"),
 		m_bg_rgb555_pixram(*this, "bg_rgb555ram"),
-		m_videoram2(*this, "videoram2"),
 		m_scrollram(*this, "scrollram"),
 		m_gfxdecode(*this, "gfxdecode")
 	{ }
 
 	void newquiz(machine_config &config);
-	void init_galpanicm();
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -69,52 +69,17 @@ private:
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_fg_ind8_pixram;
 	required_shared_ptr<uint16_t> m_bg_rgb555_pixram;
-	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint16_t> m_scrollram;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 	void galspanic_ms_palette(palette_device &palette) const;
 
 	uint32_t screen_update_backgrounds(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void newquiz_map(address_map &map) ATTR_COLD;
-
-	uint16_t vram2_r(offs_t offset, uint16_t mem_mask);
-	void vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask);
-
-	TILE_GET_INFO_MEMBER(get_tile_info_tilemap2);
-
-	tilemap_t *m_bg_tilemap2 = nullptr;
-
-	void descramble_16x16tiles(uint8_t* src, int len);
 };
-
-TILE_GET_INFO_MEMBER(galspanic_ms_state::get_tile_info_tilemap2)
-{
-	int tile = m_videoram2[tile_index*2];
-
-	//int attr = m_videoram2[(tile_index*2)+1] & 0xff;
-	//int fx = (m_videoram2[(tile_index*2)+1] & 0xc0)>>6;
-
-	int col = (tile & 0xf000)>>12;
-	tile &= 0x0fff;
-
-	tileinfo.set(1,tile,col,0);
-}
-
-uint16_t galspanic_ms_state::vram2_r(offs_t offset, uint16_t mem_mask)
-{
-	return m_videoram2[offset];
-}
-
-void galspanic_ms_state::vram2_w(offs_t offset, uint16_t data, uint16_t mem_mask)
-{
-	COMBINE_DATA(&m_videoram2[offset]);
-	m_bg_tilemap2->mark_tile_dirty(offset/2);
-}
 
 
 // lots of bad / leftover reads/writes from the original code in here
@@ -128,7 +93,7 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 	map(0x520000, 0x53ffff).ram().share("bg_rgb555ram");
 
 	map(0x581000, 0x581fff).ram();
-	map(0x584000, 0x5847ff).rw(FUNC(galspanic_ms_state::vram2_r), FUNC(galspanic_ms_state::vram2_w)).share("videoram2"); // was view2 tilemaps (moved from 0x580000 on original) presumably still 'bgtile' tiles tho
+	map(0x584000, 0x5847ff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w)); // was view2 tilemaps (moved from 0x580000 on original)
 	map(0x584800, 0x584fff).ram().share("scrollram");
 	map(0x585000, 0x58ffff).ram();
 
@@ -162,12 +127,6 @@ void galspanic_ms_state::machine_start()
 {
 }
 
-
-void galspanic_ms_state::video_start()
-{
-	m_bg_tilemap2 = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(galspanic_ms_state::get_tile_info_tilemap2)), TILEMAP_SCAN_ROWS,  16,  16, 32, 16);
-	m_bg_tilemap2->set_transparent_pen(15);
-}
 
 void galspanic_ms_state::galspanic_ms_palette(palette_device &palette) const
 {
@@ -218,10 +177,10 @@ uint32_t galspanic_ms_state::screen_update(screen_device &screen, bitmap_ind16 &
 {
 	screen_update_backgrounds(screen, bitmap, cliprect);
 
-	m_bg_tilemap2->set_scrollx(0, 64+m_scrollram[0x400/2]);
-	m_bg_tilemap2->set_scrolly(0, 48-m_scrollram[0x402/2]);
+	m_mod4->set_scrollx(64 + m_scrollram[0x400 / 2]);
+	m_mod4->set_scrolly(48 - m_scrollram[0x402 / 2]);
 
-	m_bg_tilemap2->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4->draw(screen, bitmap, cliprect);
 
 	// TODO, convert to device, share between Modualar System games
 	const int NUM_SPRITES = 0x200;
@@ -312,7 +271,6 @@ static const gfx_layout tiles16x16x4_layout =
 
 static GFXDECODE_START( gfx_galspanic_ms )
 	GFXDECODE_ENTRY( "kan_spr", 0, tiles16x16x4_layout, 0x100, 16 )
-	GFXDECODE_ENTRY( "bgtile", 0, tiles16x16x4_layout, 0x400, 16 )
 GFXDECODE_END
 
 
@@ -337,6 +295,12 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	PALETTE(config, m_palette, FUNC(galspanic_ms_state::galspanic_ms_palette)).set_format(palette_device::GRBx_555, 2048 + 32768);
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_galspanic_ms);
+
+	GAELCO_MS_MOD4(config, m_mod4);
+	m_mod4->set_palette(m_palette);
+	m_mod4->set_color_base(0x400);
+	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 32, 16, 2);
+	m_mod4->set_transparent_pen(15);
 
 	/* sound hardware */
 	SPEAKER(config, "mono").front_center();
@@ -413,7 +377,7 @@ ROM_START( galpanicm )
 	ROM_LOAD32_BYTE( "5_gp_521.ic21",        0x140001, 0x010000, CRC(00ed84f5) SHA1(d3704a0a0e0b3f0f6509f3ab80a7203794b61cca) )
 	ROM_LOAD32_BYTE( "5_gp_527.ic27",        0x140000, 0x010000, CRC(689a8fae) SHA1(b16c33f02966aff3796b9dc528d3c2ca08ae49b1) )
 
-	ROM_REGION( 0x40000, "bgtile", ROMREGION_INVERT ) // tilemap (less data than the encrypted layer on Gals Panic, probably no animation?)
+	ROM_REGION( 0x40000, "mod4", ROMREGION_INVERT ) // tilemap (less data than the encrypted layer on Gals Panic, probably no animation?)
 	ROM_LOAD32_BYTE( "4_gp_401.ic17",        0x000003, 0x010000, CRC(cd7060f6) SHA1(c548b0ccdff0ae33a2b6eef3bf49d18bd0935321) ) // MC27C512AQ
 	ROM_LOAD32_BYTE( "4_gp_402.ic16",        0x000002, 0x010000, CRC(c4627916) SHA1(9d30251a3a7ac0198f89c797ae59285870d21033) ) // MC27C512AQ
 	ROM_LOAD32_BYTE( "4_gp_403.ic15",        0x000001, 0x010000, CRC(35d2bce4) SHA1(050e7adad47ea10a59761e59d8d4aee11960b0db) ) // MC27C512AQ
@@ -438,27 +402,7 @@ ROM_START( galpanicm )
 	ROM_LOAD( "cpu_647_gal16v8.ic7",        0x000, 0x117, CRC(f71d744b) SHA1(c44db82e424d0e36144dfc408e8a7e3d43fc8245) )
 ROM_END
 
-// reorganize graphics into something we can decode with a single pass
-void galspanic_ms_state::descramble_16x16tiles(uint8_t* src, int len)
-{
-	std::vector<uint8_t> buffer(len);
-	{
-		for (int i = 0; i < len; i++)
-		{
-			int j = bitswap<20>(i, 19,18,17,16,15,12,11,10,9,8,7,6,5,14,13,4,3,2,1,0);
-			buffer[j] = src[i];
-		}
-
-		std::copy(buffer.begin(), buffer.end(), &src[0]);
-	}
-}
-
-void galspanic_ms_state::init_galpanicm()
-{
-	descramble_16x16tiles(memregion("bgtile")->base(), memregion("bgtile")->bytes());
-}
-
 } // anonymous namespace
 
 
-GAME( 1991, galpanicm, galsnew, newquiz, newquiz, galspanic_ms_state, init_galpanicm, ROT90, "bootleg (Kaneko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING )
+GAME( 1991, galpanicm, galsnew, newquiz, newquiz, galspanic_ms_state, empty_init,     ROT90, "bootleg (Kaneko / Gaelco / Ervisa)", "New Quiz (Modular System bootleg of Gals Panic)", MACHINE_NOT_WORKING )

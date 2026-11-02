@@ -29,6 +29,7 @@ TODO:
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -47,14 +48,13 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4(*this, "mod4_%c", 'a'),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_spriteram(*this, "spriteram"),
-		m_tileram(*this, "tileram%u", 0U)
+		m_txram(*this, "txram")
 	{ }
 
 	void bloodbrom(machine_config &config) ATTR_COLD;
-
-	void init_bloodbrom() ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
@@ -63,22 +63,21 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint16_t> m_spriteram;
-	required_shared_ptr_array<uint16_t, 3> m_tileram; // 0 bg, 1 fg, 2 tx
+	required_shared_ptr<uint16_t> m_txram;
 
-	tilemap_t *m_tilemap[3] {};
+	tilemap_t *m_tx_tilemap = nullptr;
 	uint16_t m_scrollreg[2] {};
 
-	template <uint8_t Which> TILE_GET_INFO_MEMBER(get_tile_info);
-	template <uint8_t Which> void tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask);
+	TILE_GET_INFO_MEMBER(get_tx_tile_info);
+	void txram_w(offs_t offset, uint16_t data, uint16_t mem_mask);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_program_map(address_map &map) ATTR_COLD;
-
-	void descramble_16x16tiles(uint8_t *src, int len) ATTR_COLD;
 };
 
 
@@ -90,26 +89,20 @@ void bloodbro_ms_state::machine_start()
 
 void bloodbro_ms_state::video_start()
 {
-	m_tilemap[0] = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(bloodbro_ms_state::get_tile_info<0>)), TILEMAP_SCAN_ROWS, 16, 16, 32, 16);
-	m_tilemap[1] = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(bloodbro_ms_state::get_tile_info<1>)), TILEMAP_SCAN_ROWS, 16, 16, 32, 16);
-	m_tilemap[2] = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(bloodbro_ms_state::get_tile_info<2>)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
-
-	m_tilemap[1]->set_transparent_pen(0x0f);
-	m_tilemap[2]->set_transparent_pen(0x0f);
+	m_tx_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(bloodbro_ms_state::get_tx_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+	m_tx_tilemap->set_transparent_pen(0x0f);
 }
 
-template <uint8_t Which>
-TILE_GET_INFO_MEMBER(bloodbro_ms_state::get_tile_info)
+TILE_GET_INFO_MEMBER(bloodbro_ms_state::get_tx_tile_info)
 {
-	int const tile = m_tileram[Which][tile_index];
-	tileinfo.set(Which, tile & 0xfff, tile >> 12, 0);
+	int const tile = m_txram[tile_index];
+	tileinfo.set(0, tile & 0xfff, tile >> 12, 0);
 }
 
-template <uint8_t Which>
-void bloodbro_ms_state::tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
+void bloodbro_ms_state::txram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
 {
-	COMBINE_DATA(&m_tileram[Which][offset]);
-	m_tilemap[Which]->mark_tile_dirty(offset);
+	COMBINE_DATA(&m_txram[offset]);
+	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
 void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -119,7 +112,7 @@ void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 
 	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
 	{
-		gfx_element *gfx = m_gfxdecode->gfx(3);
+		gfx_element *gfx = m_gfxdecode->gfx(1);
 
 		uint16_t const attr0 = m_spriteram[i + 0];
 		uint16_t const attr1 = m_spriteram[i + 1];
@@ -147,16 +140,16 @@ void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 uint32_t bloodbro_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	// TODO: is scrollx used?
-	m_tilemap[1]->set_scrolly(0, (int8_t)m_scrollreg[1] + 1);
+	m_mod4[0]->set_scrolly((int8_t)m_scrollreg[1] + 1);
 
 	bitmap.fill(0, cliprect);
 
-	m_tilemap[0]->draw(screen, bitmap, cliprect, 0, 0);
-	m_tilemap[1]->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4[1]->draw(screen, bitmap, cliprect);
+	m_mod4[0]->draw(screen, bitmap, cliprect);
 
 	draw_sprites(bitmap, cliprect);
 
-	m_tilemap[2]->draw(screen, bitmap, cliprect, 0, 0);
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
 	return 0;
 }
@@ -166,9 +159,9 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 {
 	map(0x000000, 0x07ffff).rom();
 	map(0x080000, 0x08bfff).ram(); // original vram is in here, but bootleg copies some of it elsewhere for use
-	map(0x08c000, 0x08cfff).ram().w(FUNC(bloodbro_ms_state::tileram_w<0>)).share(m_tileram[0]);
-	map(0x08d000, 0x08d7ff).ram();
-	map(0x08d800, 0x08dfff).ram().w(FUNC(bloodbro_ms_state::tileram_w<2>)).share(m_tileram[2]);
+	map(0x08c000, 0x08c7ff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x08c800, 0x08d7ff).ram();
+	map(0x08d800, 0x08dfff).ram().w(FUNC(bloodbro_ms_state::txram_w)).share(m_txram);
 	map(0x08e000, 0x08ffff).ram();
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
 	map(0x0c0100, 0x0c0101).nopw(); // ??? written once
@@ -179,7 +172,7 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x101000, 0x1017ff).ram().share(m_spriteram);
 	map(0x101800, 0x101fff).ram();
 	map(0x102000, 0x102001).nopw(); // ??? written often
-	map(0x18d000, 0x18d7ff).w(FUNC(bloodbro_ms_state::tileram_w<1>)).share(m_tileram[1]);
+	map(0x18d000, 0x18d7ff).w(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, uint16_t data) { m_scrollreg[offset] = data; }));
 }
 
@@ -264,8 +257,6 @@ static const gfx_layout tiles16x16x4_layout =
 
 
 static GFXDECODE_START( gfx_bloodbro_ms )
-	GFXDECODE_ENTRY( "gfx2", 0, tiles16x16x4_layout, 0x300, 16 )
-	GFXDECODE_ENTRY( "gfx1", 0, tiles16x16x4_layout, 0x200, 16 )
 	GFXDECODE_ENTRY( "gfx3", 0, gfx_8x8x4_planar, 0x000, 16 )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x100, 16 )
 GFXDECODE_END
@@ -290,6 +281,17 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_bloodbro_ms);
+
+	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_palette("palette");
+	m_mod4[0]->set_color_base(0x200);
+	m_mod4[0]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
+	m_mod4[0]->set_transparent_pen(15);
+
+	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_palette("palette");
+	m_mod4[1]->set_color_base(0x300);
+	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -336,13 +338,13 @@ ROM_START( bloodbrom )
 	// dumper's note: ROMs [bb4b1, bb4b2, bb4b3, bb4b4] and [bb4a1, bb4a2, bb4a3, bb4a4] have a strange setup
 	// with pins 32, 31 and 30 soldered together and pin 2 connected between all four chips,
 	// while the sockets are for 28 pin chips (with 27C512 silkscreened on the PCB behind the chips)
-	ROM_REGION( 0x80000, "gfx1", ROMREGION_INVERT ) // on one of the MOD 4/3 boards
+	ROM_REGION( 0x80000, "mod4_a", ROMREGION_INVERT ) // on one of the MOD 4/3 boards
 	ROM_LOAD32_BYTE( "4-3-a_bb4a1.ic17",  0x00003, 0x20000, CRC(499c91db) SHA1(bd7142a311a4f3e606f8a31aafc0b504f3d5a2e4) )
 	ROM_LOAD32_BYTE( "4-3-a_bb4a2.ic16",  0x00002, 0x20000, CRC(e8f87153) SHA1(f4147c971d1c66e7c6133c6318357ced7e30e217) )
 	ROM_LOAD32_BYTE( "4-3-a_bb4a3.ic15",  0x00001, 0x20000, CRC(13b888f2) SHA1(7a53f78f22a09fe4db45c36bf3912ad379deca64) )
 	ROM_LOAD32_BYTE( "4-3-a_bb4a4.ic14",  0x00000, 0x20000, CRC(19bc0508) SHA1(01c4eb570dc7ba9401085012d23bdb865df78029) )
 
-	ROM_REGION( 0x80000, "gfx2", ROMREGION_INVERT ) // on another MOD 4/3 board
+	ROM_REGION( 0x80000, "mod4_b", ROMREGION_INVERT ) // on another MOD 4/3 board
 	ROM_LOAD32_BYTE( "4-3-b_bb4b1.ic17",  0x00003, 0x20000, CRC(aa86ae59) SHA1(c15a78eaaca36bebd3261cb2c4a2c232b967a135) )
 	ROM_LOAD32_BYTE( "4-3-b_bb4b2.ic16",  0x00002, 0x20000, CRC(f25dd182) SHA1(eff29970c7b898744b08a151f9e17b68ce77e78d) )
 	ROM_LOAD32_BYTE( "4-3-b_bb4b3.ic15",  0x00001, 0x20000, CRC(3efcb6aa) SHA1(0a162285d08e171e946147e0725db879643ae113) )
@@ -391,28 +393,7 @@ ROM_START( bloodbrom )
 ROM_END
 
 
-// reorganize graphics into something we can decode with a single pass
-void bloodbro_ms_state::descramble_16x16tiles(uint8_t *src, int len)
-{
-	std::vector<uint8_t> buffer(len);
-	{
-		for (int i = 0; i < len; i++)
-		{
-			int j = bitswap<20>(i, 19, 18, 17, 16, 15, 12, 11, 10, 9, 8, 7, 6, 5, 14, 13, 4, 3, 2, 1, 0);
-			buffer[j] = src[i];
-		}
-
-		std::copy(buffer.begin(), buffer.end(), &src[0]);
-	}
-}
-
-void bloodbro_ms_state::init_bloodbrom()
-{
-	descramble_16x16tiles(memregion("gfx1")->base(), memregion("gfx1")->bytes());
-	descramble_16x16tiles(memregion("gfx2")->base(), memregion("gfx2")->bytes());
-}
-
 } // anonymous namespace
 
 
-GAME( 199?, bloodbrom,  bloodbro,  bloodbrom,  bloodbrom,  bloodbro_ms_state, init_bloodbrom, ROT0, "bootleg (Gaelco / Ervisa)", "Blood Bros. (Modular System)", MACHINE_IMPERFECT_SOUND | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NOT_WORKING )
+GAME( 199?, bloodbrom,  bloodbro,  bloodbrom,  bloodbrom,  bloodbro_ms_state, empty_init,     ROT0, "bootleg (Gaelco / Ervisa)", "Blood Bros. (Modular System)", MACHINE_IMPERFECT_SOUND | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NOT_WORKING )
