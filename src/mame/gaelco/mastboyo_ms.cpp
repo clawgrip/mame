@@ -34,6 +34,7 @@
 #include "emu.h"
 
 #include "gaelco_ms_mod1.h"
+#include "gaelco_ms_mod4.h"
 
 #include "cpu/z80/z80.h"
 #include "machine/nvram.h"
@@ -41,7 +42,6 @@
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 #include <vector>
 
@@ -53,10 +53,9 @@ class mastboyo_ms_state : public driver_device
 public:
 	mastboyo_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
-		m_tileram(*this, "tileram.%u", 0U),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
-		m_gfxdecode(*this, "gfxdecode"),
+		m_mod4(*this, "mod4"),
 		m_palette(*this, "palette"),
 		m_rombank(*this, "rombank")
 	{ }
@@ -68,54 +67,35 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 
 private:
-	required_shared_ptr_array<uint8_t, 2> m_tileram;
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
-	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<palette_device> m_palette;
 	required_memory_bank m_rombank;
 
-	tilemap_t *m_tilemap = nullptr;
-
 	void main_program_map(address_map &map) ATTR_COLD;
 
-	template<uint8_t Which> void tileram_w(offs_t offset, uint8_t data);
 	void rombank_w(uint8_t data);
 	uint8_t irq_ack_r();
-	TILE_GET_INFO_MEMBER(get_tile_info);
+	void tile_cb(u16 data, u32 &code, u32 &color);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 };
 
 
-TILE_GET_INFO_MEMBER(mastboyo_ms_state::get_tile_info)
+void mastboyo_ms_state::tile_cb(u16 data, u32 &code, u32 &color)
 {
-	int const code = m_tileram[0][tile_index];
+	code = data & 0xff;
 	// palette bank lines are scrambled, the program reorders its palette table to match
-	int const color = bitswap<4>(m_tileram[1][tile_index], 0, 1, 3, 2);
-
-	tileinfo.set(0, code, color, 0);
-}
-
-void mastboyo_ms_state::video_start()
-{
-	m_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(mastboyo_ms_state::get_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+	color = bitswap<4>(data, 8, 9, 11, 10);
 }
 
 uint32_t mastboyo_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4->draw(screen, bitmap, cliprect);
 
 	return 0;
-}
-
-template<uint8_t Which>
-void mastboyo_ms_state::tileram_w(offs_t offset, uint8_t data)
-{
-	m_tileram[Which][offset] = data;
-	m_tilemap->mark_tile_dirty(offset);
 }
 
 
@@ -143,8 +123,8 @@ void mastboyo_ms_state::main_program_map(address_map &map)
 {
 	map(0x0000, 0x3fff).rom();
 	map(0x4000, 0x47ff).ram().share("nvram");
-	map(0x5000, 0x53ff).ram().w(FUNC(mastboyo_ms_state::tileram_w<0>)).share(m_tileram[0]);
-	map(0x5400, 0x57ff).ram().w(FUNC(mastboyo_ms_state::tileram_w<1>)).share(m_tileram[1]);
+	map(0x5000, 0x53ff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
+	map(0x5400, 0x57ff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
 	map(0x5800, 0x5803).nopw(); // MOD 4 scroll registers
 	map(0x6000, 0x6000).w(FUNC(mastboyo_ms_state::rombank_w));
 	map(0x6400, 0x640f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
@@ -194,11 +174,6 @@ static INPUT_PORTS_START( mastboyo_ms )
 INPUT_PORTS_END
 
 
-static GFXDECODE_START( gfx_mastboyo_ms )
-	GFXDECODE_ENTRY( "tiles", 0, gfx_8x8x4_planar, 0, 16 )
-GFXDECODE_END
-
-
 void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 {
 	// basic machine hardware
@@ -217,9 +192,12 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	screen.set_screen_update(FUNC(mastboyo_ms_state::screen_update));
 	screen.set_palette(m_palette);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_mastboyo_ms);
-
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_333_nibble, 0x100);
+
+	GAELCO_MS_MOD4(config, m_mod4);
+	m_mod4->set_palette(m_palette);
+	m_mod4->set_tile_size(8);
+	m_mod4->set_tile_callback(FUNC(mastboyo_ms_state::tile_cb));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -268,15 +246,11 @@ ROM_START( mastboyom )
 	ROM_FILL( 0x1e, 0x01, 0xbf )
 	ROM_FILL( 0x1f, 0x01, 0xdf )
 
-	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
-	ROM_LOAD( "ma_0401_27128.bin", 0x00000, 0x02000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x00000, 0x02000)
-	ROM_LOAD( "ma_0402_27128.bin", 0x02000, 0x02000, CRC(76d14275) SHA1(6bd920bd58b9b30cd81e2658084639a16314322d) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x02000, 0x02000)
-	ROM_LOAD( "ma_0403_27128.bin", 0x04000, 0x02000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x04000, 0x02000)
-	ROM_LOAD( "ma_0404_27128.bin", 0x06000, 0x02000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x06000, 0x02000)
+	ROM_REGION( 0x10000, "mod4", ROMREGION_INVERT ) // on MOD-4 board
+	ROM_LOAD32_BYTE( "ma_0401_27128.bin", 0x00003, 0x04000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0402_27128.bin", 0x00002, 0x04000, CRC(76d14275) SHA1(6bd920bd58b9b30cd81e2658084639a16314322d) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0403_27128.bin", 0x00001, 0x04000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0404_27128.bin", 0x00000, 0x04000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
 
 	ROM_REGION( 0x200, "proms", 0 ) // address decoder
 	ROM_LOAD( "p0314_82s147a.bin", 0x000, 0x200, CRC(aea2bbab) SHA1(506cca2acd8e65e5dbddef3a7e93950d54cf3d5a) )
@@ -306,15 +280,11 @@ ROM_START( mastboyoma )
 	ROM_FILL( 0x1e, 0x01, 0xbf )
 	ROM_FILL( 0x1f, 0x01, 0xdf )
 
-	ROM_REGION( 0x8000, "tiles", ROMREGION_INVERT ) // on MOD-4 board
-	ROM_LOAD( "ma_0401_27128.bin", 0x00000, 0x02000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x00000, 0x02000)
-	ROM_LOAD( "ma_0402_27128.bin", 0x02000, 0x02000, CRC(76d14275) SHA1(6bd920bd58b9b30cd81e2658084639a16314322d) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x02000, 0x02000)
-	ROM_LOAD( "ma_0403_27128.bin", 0x04000, 0x02000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x04000, 0x02000)
-	ROM_LOAD( "ma_0404_27128.bin", 0x06000, 0x02000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_CONTINUE(                  0x06000, 0x02000)
+	ROM_REGION( 0x10000, "mod4", ROMREGION_INVERT ) // on MOD-4 board
+	ROM_LOAD32_BYTE( "ma_0401_27128.bin", 0x00003, 0x04000, CRC(ad9f97d2) SHA1(1b8cde21c5fd5f1970ef6cc20616bff5c36a6b68) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0402_27128.bin", 0x00002, 0x04000, CRC(76d14275) SHA1(6bd920bd58b9b30cd81e2658084639a16314322d) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0403_27128.bin", 0x00001, 0x04000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD32_BYTE( "ma_0404_27128.bin", 0x00000, 0x04000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
 
 	ROM_REGION( 0x200, "proms", 0 ) // address decoder
 	ROM_LOAD( "p0314_82s147a.bin", 0x000, 0x200, CRC(aea2bbab) SHA1(506cca2acd8e65e5dbddef3a7e93950d54cf3d5a) )

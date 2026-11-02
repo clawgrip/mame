@@ -207,7 +207,6 @@ _|_  74LS86PC  74LS299N |RD4B3  | 74LS153PC|V||  _|_  74LS86PC  74LS299N |RD4A3 
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -226,27 +225,22 @@ public:
 		m_spriteram(*this, "spriteram"),
 		m_scrollram1(*this, "scrollram1"),
 		m_scrollram2(*this, "scrollram2"),
-		m_gfxdecode(*this, "gfxdecode"),
-		m_videoram(*this, "videoram")
+		m_gfxdecode(*this, "gfxdecode")
 	{ }
 
 	void raidenm(machine_config &config);
-
-protected:
-	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
-	required_device_array<gaelco_ms_mod4_device, 2> m_mod4;
+	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_scrollram1;
 	required_shared_ptr<uint16_t> m_scrollram2;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_shared_ptr<uint16_t> m_videoram;
 
 	uint16_t pal_read16(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16(offset); return swapendian_int16(data); };
 	uint16_t pal_read16_ext(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16_ext(offset); return swapendian_int16(data);  };
@@ -261,11 +255,7 @@ private:
 	IRQ_CALLBACK_MEMBER( vector_r );
 	void vblank_irq(int state);
 
-	void vram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-
-	TILE_GET_INFO_MEMBER(get_tile_info_tilemap1);
-
-	tilemap_t *m_bg_tilemap;
+	void text_tile_cb(u16 data, u32 &code, u32 &color);
 };
 
 
@@ -277,7 +267,7 @@ void raiden_ms_state::raidenm_map(address_map &map)
 
 	map(0x0b000, 0x0b00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
 
-	map(0x0c000, 0x0cfff).ram().w(FUNC(raiden_ms_state::vram_w)).share("videoram");
+	map(0x0c000, 0x0cfff).rw(m_mod4[2], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x0d800, 0x0dfff).ram().share("spriteram");
 
 	map(0x0f100, 0x0f103).ram().share("scrollram1");
@@ -307,26 +297,10 @@ void raiden_ms_state::raidenm_sub_map(address_map &map)
 }
 
 
-void raiden_ms_state::vram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
+void raiden_ms_state::text_tile_cb(u16 data, u32 &code, u32 &color)
 {
-	COMBINE_DATA(&m_videoram[offset]);
-	m_bg_tilemap->mark_tile_dirty(offset);
-}
-
-TILE_GET_INFO_MEMBER(raiden_ms_state::get_tile_info_tilemap1)
-{
-	int tiledata = m_videoram[tile_index];
-	int tile = (tiledata & 0xff) | ((tiledata >> 6) & 0x300);
-	int color = (tiledata >> 8) & 0x0f;
-
-	tileinfo.set(1, tile, color, 0);
-}
-
-
-void raiden_ms_state::video_start()
-{
-	m_bg_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(raiden_ms_state::get_tile_info_tilemap1)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
-	m_bg_tilemap->set_transparent_pen(15);
+	code = (data & 0xff) | ((data & 0xc000) >> 6);
+	color = BIT(data, 8, 4);
 }
 
 uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -373,9 +347,9 @@ uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bit
 		gfx->transpen(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - Y_EXTRA_OFFSET, 15);
 	}
 
-	m_bg_tilemap->set_scrolly(0, 16);
+	m_mod4[2]->set_scrolly(16);
 
-	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4[2]->draw(screen, bitmap, cliprect);
 
 	return 0;
 }
@@ -459,21 +433,8 @@ static const gfx_layout tiles16x16x4_layout =
 };
 
 
-static const gfx_layout tiles8x8x4_layout =
-{
-	8,8,
-	RGN_FRAC(1,1),
-	4,
-	{ 0,8,16,24 },
-	{ 0,1,2,3,4,5,6,7 },
-	{ STEP8(0,32) },
-	16 * 16
-};
-
-
 static GFXDECODE_START( gfx_raiden_ms )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x200, 16 )
-	GFXDECODE_ENTRY( "gfx3", 0, tiles8x8x4_layout, 0x000, 16 )
 GFXDECODE_END
 
 IRQ_CALLBACK_MEMBER(raiden_ms_state::vector_r)
@@ -527,6 +488,12 @@ void raiden_ms_state::raidenm(machine_config &config)
 	m_mod4[1]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 	m_mod4[1]->set_transparent_pen(15);
 
+	GAELCO_MS_MOD4(config, m_mod4[2]);
+	m_mod4[2]->set_palette(m_palette);
+	m_mod4[2]->set_tile_size(8);
+	m_mod4[2]->set_transparent_pen(15);
+	m_mod4[2]->set_tile_callback(FUNC(raiden_ms_state::text_tile_cb));
+
 	// Sound hardware
 	SPEAKER(config, "mono").front_center();
 
@@ -572,7 +539,7 @@ ROM_START( raidenm )
 	ROM_LOAD32_BYTE( "msraid_4-3-2_rd4a3.ic15",  0x00001, 0x20000, CRC(7554acef) SHA1(ec418ef2246c889d0e308925e11b1d3328bd83f9) )
 	ROM_LOAD32_BYTE( "msraid_4-3-2_rd4a4.ic14",  0x00000, 0x20000, CRC(1e1537a5) SHA1(3f17a85c185dd8be7f7b3a5adb28d508f9f059a5) )
 
-	ROM_REGION( 0x20000, "gfx3", ROMREGION_INVERT ) // on a third MOD 4/3 board, all 1st and 2nd half identical
+	ROM_REGION( 0x20000, "mod4_3", ROMREGION_INVERT ) // on a third MOD 4/3 board, all 1st and 2nd half identical
 	ROM_LOAD32_BYTE( "msraid_4-3-3_rd404.ic17",  0x00000, 0x08000, CRC(caec39f5) SHA1(c61bd1f02515c6597d276dfcb21ed0969b556b8b) )
 	ROM_LOAD32_BYTE( "msraid_4-3-3_rd403.ic16",  0x00001, 0x08000, CRC(0e817530) SHA1(efbc05d31ab38d0213387f4e61977f5203e19ace) )
 	ROM_LOAD32_BYTE( "msraid_4-3-3_rd402.ic15",  0x00002, 0x08000, CRC(55dd887b) SHA1(efa687afe0b19fc741626b8fe5cd6ab541874396) )

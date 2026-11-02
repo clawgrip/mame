@@ -27,6 +27,7 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/z80/z80.h"
 #include "machine/74259.h"
@@ -34,7 +35,6 @@
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -46,13 +46,11 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4_pf(*this, "mod4_pf"),
+		m_mod4_fix(*this, "mod4_fix"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_videoram(*this, "videoram"),
-		m_colorram(*this, "colorram"),
 		m_spriteram(*this, "spriteram"),
-		m_fixvideoram(*this, "fixvideoram"),
-		m_fixcolorram(*this, "fixcolorram"),
 		m_mainbank(*this, "mainbank")
 	{ }
 
@@ -62,37 +60,26 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod4_device> m_mod4_pf;
+	required_device<gaelco_ms_mod4_device> m_mod4_fix;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 
-	required_shared_ptr<uint8_t> m_videoram;
-	required_shared_ptr<uint8_t> m_colorram;
 	required_shared_ptr<uint8_t> m_spriteram;
-	required_shared_ptr<uint8_t> m_fixvideoram;
-	required_shared_ptr<uint8_t> m_fixcolorram;
 	required_memory_bank m_mainbank;
 
 	bool m_main_irq_enabled = false;
 	bool m_sound_nmi_enabled = false;
 
-	tilemap_t *m_pf1_tilemap = nullptr;
-	tilemap_t *m_fix_tilemap = nullptr;
-
 	void vblank_irq(int state);
 	void irq_enable_w(int state);
 	void sound_reset_w(int state);
 
-	void videoram_w(offs_t offset, uint8_t data);
-	void colorram_w(offs_t offset, uint8_t data);
-	void fixram_w(offs_t offset, uint8_t data);
-	void fixcol_w(offs_t offset, uint8_t data);
-	TILE_GET_INFO_MEMBER(get_pf1_tile_info);
-	TILE_GET_INFO_MEMBER(get_fix_tile_info);
+	void fix_tile_cb(u16 data, u32 &code, u32 &color);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -101,44 +88,10 @@ private:
 };
 
 
-TILE_GET_INFO_MEMBER(slapfght_ms_state::get_pf1_tile_info)
+void slapfght_ms_state::fix_tile_cb(u16 data, u32 &code, u32 &color)
 {
-	int tile = m_videoram[tile_index] | ((m_colorram[tile_index] & 0x0f) << 8);
-	int color = (m_colorram[tile_index] & 0xf0) >> 4;
-
-	tileinfo.set(1, tile, color, 0);
-}
-
-TILE_GET_INFO_MEMBER(slapfght_ms_state::get_fix_tile_info)
-{
-	int tile = m_fixvideoram[tile_index] | ((m_fixcolorram[tile_index] & 0x03) << 8);
-	int color = (m_fixcolorram[tile_index] & 0xfc) >> 2;
-
-	tileinfo.set(0, tile, color, 0);
-}
-
-void slapfght_ms_state::videoram_w(offs_t offset, uint8_t data)
-{
-	m_videoram[offset] = data;
-	m_pf1_tilemap->mark_tile_dirty(offset);
-}
-
-void slapfght_ms_state::colorram_w(offs_t offset, uint8_t data)
-{
-	m_colorram[offset] = data;
-	m_pf1_tilemap->mark_tile_dirty(offset);
-}
-
-void slapfght_ms_state::fixram_w(offs_t offset, uint8_t data)
-{
-	m_fixvideoram[offset] = data;
-	m_fix_tilemap->mark_tile_dirty(offset);
-}
-
-void slapfght_ms_state::fixcol_w(offs_t offset, uint8_t data)
-{
-	m_fixcolorram[offset] = data;
-	m_fix_tilemap->mark_tile_dirty(offset);
+	code = data & 0x03ff;
+	color = data >> 10;
 }
 
 void slapfght_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect) // TODO: verify
@@ -173,31 +126,18 @@ void slapfght_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		if (sy > 256-8)
 			sy -= 256;
 
-		m_gfxdecode->gfx(2)->transpen(bitmap, cliprect, code, color, fx, fy, sx, sy, 0);
+		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, fx, fy, sx, sy, 0);
 	}
 }
 
 uint32_t slapfght_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	//m_pf1_tilemap->set_scrollx(m_scrollx_hi << 8 | m_scrollx_lo);
-	//m_pf1_tilemap->set_scrolly(m_scrolly);
-
-	m_pf1_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	// TODO: scroll registers
+	m_mod4_pf->draw(screen, bitmap, cliprect);
 	draw_sprites(bitmap, cliprect);
-	m_fix_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4_fix->draw(screen, bitmap, cliprect);
 
 	return 0;
-}
-
-void slapfght_ms_state::video_start()
-{
-	m_pf1_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(slapfght_ms_state::get_pf1_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 64, 32);
-	m_fix_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(slapfght_ms_state::get_fix_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 64, 32);
-
-	m_fix_tilemap->set_scrolldy(0, 15);
-	m_pf1_tilemap->set_scrolldy(0, 14);
-
-	m_fix_tilemap->set_transparent_pen(0);
 }
 
 
@@ -241,13 +181,13 @@ void slapfght_ms_state::main_prg_map(address_map &map)
 	map(0xc000, 0xc7ff).ram();
 	map(0xc800, 0xc80f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
 	map(0xc810, 0xcfff).ram();
-	map(0xd000, 0xd7ff).ram().w(FUNC(slapfght_ms_state::videoram_w)).share(m_videoram);
-	map(0xd800, 0xdfff).ram().w(FUNC(slapfght_ms_state::colorram_w)).share(m_colorram);
+	map(0xd000, 0xd7ff).rw(m_mod4_pf, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
+	map(0xd800, 0xdfff).rw(m_mod4_pf, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
 	map(0xe000, 0xe7ff).ram().share(m_spriteram);
 	map(0xe900, 0xe900).lw8(NAME([this] (uint8_t data) { m_mainbank->set_entry(data & 0x01); }));
 	map(0xea00, 0xefff).rom().region("maincpu", 0xea00); // title screen data gets loaded here like slapfighb2
-	map(0xf000, 0xf7ff).ram().w(FUNC(slapfght_ms_state::fixram_w)).share(m_fixvideoram);
-	map(0xf800, 0xffff).ram().w(FUNC(slapfght_ms_state::fixcol_w)).share(m_fixcolorram);
+	map(0xf000, 0xf7ff).rw(m_mod4_fix, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
+	map(0xf800, 0xffff).rw(m_mod4_fix, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
 }
 
 void slapfght_ms_state::main_io_map(address_map &map)
@@ -281,28 +221,6 @@ static INPUT_PORTS_START( slapfighm )
 INPUT_PORTS_END
 
 
-static const gfx_layout charlayout =
-{
-	8,8,
-	RGN_FRAC(1,2),
-	2,
-	{ RGN_FRAC(0,2), RGN_FRAC(1,2) },
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8
-};
-
-static const gfx_layout tilelayout =
-{
-	8,8,
-	RGN_FRAC(1,4),
-	4,
-	{ RGN_FRAC(0,4), RGN_FRAC(1,4), RGN_FRAC(2,4), RGN_FRAC(3,4) },
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8
-};
-
 static const gfx_layout spritelayout =
 {
 	16,16,
@@ -315,8 +233,6 @@ static const gfx_layout spritelayout =
 };
 
 static GFXDECODE_START( gfx_slapfighm)
-	GFXDECODE_ENTRY( "chars",   0, charlayout,   0,  64 )
-	GFXDECODE_ENTRY( "tiles",   0, tilelayout,   0,  16 )
 	GFXDECODE_ENTRY( "sprites", 0, spritelayout, 0,  16 )
 GFXDECODE_END
 
@@ -347,6 +263,19 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_slapfighm);
 
+	GAELCO_MS_MOD4(config, m_mod4_pf);
+	m_mod4_pf->set_palette("palette");
+	m_mod4_pf->set_tile_size(8);
+	m_mod4_pf->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
+
+	GAELCO_MS_MOD4(config, m_mod4_fix);
+	m_mod4_fix->set_palette("palette");
+	m_mod4_fix->set_tile_size(8);
+	m_mod4_fix->set_planes(2);
+	m_mod4_fix->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
+	m_mod4_fix->set_transparent_pen(0);
+	m_mod4_fix->set_tile_callback(FUNC(slapfght_ms_state::fix_tile_cb));
+
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
@@ -372,19 +301,18 @@ ROM_START( slapfighm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "1_snd_p0102_82s123.ic20", 0x00, 0x20, CRC(6228a653) SHA1(a8cfceba0546875940e9124c5ca2a6c625232856) )
 
-	ROM_REGION( 0x4000, "chars", 0 ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
-	ROM_LOAD( "4-2_fi_401.ic17", 0x0000, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
-	ROM_CONTINUE(                0x0000, 0x4000 )
-	ROM_LOAD( "4-2_fi_402.ic16", 0x2000, 0x2000, CRC(6e9ce9ea) SHA1(9b80360050022fb7b938a874d5c9adb344907bab) ) // BADADDR  x-xxxxxxxxxxxxx, 4-2_fi_402.ic16  [3/4] a77_04.6f IDENTICAL
-	ROM_CONTINUE(                0x2000, 0x2000 )
-	ROM_CONTINUE(                0x2000, 0x2000 )
-	ROM_IGNORE(                          0x2000 )
+	// only the upper half of the EPROMs is used
+	ROM_REGION( 0x8000, "mod4_fix", 0 ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
+	ROM_LOAD16_BYTE( "4-2_fi_401.ic17", 0x0000, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
+	ROM_CONTINUE(                       0x0000, 0x4000 )
+	ROM_LOAD16_BYTE( "4-2_fi_402.ic16", 0x0001, 0x4000, CRC(6e9ce9ea) SHA1(9b80360050022fb7b938a874d5c9adb344907bab) ) // BADADDR  x-xxxxxxxxxxxxx, 4-2_fi_402.ic16  [3/4] a77_04.6f IDENTICAL
+	ROM_CONTINUE(                       0x0001, 0x4000 )
 
-	ROM_REGION( 0x20000, "tiles", 0 ) // on a second MOD 4/2 board, identical to the original
-	ROM_LOAD( "4-2-b_fi_4a01.ic17", 0x00000, 0x8000, CRC(974e2ea9) SHA1(3840550fc3a833828dad8f3e300d2ea583d69ce7) )
-	ROM_LOAD( "4-2-b_fi_4a02.ic16", 0x08000, 0x8000, CRC(5faeeea3) SHA1(696fba24bcf1f3a7e914a4403854da5eededaf7f) )
-	ROM_LOAD( "4-2-b_fi_4a03.ic15", 0x10000, 0x8000, CRC(e92d9d60) SHA1(2554617e0e6615ca8c85a49299a4a0e762478339) )
-	ROM_LOAD( "4-2-b_fi_4a04.ic14", 0x18000, 0x8000, CRC(b6358305) SHA1(c7bb4236a75ec6b88f011bc30f8fb9a718e2ca3e) )
+	ROM_REGION( 0x20000, "mod4_pf", 0 ) // on a second MOD 4/2 board, identical to the original
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a01.ic17", 0x00000, 0x8000, CRC(974e2ea9) SHA1(3840550fc3a833828dad8f3e300d2ea583d69ce7) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a02.ic16", 0x00001, 0x8000, CRC(5faeeea3) SHA1(696fba24bcf1f3a7e914a4403854da5eededaf7f) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a03.ic15", 0x00002, 0x8000, CRC(e92d9d60) SHA1(2554617e0e6615ca8c85a49299a4a0e762478339) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a04.ic14", 0x00003, 0x8000, CRC(b6358305) SHA1(c7bb4236a75ec6b88f011bc30f8fb9a718e2ca3e) )
 
 	ROM_REGION( 0x20000, "sprites", ROMREGION_INVERT ) // on MOD 51/1 board, different format from the original
 	ROM_LOAD32_BYTE( "51-1_fi_501.ic43", 0x0003, 0x8000, CRC(fa901876) SHA1(e27a8f9014419343bf08a7536b4b37bded611ec0) )

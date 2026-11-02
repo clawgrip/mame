@@ -18,7 +18,7 @@
 
     TODO: practically everything:
     - derive from blktiger_state? (eventually, if differences aren't too much)
-    - chars and sprites related functions are copied from blktiger.cpp. Verify differences
+    - sprite related functions are copied from blktiger.cpp. Verify differences
     - correct GFX decoding
     - tiles
     - palette
@@ -32,13 +32,13 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/z80/z80.h"
 
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -50,10 +50,10 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4_tx(*this, "mod4_tx"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_txvideoram(*this, "txvideoram"),
 		m_spriteram(*this, "spriteram"),
 		m_mainbank(*this, "mainbank"),
 		m_bg_view(*this, "bg_view")
@@ -65,33 +65,29 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 	virtual void device_post_load() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 
-	required_shared_ptr<uint8_t> m_txvideoram;
 	required_shared_ptr<uint8_t> m_spriteram;
 	required_memory_bank m_mainbank;
 	memory_view m_bg_view;
 
 	u8 m_bank_latch = 0;
 
-	TILE_GET_INFO_MEMBER(get_tx_tile_info);
-	void txvideoram_w(offs_t offset, uint8_t data);
+	void tx_tile_cb(u16 data, u32 &code, u32 &color);
 	void bank_w(u8 data);
 	void select_bg_view();
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
-
-	tilemap_t *m_tx_tilemap = nullptr;
 };
 
 
@@ -106,7 +102,8 @@ void blktiger_ms_state::main_map(address_map &map)
 	m_bg_view[1](0xc000, 0xcfff).ram(); // background tiles, banked?
 	m_bg_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
 	m_bg_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	map(0xd000, 0xd7ff).ram().w(FUNC(blktiger_ms_state::txvideoram_w)).share(m_txvideoram);
+	map(0xd000, 0xd3ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
+	map(0xd400, 0xd7ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
 	map(0xd800, 0xd800).w(FUNC(blktiger_ms_state::bank_w));
 	map(0xe000, 0xfdff).ram();
 	map(0xfe00, 0xffff).ram().share(m_spriteram);
@@ -138,18 +135,6 @@ void blktiger_ms_state::select_bg_view()
 	m_bg_view.select(BIT(m_bank_latch, 4) ? 1 : ((m_bank_latch & 0x0f) == 0x07) ? 0 : 2);
 }
 
-void blktiger_ms_state::video_start()
-{
-	m_tx_tilemap =  &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(blktiger_ms_state::get_tx_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
-	m_tx_tilemap->set_transparent_pen(0);
-}
-
-void blktiger_ms_state::txvideoram_w(offs_t offset, uint8_t data)
-{
-	m_txvideoram[offset] = data;
-	m_tx_tilemap->mark_tile_dirty(offset & 0x3ff);
-}
-
 void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	for (int offs = m_spriteram.bytes() - 4; offs >= 0; offs -= 4)
@@ -168,7 +153,7 @@ void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 			flipx = !flipx;
 		}
 
-		m_gfxdecode->gfx(2)->transpen(bitmap, cliprect,
+		m_gfxdecode->gfx(1)->transpen(bitmap, cliprect,
 				code,
 				color,
 				flipx, flip_screen(),
@@ -180,20 +165,17 @@ uint32_t blktiger_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 {
 	bitmap.fill(0, cliprect);
 
-	m_tx_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	draw_sprites(bitmap, cliprect);
 
 	return 0;
 }
 
-TILE_GET_INFO_MEMBER(blktiger_ms_state::get_tx_tile_info)
+void blktiger_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color)
 {
-	uint8_t attr = m_txvideoram[tile_index + 0x400];
-	tileinfo.set(0,
-			m_txvideoram[tile_index] + ((attr & 0xe0) << 3),
-			attr & 0x1f,
-			0);
+	code = (data & 0xff) | ((data & 0xe000) >> 5);
+	color = BIT(data, 8, 5);
 }
 
 static INPUT_PORTS_START( blktigerm )
@@ -245,18 +227,6 @@ static INPUT_PORTS_START( blktigerm )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" )
 INPUT_PORTS_END
 
-static const gfx_layout charlayout =
-{
-	8,8,
-	RGN_FRAC(1,4),
-	2,
-	//{ RGN_FRAC(0,4), RGN_FRAC(1,4), RGN_FRAC(2,4), RGN_FRAC(3,4) },
-	{ RGN_FRAC(1, 4), RGN_FRAC(3, 4) },
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8
-};
-
 static const gfx_layout tiles16x16x4_layout =
 {
 	16,16,
@@ -269,7 +239,6 @@ static const gfx_layout tiles16x16x4_layout =
 };
 
 static GFXDECODE_START( gfx_blktiger_ms )
-	GFXDECODE_ENTRY( "chars", 0, charlayout, 0x000, 32 )
 	GFXDECODE_ENTRY( "tiles", 0, tiles16x16x4_layout, 0x100, 16 )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x200, 32 )
 GFXDECODE_END
@@ -294,6 +263,13 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 1024);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_blktiger_ms);
+
+	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_palette(m_palette);
+	m_mod4_tx->set_tile_size(8);
+	m_mod4_tx->set_planes(2);
+	m_mod4_tx->set_transparent_pen(0);
+	m_mod4_tx->set_tile_callback(FUNC(blktiger_ms_state::tx_tile_cb));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -323,9 +299,11 @@ ROM_START( blktigerm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "1_p0101_82s123.ic20", 0x00, 0x20, CRC(3fd60d3a) SHA1(8100fa7453638ac40193b5d92404f41b101ed2cc) )
 
-	ROM_REGION( 0x10000, "chars", 0 ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
-	ROM_LOAD( "4_bl_401.ic17",  0x0000, 0x8000, CRC(ab1afb3d) SHA1(555332ccfb69e65b776f94ffac9a4a051fb6f09e) )
-	ROM_LOAD( "4_bl_402.ic16",  0x8000, 0x8000, CRC(89445b11) SHA1(7d9ab6e88d7de3a0e31b3b8a5e57dd39afd7940d) )
+	ROM_REGION( 0x8000, "mod4_tx", 0 ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
+	ROM_LOAD16_BYTE( "4_bl_401.ic17",  0x0000, 0x4000, CRC(ab1afb3d) SHA1(555332ccfb69e65b776f94ffac9a4a051fb6f09e) )
+	ROM_CONTINUE(                      0x0000, 0x4000 )
+	ROM_LOAD16_BYTE( "4_bl_402.ic16",  0x0001, 0x4000, CRC(89445b11) SHA1(7d9ab6e88d7de3a0e31b3b8a5e57dd39afd7940d) )
+	ROM_CONTINUE(                      0x0001, 0x4000 )
 
 	ROM_REGION( 0x40000, "tiles", 0 ) // on the other MOD 4/3 board
 	ROM_LOAD32_BYTE( "4_a_bl_4a01.ic17",  0x00003, 0x10000, CRC(fc00fd6c) SHA1(066714421fa782c6cfad9f695f05e6e3551ffdc7) )

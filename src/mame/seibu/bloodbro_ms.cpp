@@ -36,7 +36,6 @@ TODO:
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -49,31 +48,27 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%c", 'a'),
+		m_mod4_tx(*this, "mod4_tx"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_spriteram(*this, "spriteram"),
-		m_txram(*this, "txram")
+		m_spriteram(*this, "spriteram")
 	{ }
 
 	void bloodbrom(machine_config &config) ATTR_COLD;
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
+	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint16_t> m_spriteram;
-	required_shared_ptr<uint16_t> m_txram;
 
-	tilemap_t *m_tx_tilemap = nullptr;
 	uint16_t m_scrollreg[2] {};
 
-	TILE_GET_INFO_MEMBER(get_tx_tile_info);
-	void txram_w(offs_t offset, uint16_t data, uint16_t mem_mask);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -87,24 +82,6 @@ void bloodbro_ms_state::machine_start()
 }
 
 
-void bloodbro_ms_state::video_start()
-{
-	m_tx_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(bloodbro_ms_state::get_tx_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
-	m_tx_tilemap->set_transparent_pen(0x0f);
-}
-
-TILE_GET_INFO_MEMBER(bloodbro_ms_state::get_tx_tile_info)
-{
-	int const tile = m_txram[tile_index];
-	tileinfo.set(0, tile & 0xfff, tile >> 12, 0);
-}
-
-void bloodbro_ms_state::txram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
-{
-	COMBINE_DATA(&m_txram[offset]);
-	m_tx_tilemap->mark_tile_dirty(offset);
-}
-
 void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	const int NUM_SPRITES = 0x200;
@@ -112,7 +89,7 @@ void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 
 	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
 	{
-		gfx_element *gfx = m_gfxdecode->gfx(1);
+		gfx_element *gfx = m_gfxdecode->gfx(0);
 
 		uint16_t const attr0 = m_spriteram[i + 0];
 		uint16_t const attr1 = m_spriteram[i + 1];
@@ -149,7 +126,7 @@ uint32_t bloodbro_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 
 	draw_sprites(bitmap, cliprect);
 
-	m_tx_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
 }
@@ -161,7 +138,7 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x080000, 0x08bfff).ram(); // original vram is in here, but bootleg copies some of it elsewhere for use
 	map(0x08c000, 0x08c7ff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08c800, 0x08d7ff).ram();
-	map(0x08d800, 0x08dfff).ram().w(FUNC(bloodbro_ms_state::txram_w)).share(m_txram);
+	map(0x08d800, 0x08dfff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08e000, 0x08ffff).ram();
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
 	map(0x0c0100, 0x0c0101).nopw(); // ??? written once
@@ -257,7 +234,6 @@ static const gfx_layout tiles16x16x4_layout =
 
 
 static GFXDECODE_START( gfx_bloodbro_ms )
-	GFXDECODE_ENTRY( "gfx3", 0, gfx_8x8x4_planar, 0x000, 16 )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x100, 16 )
 GFXDECODE_END
 
@@ -292,6 +268,11 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	m_mod4[1]->set_palette("palette");
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
+
+	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_palette("palette");
+	m_mod4_tx->set_tile_size(8);
+	m_mod4_tx->set_transparent_pen(15);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -351,11 +332,11 @@ ROM_START( bloodbrom )
 	ROM_LOAD32_BYTE( "4-3-b_bb4b4.ic14",  0x00000, 0x20000, CRC(6b5254fa) SHA1(1e9e3096e5f29554fb8f8cb0df0e5157f940f8c9) )
 
 	// ROMs for frontmost tile layer (text)
-	ROM_REGION( 0x20000, "gfx3", ROMREGION_INVERT ) // on another MOD 4/3 board
-	ROM_LOAD( "4-3_bb401.ic17",    0x00000, 0x08000, CRC(07e12bd2) SHA1(33977f97f0c1a45055f6f8cb06294b2eb3c27acc) ) // 27256
-	ROM_LOAD( "4-3_bb402.ic16",    0x08000, 0x08000, CRC(eca374ea) SHA1(4da5b876ccc9a7ac64f129ef18da521a56a022e0) ) // 27256
-	ROM_LOAD( "4-3_bb403.ic15",    0x10000, 0x08000, CRC(d77b84d3) SHA1(baa7d3175e42c3872682ca3080e8d07ce3f5e43b) ) // 27256
-	ROM_LOAD( "4-3_bb404.ic14",    0x18000, 0x08000, CRC(f8d2d4dc) SHA1(7210de80cb0939d9f703ed4c1e2d030dcb99d5f4) ) // 27256
+	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on another MOD 4/3 board
+	ROM_LOAD32_BYTE( "4-3_bb401.ic17",    0x00003, 0x08000, CRC(07e12bd2) SHA1(33977f97f0c1a45055f6f8cb06294b2eb3c27acc) ) // 27256
+	ROM_LOAD32_BYTE( "4-3_bb402.ic16",    0x00002, 0x08000, CRC(eca374ea) SHA1(4da5b876ccc9a7ac64f129ef18da521a56a022e0) ) // 27256
+	ROM_LOAD32_BYTE( "4-3_bb403.ic15",    0x00001, 0x08000, CRC(d77b84d3) SHA1(baa7d3175e42c3872682ca3080e8d07ce3f5e43b) ) // 27256
+	ROM_LOAD32_BYTE( "4-3_bb404.ic14",    0x00000, 0x08000, CRC(f8d2d4dc) SHA1(7210de80cb0939d9f703ed4c1e2d030dcb99d5f4) ) // 27256
 
 	ROM_REGION( 0x100000, "sprites", ROMREGION_INVERT ) // on MOD 51/1 board
 	ROM_LOAD32_BYTE( "51-1-b_bb503.ic3",  0x00003, 0x10000, CRC(9d2a382d) SHA1(734b495ace73f07c622f64b305dafe43099395c1) )

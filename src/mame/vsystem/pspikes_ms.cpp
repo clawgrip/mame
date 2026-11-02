@@ -18,7 +18,6 @@
     MOD 51/1 - Sprite board, has logic, a PROM, and 4 empty ROM sockets. Sprite ROMs are actually on the below board.
 
     TODO:
-    - tilemap colors
     - sound
 */
 
@@ -26,13 +25,13 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 
 #include "cpu/m68000/m68000.h"
 
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -44,8 +43,8 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4(*this, "mod4"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_tileram(*this, "tileram"),
 		m_scrollram(*this, "scrollram"),
 		m_spriteram(*this, "spriteram")
 	{ }
@@ -54,22 +53,20 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<gfxdecode_device> m_gfxdecode;
 
-	required_shared_ptr<uint16_t> m_tileram;
 	required_shared_ptr<uint16_t> m_scrollram;
 	required_shared_ptr<uint16_t> m_spriteram;
 
-	tilemap_t *m_tilemap = nullptr;
 	uint8_t m_gfxbank = 0;
 
-	TILE_GET_INFO_MEMBER(get_tile_info);
-	void tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
+	void tile_cb(u16 data, u32 &code, u32 &color);
+	void gfxbank_w(uint8_t data);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -77,22 +74,20 @@ private:
 };
 
 
-void pspikes_ms_state::video_start()
+void pspikes_ms_state::tile_cb(u16 data, u32 &code, u32 &color)
 {
-	m_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(pspikes_ms_state::get_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 64, 32);
+	// as in the original, bit 12 picks a tile bank: bits 6-7 of the bank register when clear, bits 2-3 when set
+	code = (data & 0x0fff) | (BIT(m_gfxbank, BIT(data, 12) ? 2 : 6, 2) << 12);
+	color = data >> 13;
 }
 
-TILE_GET_INFO_MEMBER(pspikes_ms_state::get_tile_info)
+void pspikes_ms_state::gfxbank_w(uint8_t data)
 {
-	int const tile = (m_tileram[tile_index] & 0xfff) | (m_gfxbank << 12);
-	int const color = BIT(tile, 12, 4); // TODO: wrong
-	tileinfo.set(0, tile, color, 0);
-}
-
-void pspikes_ms_state::tileram_w(offs_t offset, uint16_t data, uint16_t mem_mask)
-{
-	COMBINE_DATA(&m_tileram[offset]);
-	m_tilemap->mark_tile_dirty(offset);
+	if (data != m_gfxbank)
+	{
+		m_gfxbank = data;
+		m_mod4->mark_all_dirty();
+	}
 }
 
 void pspikes_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -101,7 +96,7 @@ void pspikes_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clipr
 
 	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
 	{
-		gfx_element *gfx = m_gfxdecode->gfx(1);
+		gfx_element *gfx = m_gfxdecode->gfx(0);
 
 		uint16_t const attr0 = m_spriteram[i + 0];
 		uint16_t const attr1 = m_spriteram[i + 1];
@@ -127,12 +122,12 @@ void pspikes_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clipr
 
 uint32_t pspikes_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m_tilemap->set_scroll_rows(256);
+	m_mod4->set_scroll_rows(256);
 
 	for (int i = 0; i < 256; i++)
-		m_tilemap->set_scrollx(i, m_scrollram[i] + 42);
+		m_mod4->set_scrollx(i, m_scrollram[i] + 42);
 
-	m_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_mod4->draw(screen, bitmap, cliprect);
 
 	draw_sprites(bitmap, cliprect);
 
@@ -152,10 +147,10 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0x100000, 0x10ffff).ram();
 	map(0x200000, 0x203fff).ram(); // leftover from original sprite system?
 	map(0xc40000, 0xc40001).noprw(); // leftover?
-	map(0xff8000, 0xff8fff).ram().w(FUNC(pspikes_ms_state::tileram_w)).share(m_tileram);
+	map(0xff8000, 0xff8fff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xffc000, 0xffc7ff).ram().share(m_spriteram);
 	map(0xffd000, 0xffdfff).ram().share(m_scrollram);
-	map(0xffd200, 0xffd200).lw8(NAME([this] (uint8_t data) { { if (data & 0xf3) logerror("gfxbank_w %02x\n", data); } m_gfxbank = (data & 0x0c) >> 2; }));
+	map(0xffd200, 0xffd200).w(FUNC(pspikes_ms_state::gfxbank_w));
 	map(0xffe000, 0xffe3ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0xffe400, 0xffe7ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0xffe800, 0xffefff).ram(); // only initialized at start?
@@ -222,7 +217,6 @@ static const gfx_layout sprites_16x16x4_layout =
 
 
 static GFXDECODE_START( gfx_pspikes_ms )
-	GFXDECODE_ENTRY( "tiles", 0, gfx_8x8x4_planar, 0x200, 32 ) // TODO: wrong colors
 	GFXDECODE_ENTRY( "sprites", 0, sprites_16x16x4_layout, 0, 16 ) // ok
 GFXDECODE_END
 
@@ -247,6 +241,13 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_pspikes_ms);
 
+	GAELCO_MS_MOD4(config, m_mod4);
+	m_mod4->set_palette("palette");
+	m_mod4->set_color_base(0x200);
+	m_mod4->set_tile_size(8);
+	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
+	m_mod4->set_tile_callback(FUNC(pspikes_ms_state::tile_cb));
+
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
@@ -270,11 +271,11 @@ ROM_START( pspikesm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "mod_1-4_105_82s123n.ic20", 0x00, 0x20, CRC(14d72781) SHA1(372dc021d8aaf4aa6fd46e69a3d8f1c68113426f) )
 
-	ROM_REGION( 0x80000, "tiles", ROMREGION_INVERT ) // on MOD 4/2 board
-	ROM_LOAD( "mod_4-3_ps_401.ic17", 0x00000, 0x20000, CRC(a7e00b36) SHA1(2b5e85ec02e8893d7d730aad4d690883b1d236cc) )
-	ROM_LOAD( "mod_4-3_ps_402.ic16", 0x20000, 0x20000, CRC(96a5c235) SHA1(dad4ef9069d3130f719a402737909bb48225b73c) )
-	ROM_LOAD( "mod_4-3_ps_403.ic15", 0x40000, 0x20000, CRC(bfdc60f4) SHA1(2b1893fac2651ac82f5a05b8f891b20c928ced7e) )
-	ROM_LOAD( "mod_4-3_ps_404.ic14", 0x60000, 0x20000, CRC(ea1c05a7) SHA1(adfdfeac80df287ffa6f469dc38ea94698817cf4) )
+	ROM_REGION( 0x80000, "mod4", ROMREGION_INVERT ) // on MOD 4/3 board
+	ROM_LOAD32_BYTE( "mod_4-3_ps_401.ic17", 0x00003, 0x20000, CRC(a7e00b36) SHA1(2b5e85ec02e8893d7d730aad4d690883b1d236cc) )
+	ROM_LOAD32_BYTE( "mod_4-3_ps_402.ic16", 0x00002, 0x20000, CRC(96a5c235) SHA1(dad4ef9069d3130f719a402737909bb48225b73c) )
+	ROM_LOAD32_BYTE( "mod_4-3_ps_403.ic15", 0x00001, 0x20000, CRC(bfdc60f4) SHA1(2b1893fac2651ac82f5a05b8f891b20c928ced7e) )
+	ROM_LOAD32_BYTE( "mod_4-3_ps_404.ic14", 0x00000, 0x20000, CRC(ea1c05a7) SHA1(adfdfeac80df287ffa6f469dc38ea94698817cf4) )
 
 	ROM_REGION( 0x100000, "sprites", ROMREGION_INVERT ) // on MODULAR SYSTEM 2 MOD 5/1 board
 	ROM_LOAD32_BYTE( "mod_5-1_ps_503.ic3",  0x00003, 0x10000, CRC(2200c459) SHA1(4d0c4eafc6f1d66675358b100805fe1a5d05562a) )

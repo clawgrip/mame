@@ -9,17 +9,22 @@
     own 74LS299, a PAL16R8 (P0403 and others) and counters. A long thin sub
     board, different for each game, connects one edge to the cage.
 
-    Tile map entries are 16 bits: bits 0-11 tile, bits 12-15 colour.
+    Tile map entries are 16 bits: usually bits 0-11 tile and bits 12-15
+    colour, but some games split them differently. 8-bit hosts see the low
+    byte (tile code) and the high byte (attribute) in two separate areas.
 
-    16x16 tiles are made of four 8x8 tiles: the board drives the EPROMs with
-    the tile row in A0-A2, tile bits 0-7 in A3-A10, the lower half in A11,
-    the right half in A12 and tile bits 8 and up from A13.
+    Boards with four EPROMs draw 4bpp tiles in 16 colours, boards with two
+    draw 2bpp tiles in 64 colours.
 
-    The EPROMs are loaded with ROM_LOAD32_BYTE, IC17 in the highest byte,
-    and their data is inverted.
+    The tiles are 8x8 or 16x16. 8x8 tiles take the tile row from EPROM A0-A2
+    and the tile number from A3 up. 16x16 tiles are made of four 8x8 tiles:
+    tile bits 0-7 in A3-A10, the lower half in A11, the right half in A12
+    and tile bits 8 and up from A13.
+
+    The EPROMs are interleaved in the region with the most significant
+    bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_LOAD16_BYTE for two.
 
     TODO:
-    - 8x8 tiles (Master Boy, Power Spikes, Slap Fight, text layers)
     - scroll registers (the drivers apply their own offsets)
     - how the RAM is organised: the games scan it in different orders, maybe
       set by the edge sub board
@@ -30,22 +35,6 @@
 #include "gaelco_ms_mod4.h"
 
 
-namespace {
-
-const gfx_layout tiles16x16x4_layout =
-{
-	16, 16,
-	0, // from the EPROM size
-	4,
-	{ 0, 8, 16, 24 },
-	{ STEP8(0, 1), STEP8(16 * 32, 1) },
-	{ STEP16(0, 32) },
-	16 * 16 * 4
-};
-
-} // anonymous namespace
-
-
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD4, gaelco_ms_mod4_device, "gaelco_ms_mod4", "Gaelco Modular System MOD 4 tilemap board")
 
 
@@ -53,8 +42,11 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 	device_t(mconfig, GAELCO_MS_MOD4, tag, owner, clock),
 	device_gfx_interface(mconfig, *this),
 	m_rom(*this, DEVICE_SELF),
-	m_ram(*this, "ram", 0x800, ENDIANNESS_BIG),
+	m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
+	m_tile_cb(*this),
 	m_tilemap(nullptr),
+	m_tile_size(16),
+	m_planes(4),
 	m_mapper(TILEMAP_SCAN_ROWS),
 	m_columns(32),
 	m_rows(32),
@@ -66,17 +58,39 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 
 void gaelco_ms_mod4_device::device_start()
 {
-	// put the 8x8 quarters of each tile together, as the A11 and A12 wiring does
+	m_tile_cb.resolve();
+
 	offs_t const length = m_rom.bytes();
-	m_tiles = std::make_unique<u8[]>(length);
-	for (offs_t i = 0; i < length; i++)
-		m_tiles[(i & ~0x7fff) | ((i & 0x1fe0) << 2) | ((i & 0x6000) >> 8) | (i & 0x1f)] = m_rom[i];
+	u8 const *tiles = m_rom.target();
+	if (m_tile_size == 16)
+	{
+		// put the 8x8 quarters of each tile together, as the A11 and A12 wiring does
+		m_tiles = std::make_unique<u8[]>(length);
+		for (offs_t i = 0; i < length; i++)
+		{
+			offs_t const address = i / m_planes;
+			offs_t const tile = (address & ~0x1fff) | bitswap<13>(address, 10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 2, 1, 0);
+			m_tiles[tile * m_planes + i % m_planes] = m_rom[i];
+		}
+		tiles = m_tiles.get();
+	}
 
-	gfx_layout layout = tiles16x16x4_layout;
-	layout.total = length / (16 * 16 * 4 / 8);
-	set_gfx(0, std::make_unique<gfx_element>(&palette(), layout, m_tiles.get(), 0, 16, m_color_base));
+	gfx_layout layout{};
+	layout.width = layout.height = m_tile_size;
+	layout.planes = m_planes;
+	for (unsigned plane = 0; plane < m_planes; plane++)
+		layout.planeoffset[plane] = plane * 8;
+	for (unsigned i = 0; i < m_tile_size; i++)
+	{
+		// the right half of a 16x16 tile follows the 16 rows of the left half
+		layout.xoffset[i] = (i & 7) + (i >> 3) * 16 * 8 * m_planes;
+		layout.yoffset[i] = i * 8 * m_planes;
+	}
+	layout.charincrement = m_tile_size * m_tile_size * m_planes;
+	layout.total = length * 8 / layout.charincrement;
+	set_gfx(0, std::make_unique<gfx_element>(&palette(), layout, tiles, 0, 0x100 >> m_planes, m_color_base));
 
-	m_tilemap = &machine().tilemap().create(*this, tilemap_get_info_delegate(*this, FUNC(gaelco_ms_mod4_device::get_tile_info)), m_mapper, 16, 16, m_columns, m_rows);
+	m_tilemap = &machine().tilemap().create(*this, tilemap_get_info_delegate(*this, FUNC(gaelco_ms_mod4_device::get_tile_info)), m_mapper, m_tile_size, m_tile_size, m_columns, m_rows);
 	if (m_transparent_pen >= 0)
 		m_tilemap->set_transparent_pen(m_transparent_pen);
 }
@@ -85,7 +99,12 @@ void gaelco_ms_mod4_device::device_start()
 TILE_GET_INFO_MEMBER(gaelco_ms_mod4_device::get_tile_info)
 {
 	u16 const data = m_ram[tile_index * m_step];
-	tileinfo.set(0, data & 0x0fff, data >> 12, 0);
+	u32 code = data & 0x0fff;
+	u32 color = data >> 12;
+	if (!m_tile_cb.isnull())
+		m_tile_cb(data, code, color);
+
+	tileinfo.set(0, code, color, 0);
 }
 
 u16 gaelco_ms_mod4_device::vram_r(offs_t offset)
@@ -97,6 +116,26 @@ void gaelco_ms_mod4_device::vram_w(offs_t offset, u16 data, u16 mem_mask)
 {
 	COMBINE_DATA(&m_ram[offset]);
 	m_tilemap->mark_tile_dirty(offset / m_step);
+}
+
+u8 gaelco_ms_mod4_device::code_r(offs_t offset)
+{
+	return u8(m_ram[offset]);
+}
+
+void gaelco_ms_mod4_device::code_w(offs_t offset, u8 data)
+{
+	vram_w(offset, data, 0x00ff);
+}
+
+u8 gaelco_ms_mod4_device::attr_r(offs_t offset)
+{
+	return m_ram[offset] >> 8;
+}
+
+void gaelco_ms_mod4_device::attr_w(offs_t offset, u8 data)
+{
+	vram_w(offset, data << 8, 0xff00);
 }
 
 void gaelco_ms_mod4_device::draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, u32 flags, u8 priority)
