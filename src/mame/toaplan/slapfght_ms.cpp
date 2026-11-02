@@ -79,7 +79,7 @@ private:
 	void irq_enable_w(int state);
 	void sound_reset_w(int state);
 
-	void fix_tile_cb(u16 data, u32 &code, u32 &color);
+	void fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -88,7 +88,7 @@ private:
 };
 
 
-void slapfght_ms_state::fix_tile_cb(u16 data, u32 &code, u32 &color)
+void slapfght_ms_state::fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 {
 	code = data & 0x03ff;
 	color = data >> 10;

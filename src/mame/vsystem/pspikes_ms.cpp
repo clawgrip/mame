@@ -65,7 +65,7 @@ private:
 
 	uint8_t m_gfxbank = 0;
 
-	void tile_cb(u16 data, u32 &code, u32 &color);
+	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void gfxbank_w(uint8_t data);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -74,7 +74,7 @@ private:
 };
 
 
-void pspikes_ms_state::tile_cb(u16 data, u32 &code, u32 &color)
+void pspikes_ms_state::tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 {
 	// as in the original, bit 12 picks a tile bank: bits 6-7 of the bank register when clear, bits 2-3 when set
 	code = (data & 0x0fff) | (BIT(m_gfxbank, BIT(data, 12) ? 2 : 6, 2) << 12);

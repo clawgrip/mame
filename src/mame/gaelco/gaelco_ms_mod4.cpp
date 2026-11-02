@@ -18,8 +18,14 @@
 
     The tiles are 8x8 or 16x16. 8x8 tiles take the tile row from EPROM A0-A2
     and the tile number from A3 up. 16x16 tiles are made of four 8x8 tiles:
-    tile bits 0-7 in A3-A10, the lower half in A11, the right half in A12
-    and tile bits 8 and up from A13.
+    the lower half comes from A11 and the right half from A12 (A9 and A10 on
+    Black Tiger's background board), and the tile number from the other lines
+    from A3 up.
+
+    Black Tiger's background board also has an 82S123 (IC13) that picks, for
+    each colour, the pens drawn in front of the sprites. Its address lines
+    are colour bit 3, pen bits 2 and 3, and colour bits 2 and 1. Those pens
+    are drawn with TILEMAP_DRAW_LAYER0 and all pens with TILEMAP_DRAW_LAYER1.
 
     The EPROMs are interleaved in the region with the most significant
     bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_LOAD16_BYTE for two.
@@ -42,10 +48,13 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 	device_t(mconfig, GAELCO_MS_MOD4, tag, owner, clock),
 	device_gfx_interface(mconfig, *this),
 	m_rom(*this, DEVICE_SELF),
+	m_prom(*this, "prom"),
 	m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
 	m_tile_cb(*this),
+	m_mapper_cb(*this),
 	m_tilemap(nullptr),
 	m_tile_size(16),
+	m_half_line(11),
 	m_planes(4),
 	m_mapper(TILEMAP_SCAN_ROWS),
 	m_columns(32),
@@ -64,13 +73,15 @@ void gaelco_ms_mod4_device::device_start()
 	u8 const *tiles = m_rom.target();
 	if (m_tile_size == 16)
 	{
-		// put the 8x8 quarters of each tile together, as the A11 and A12 wiring does
+		// put the 8x8 quarters of each tile together, as the EPROM address wiring does
+		unsigned const low_bits = m_half_line - 3;
 		m_tiles = std::make_unique<u8[]>(length);
 		for (offs_t i = 0; i < length; i++)
 		{
 			offs_t const address = i / m_planes;
-			offs_t const tile = (address & ~0x1fff) | bitswap<13>(address, 10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 2, 1, 0);
-			m_tiles[tile * m_planes + i % m_planes] = m_rom[i];
+			offs_t const tile = BIT(address, 3, low_bits) | ((address >> (m_half_line + 2)) << low_bits);
+			offs_t const dest = (tile << 5) | (BIT(address, m_half_line + 1) << 4) | (BIT(address, m_half_line) << 3) | (address & 7);
+			m_tiles[dest * m_planes + i % m_planes] = m_rom[i];
 		}
 		tiles = m_tiles.get();
 	}
@@ -90,9 +101,33 @@ void gaelco_ms_mod4_device::device_start()
 	layout.total = length * 8 / layout.charincrement;
 	set_gfx(0, std::make_unique<gfx_element>(&palette(), layout, tiles, 0, 0x100 >> m_planes, m_color_base));
 
-	m_tilemap = &machine().tilemap().create(*this, tilemap_get_info_delegate(*this, FUNC(gaelco_ms_mod4_device::get_tile_info)), m_mapper, m_tile_size, m_tile_size, m_columns, m_rows);
-	if (m_transparent_pen >= 0)
+	tilemap_get_info_delegate const get_info(*this, FUNC(gaelco_ms_mod4_device::get_tile_info));
+	if (m_mapper == TILEMAP_STANDARD_COUNT)
+	{
+		m_mapper_cb.resolve();
+		m_tilemap = &machine().tilemap().create(*this, get_info, m_mapper_cb, m_tile_size, m_tile_size, m_columns, m_rows);
+	}
+	else
+	{
+		m_tilemap = &machine().tilemap().create(*this, get_info, m_mapper, m_tile_size, m_tile_size, m_columns, m_rows);
+	}
+
+	if (m_prom)
+	{
+		// one transparency group per colour
+		u16 const transparent = (m_transparent_pen >= 0) ? (1 << m_transparent_pen) : 0;
+		for (unsigned color = 0; color < 16; color++)
+		{
+			u16 front = 0;
+			for (unsigned pen = 0; pen < 16; pen++)
+				front |= BIT(m_prom[bitswap<5>((color << 4) | pen, 5, 6, 3, 2, 7)], 0) << pen;
+			m_tilemap->set_transmask(color, u16(~front) | transparent, transparent);
+		}
+	}
+	else if (m_transparent_pen >= 0)
+	{
 		m_tilemap->set_transparent_pen(m_transparent_pen);
+	}
 }
 
 
@@ -101,10 +136,12 @@ TILE_GET_INFO_MEMBER(gaelco_ms_mod4_device::get_tile_info)
 	u16 const data = m_ram[tile_index * m_step];
 	u32 code = data & 0x0fff;
 	u32 color = data >> 12;
+	u8 flags = 0;
 	if (!m_tile_cb.isnull())
-		m_tile_cb(data, code, color);
+		m_tile_cb(data, code, color, flags);
 
-	tileinfo.set(0, code, color, 0);
+	tileinfo.set(0, code, color, flags);
+	tileinfo.group = m_prom ? color : 0;
 }
 
 u16 gaelco_ms_mod4_device::vram_r(offs_t offset)
@@ -136,6 +173,19 @@ u8 gaelco_ms_mod4_device::attr_r(offs_t offset)
 void gaelco_ms_mod4_device::attr_w(offs_t offset, u8 data)
 {
 	vram_w(offset, data << 8, 0xff00);
+}
+
+u8 gaelco_ms_mod4_device::vram8_r(offs_t offset)
+{
+	return BIT(offset, 0) ? attr_r(offset >> 1) : code_r(offset >> 1);
+}
+
+void gaelco_ms_mod4_device::vram8_w(offs_t offset, u8 data)
+{
+	if (BIT(offset, 0))
+		attr_w(offset >> 1, data);
+	else
+		code_w(offset >> 1, data);
 }
 
 void gaelco_ms_mod4_device::draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, u32 flags, u8 priority)

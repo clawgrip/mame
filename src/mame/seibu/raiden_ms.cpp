@@ -255,7 +255,7 @@ private:
 	IRQ_CALLBACK_MEMBER( vector_r );
 	void vblank_irq(int state);
 
-	void text_tile_cb(u16 data, u32 &code, u32 &color);
+	void text_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 };
 
 
@@ -297,7 +297,7 @@ void raiden_ms_state::raidenm_sub_map(address_map &map)
 }
 
 
-void raiden_ms_state::text_tile_cb(u16 data, u32 &code, u32 &color)
+void raiden_ms_state::text_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 {
 	code = (data & 0xff) | ((data & 0xc000) >> 6);
 	color = BIT(data, 8, 4);

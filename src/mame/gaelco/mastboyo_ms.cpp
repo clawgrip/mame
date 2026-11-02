@@ -79,12 +79,12 @@ private:
 
 	void rombank_w(uint8_t data);
 	uint8_t irq_ack_r();
-	void tile_cb(u16 data, u32 &code, u32 &color);
+	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 };
 
 
-void mastboyo_ms_state::tile_cb(u16 data, u32 &code, u32 &color)
+void mastboyo_ms_state::tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 {
 	code = data & 0xff;
 	// palette bank lines are scrambled, the program reorders its palette table to match

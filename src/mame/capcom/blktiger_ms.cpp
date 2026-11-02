@@ -16,15 +16,23 @@
     MOD 4/3 - Tilemap board, has logic + 2 tilemap ROMs, long thin sub-board (CAR-0484/1 SOLD) with no chips, just routing along one edge.
     MOD 4/3 - Tilemap board, has logic + 4 tilemap ROMs, long thin sub-board (CAR-0484/1 SOLD) with no chips, just routing along one edge.
 
+    The program keeps the whole background map of the original game in 16 KB of RAM and, as the screen
+    scrolls, copies the tiles around it to the background MOD 4 board, whose tile map is 32 x 16 tiles.
+
+    The latch at 0xd800 selects the 16 KB ROM bank at 0x8000-0xbfff with bits 0-2 and 4, the program
+    writes the bank of the original game plus 8. It also selects what appears at 0xc000-0xcfff:
+    0x00       background MOD 4 board: tile map at 0xc000-0xc3ff, scroll registers at 0xc400-0xc403
+    0x04       sprite board
+    0x06       palette, 0xc000 is read once per frame
+    0x07       MOD 1 board and palette
+    0x10-0x13  background map RAM
+    0x17       text MOD 4 board scroll registers at 0xc800-0xc803
+    others     palette
+
     TODO: practically everything:
     - derive from blktiger_state? (eventually, if differences aren't too much)
     - sprite related functions are copied from blktiger.cpp. Verify differences
-    - correct GFX decoding
-    - tiles
-    - palette
-    - banking: seems to work by accident, tweaking the ROM loading. Pretty sure it's wrong.
-    - what the other bank latch values select at 0xc000-0xc7ff (0x00 is read and written at boot,
-      0xc000 is read with 0x06 once per frame)
+    - the sprite board (latch 0x04) and the read at 0xc000 with latch 0x06
     - lots of other stuff
 */
 
@@ -50,13 +58,16 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_spriteram(*this, "spriteram"),
+		m_mapram(*this, "mapram", 0x4000, ENDIANNESS_LITTLE),
 		m_mainbank(*this, "mainbank"),
-		m_bg_view(*this, "bg_view")
+		m_mapbank(*this, "mapbank"),
+		m_view(*this, "view")
 	{ }
 
 	void blktigerm(machine_config &config);
@@ -70,20 +81,27 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint8_t> m_spriteram;
+	memory_share_creator<u8> m_mapram;
 	required_memory_bank m_mainbank;
-	memory_view m_bg_view;
+	memory_bank_creator m_mapbank;
+	memory_view m_view;
 
 	u8 m_bank_latch = 0;
+	u8 m_bg_scroll[4]{};
+	u8 m_tx_scroll[4]{};
 
-	void tx_tile_cb(u16 data, u32 &code, u32 &color);
+	TILEMAP_MAPPER_MEMBER(bg_scan);
+	void bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
+	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void bank_w(u8 data);
-	void select_bg_view();
+	void select_view();
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -95,16 +113,21 @@ void blktiger_ms_state::main_map(address_map &map)
 {
 	map(0x0000, 0x7fff).rom().region("maincpu", 0);
 	map(0x8000, 0xbfff).bankr(m_mainbank);
-	map(0xc000, 0xcfff).view(m_bg_view);
-	m_bg_view[0](0xc000, 0xc00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
-	m_bg_view[0](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	m_bg_view[0](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	m_bg_view[1](0xc000, 0xcfff).ram(); // background tiles, banked?
-	m_bg_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	m_bg_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
+	map(0xc000, 0xcfff).view(m_view);
+	m_view[0](0xc000, 0xc00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
+	m_view[0](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
+	m_view[0](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
+	m_view[1](0xc000, 0xcfff).bankrw(m_mapbank);
+	m_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
+	m_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
+	m_view[3](0xc000, 0xc3ff).rw(m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_r), FUNC(gaelco_ms_mod4_device::vram8_w));
+	m_view[3](0xc400, 0xc403).lw8(NAME([this] (offs_t offset, u8 data) { m_bg_scroll[offset] = data; }));
+	m_view[3](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
+	m_view[3](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
+	m_view[4](0xc800, 0xc803).lw8(NAME([this] (offs_t offset, u8 data) { m_tx_scroll[offset] = data; }));
 	map(0xd000, 0xd3ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
 	map(0xd400, 0xd7ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
-	map(0xd800, 0xd800).w(FUNC(blktiger_ms_state::bank_w));
+	map(0xd800, 0xd800).mirror(0x07ff).w(FUNC(blktiger_ms_state::bank_w));
 	map(0xe000, 0xfdff).ram();
 	map(0xfe00, 0xffff).ram().share(m_spriteram);
 }
@@ -112,27 +135,41 @@ void blktiger_ms_state::main_map(address_map &map)
 void blktiger_ms_state::machine_start()
 {
 	m_mainbank->configure_entries(0, 16, memregion("maincpu")->base() + 0x10000, 0x4000);
+	m_mapbank->configure_entries(0, 4, &m_mapram[0], 0x1000);
 
 	save_item(NAME(m_bank_latch));
+	save_item(NAME(m_bg_scroll));
+	save_item(NAME(m_tx_scroll));
 }
 
 void blktiger_ms_state::device_post_load()
 {
-	select_bg_view();
+	select_view();
 }
 
 void blktiger_ms_state::bank_w(u8 data)
 {
-	// TODO: may bitswap, cfr. background collision detection
 	m_bank_latch = data;
-	m_mainbank->set_entry(data & 0x0f);
-	select_bg_view();
+	m_mainbank->set_entry(bitswap<4>(data, 4, 2, 1, 0));
+	select_view();
 }
 
-void blktiger_ms_state::select_bg_view()
+void blktiger_ms_state::select_view()
 {
-	// 0x07 selects the MOD 1 board, 0x04 the sprite board (copied from 0xfe00 every frame), bit 4 the background tiles
-	m_bg_view.select(BIT(m_bank_latch, 4) ? 1 : ((m_bank_latch & 0x0f) == 0x07) ? 0 : 2);
+	if (BIT(m_bank_latch, 4))
+	{
+		m_view.select(BIT(m_bank_latch, 2) ? 4 : 1);
+		m_mapbank->set_entry(m_bank_latch & 0x03);
+	}
+	else
+	{
+		switch (m_bank_latch & 0x0f)
+		{
+		case 0x00: m_view.select(3); break;
+		case 0x07: m_view.select(0); break;
+		default:   m_view.select(2); break;
+		}
+	}
 }
 
 void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -153,7 +190,7 @@ void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 			flipx = !flipx;
 		}
 
-		m_gfxdecode->gfx(1)->transpen(bitmap, cliprect,
+		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect,
 				code,
 				color,
 				flipx, flip_screen(),
@@ -163,16 +200,37 @@ void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 
 uint32_t blktiger_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bitmap.fill(0, cliprect);
+	// the program writes the scroll of the original game minus 26 and 1
+	m_mod4_bg->set_scrollx(26 + (m_bg_scroll[0] | (m_bg_scroll[1] << 8)));
+	m_mod4_bg->set_scrolly(1 + (m_bg_scroll[2] | (m_bg_scroll[3] << 8)));
+	m_mod4_tx->set_scrollx(26 + (m_tx_scroll[0] | (m_tx_scroll[1] << 8)));
+	m_mod4_tx->set_scrolly(1 + (m_tx_scroll[2] | (m_tx_scroll[3] << 8)));
 
-	m_mod4_tx->draw(screen, bitmap, cliprect);
+	bitmap.fill(m_palette->black_pen(), cliprect);
 
+	m_mod4_bg->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1);
 	draw_sprites(bitmap, cliprect);
+	m_mod4_bg->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0);
+	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
 }
 
-void blktiger_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color)
+TILEMAP_MAPPER_MEMBER(blktiger_ms_state::bg_scan)
+{
+	// two pages of 16 x 16 tiles
+	return (col & 0x0f) | ((row & 0x0f) << 4) | ((col & 0x10) << 4);
+}
+
+void blktiger_ms_state::bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
+{
+	// the original game format, the program copies the entries unchanged
+	code = data & 0x07ff;
+	color = BIT(data, 11, 4);
+	flags = BIT(data, 15) ? TILE_FLIPX : 0;
+}
+
+void blktiger_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 {
 	code = (data & 0xff) | ((data & 0xe000) >> 5);
 	color = BIT(data, 8, 5);
@@ -239,7 +297,6 @@ static const gfx_layout tiles16x16x4_layout =
 };
 
 static GFXDECODE_START( gfx_blktiger_ms )
-	GFXDECODE_ENTRY( "tiles", 0, tiles16x16x4_layout, 0x100, 16 )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x200, 32 )
 GFXDECODE_END
 
@@ -264,11 +321,19 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_blktiger_ms);
 
+	GAELCO_MS_MOD4(config, m_mod4_bg);
+	m_mod4_bg->set_palette(m_palette);
+	m_mod4_bg->set_color_base(0x100);
+	m_mod4_bg->set_half_lines(9);
+	m_mod4_bg->set_layout(FUNC(blktiger_ms_state::bg_scan), 32, 16);
+	m_mod4_bg->set_transparent_pen(15);
+	m_mod4_bg->set_tile_callback(FUNC(blktiger_ms_state::bg_tile_cb));
+
 	GAELCO_MS_MOD4(config, m_mod4_tx);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);
-	m_mod4_tx->set_transparent_pen(0);
+	m_mod4_tx->set_transparent_pen(3);
 	m_mod4_tx->set_tile_callback(FUNC(blktiger_ms_state::tx_tile_cb));
 
 	// sound hardware
@@ -288,10 +353,10 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 ROM_START( blktigerm )
 	ROM_REGION( 0x50000, "maincpu", 0 ) // on MOD 3/4 board
 	ROM_LOAD( "3_bl_301.ic14",   0x00000, 0x08000, CRC(b4525312) SHA1(958ce9a7f41422f3011412e4a16dd3ad65019733) )
-	ROM_LOAD( "3_bl_304.ic18",   0x10000, 0x10000, CRC(36f669c6) SHA1(e91fd222919904d4d4b3ef70a22ab599a7cfa263) )
-	ROM_LOAD( "3_bl_305.ic19",   0x20000, 0x10000, CRC(b30a99af) SHA1(19d6dbe11ffeb9a21dbfe75eb39ce9ceaef5eb31) )
-	ROM_LOAD( "3_bl_302_c.ic13", 0x30000, 0x10000, CRC(c943415f) SHA1(08e82d2557de01c979a0a58b5433e9bdcdb118cb) )
-	ROM_LOAD( "3_bl_303_b.ic12", 0x40000, 0x10000, CRC(72114f6b) SHA1(049e747431cd95db2e7414467754424f68a8d757) )
+	ROM_LOAD( "3_bl_302_c.ic13", 0x10000, 0x10000, CRC(c943415f) SHA1(08e82d2557de01c979a0a58b5433e9bdcdb118cb) )
+	ROM_LOAD( "3_bl_303_b.ic12", 0x20000, 0x10000, CRC(72114f6b) SHA1(049e747431cd95db2e7414467754424f68a8d757) )
+	ROM_LOAD( "3_bl_305.ic19",   0x30000, 0x10000, CRC(b30a99af) SHA1(19d6dbe11ffeb9a21dbfe75eb39ce9ceaef5eb31) )
+	ROM_LOAD( "3_bl_304.ic18",   0x40000, 0x10000, CRC(36f669c6) SHA1(e91fd222919904d4d4b3ef70a22ab599a7cfa263) )
 
 	ROM_REGION( 0x8000, "mod1", 0 )
 	ROM_LOAD( "1_bl_101.ic12",  0x0000, 0x8000, CRC(14028686) SHA1(64dc219d906f1bdd0c2bc05aff5aa73e001a6901) )
@@ -299,17 +364,20 @@ ROM_START( blktigerm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "1_p0101_82s123.ic20", 0x00, 0x20, CRC(3fd60d3a) SHA1(8100fa7453638ac40193b5d92404f41b101ed2cc) )
 
-	ROM_REGION( 0x8000, "mod4_tx", 0 ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
-	ROM_LOAD16_BYTE( "4_bl_401.ic17",  0x0000, 0x4000, CRC(ab1afb3d) SHA1(555332ccfb69e65b776f94ffac9a4a051fb6f09e) )
-	ROM_CONTINUE(                      0x0000, 0x4000 )
-	ROM_LOAD16_BYTE( "4_bl_402.ic16",  0x0001, 0x4000, CRC(89445b11) SHA1(7d9ab6e88d7de3a0e31b3b8a5e57dd39afd7940d) )
+	ROM_REGION( 0x8000, "mod4_tx", ROMREGION_INVERT ) // on one of the MOD 4/3 boards, both ROMs 0xxxxxxxxxxxxxx = 0xFF
+	ROM_LOAD16_BYTE( "4_bl_401.ic17",  0x0001, 0x4000, CRC(ab1afb3d) SHA1(555332ccfb69e65b776f94ffac9a4a051fb6f09e) )
 	ROM_CONTINUE(                      0x0001, 0x4000 )
+	ROM_LOAD16_BYTE( "4_bl_402.ic16",  0x0000, 0x4000, CRC(89445b11) SHA1(7d9ab6e88d7de3a0e31b3b8a5e57dd39afd7940d) )
+	ROM_CONTINUE(                      0x0000, 0x4000 )
 
-	ROM_REGION( 0x40000, "tiles", 0 ) // on the other MOD 4/3 board
+	ROM_REGION( 0x40000, "mod4_bg", ROMREGION_INVERT ) // on the other MOD 4/3 board
 	ROM_LOAD32_BYTE( "4_a_bl_4a01.ic17",  0x00003, 0x10000, CRC(fc00fd6c) SHA1(066714421fa782c6cfad9f695f05e6e3551ffdc7) )
 	ROM_LOAD32_BYTE( "4_a_bl_4a02.ic16",  0x00002, 0x10000, CRC(49cd8afa) SHA1(147b65dad4f05b940d1f7a4028f5748ba1b7daa5) )
 	ROM_LOAD32_BYTE( "4_a_bl_4a03.ic15",  0x00001, 0x10000, CRC(50207dd4) SHA1(bee343fbefc817fa14b8b303f013bf5b89e911f8) )
 	ROM_LOAD32_BYTE( "4_a_bl_4a04.ic14",  0x00000, 0x10000, CRC(4bb0c1ba) SHA1(9433c78f0de7cb1f92b22612b9f3c51d813b025a) )
+
+	ROM_REGION( 0x20, "mod4_bg:prom", 0 ) // priority
+	ROM_LOAD( "4_a_bl_82s123.ic13", 0x00, 0x20, CRC(671f1183) SHA1(dbc21c3922c5e69340daa9008e1200f1304b3e8f) )
 
 	ROM_REGION( 0x40000, "sprites", ROMREGION_INVERT ) // on MOD 51/1 board
 	ROM_LOAD32_BYTE( "51_bl_501.ic43",   0x00003, 0x10000, CRC(ace32b94) SHA1(4a09e8dc73bd16f7d378aefbe5d433dd1396f97d) )
@@ -321,7 +389,6 @@ ROM_START( blktigerm )
 	ROM_LOAD( "21_p0201_82s129.ic4",       0x0000, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_p0202_82s129.ic12",      0x0100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0200, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
-	ROM_LOAD( "4_a_bl_82s123.ic13",        0x0400, 0x0020, CRC(671f1183) SHA1(dbc21c3922c5e69340daa9008e1200f1304b3e8f) )
 	ROM_LOAD( "51_p0502_82s129.ic10",      0x0500, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
