@@ -13,8 +13,9 @@
     colour, but some games split them differently. 8-bit hosts see the low
     byte (tile code) and the high byte (attribute) in two separate areas.
 
-    Boards with four EPROMs draw 4bpp tiles in 16 colours, boards with two
-    draw 2bpp tiles in 64 colours.
+    Boards with four EPROMs draw 4bpp tiles in 16 colours, boards with three
+    (Twin Cobra's text layer, IC14 empty) 3bpp tiles in 32 colours and boards
+    with two 2bpp tiles in 64 colours.
 
     The tiles are 8x8 or 16x16. 8x8 tiles take the tile row from EPROM A0-A2
     and the tile number from A3 up. 16x16 tiles are made of four 8x8 tiles:
@@ -28,7 +29,8 @@
     are drawn with TILEMAP_DRAW_LAYER0 and all pens with TILEMAP_DRAW_LAYER1.
 
     The EPROMs are interleaved in the region with the most significant
-    bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_LOAD16_BYTE for two.
+    bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_SKIP(2) for three and
+    ROM_LOAD16_BYTE for two.
 
     TODO:
     - scroll registers (the drivers apply their own offsets)
