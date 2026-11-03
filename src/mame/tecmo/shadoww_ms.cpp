@@ -28,6 +28,8 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -46,6 +48,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_screen(*this, "screen"),
 		m_spriteram(*this, "spriteram"),
@@ -62,6 +65,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<screen_device> m_screen;
 
@@ -173,7 +177,7 @@ void shadoww_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap,
 
 		int const pri_mask = (col & 0x08) ? 0x00 : 0xf0 | 0xcc;
 
-		gfx->prio_transpen(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, 15);
+		gfx->prio_transmask(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, m_mod51->transmask());
 	}
 }
 
@@ -302,22 +306,24 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	m_maincpu->set_vblank_int("screen", FUNC(shadoww_ms_state::irq5_line_assert));
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 16, 240-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(shadoww_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_shadowmm);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(20_MHz_XTAL / 16); // divisor unknown, gives the pitch and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -399,10 +405,12 @@ ROM_START( shadowwm )
 	ROM_LOAD32_BYTE( "mod_5-1_3sw_5b4.ic15",  0xc0002, 0x10000, CRC(bb9a59e3) SHA1(5e674305267e7e20172c97b5b85f6b58ce51962c) )
 	ROM_LOAD32_BYTE( "mod_5-1_3sw_5a04.ic06", 0xc0003, 0x10000, CRC(44275bc9) SHA1(72bfc098561e47f2820c676e551e8eaa402c88fc) )
 
-	ROM_REGION( 0x100, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "mod_51-3_502_82s129.ic10",   0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-	ROM_LOAD( "mod_21-1_p0202_82s129.ic12", 0x000, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "mod_21-1_p0201_82s129.ic4",  0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "mod_21-1_p0202_82s129.ic12", 0x100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "mod_51-3_502_82s129.ic10",   0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x257, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_604_gal16v8.ic13",  0x000, 0x117, NO_DUMP )

@@ -200,7 +200,9 @@ _|_  74LS86PC  74LS299N |RD4B3  | 74LS153PC|V||  _|_  74LS86PC  74LS299N |RD4A3 
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/nec/nec.h"
 
@@ -220,6 +222,7 @@ public:
 		m_subcpu(*this, "subcpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%u", 1U),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_spriteram(*this, "spriteram"),
@@ -235,6 +238,7 @@ private:
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_shared_ptr<uint16_t> m_spriteram;
@@ -344,7 +348,7 @@ uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bit
 		int flipy = (attr2 & 0x4000);
 		int flipx = (attr2 & 0x2000);
 
-		gfx->transpen(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - Y_EXTRA_OFFSET, 15);
+		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - Y_EXTRA_OFFSET, m_mod51->transmask());
 	}
 
 	m_mod4[2]->set_scrolly(16);
@@ -464,11 +468,7 @@ void raiden_ms_state::raidenm(machine_config &config)
 	m_subcpu->set_irq_acknowledge_callback(FUNC(raiden_ms_state::vector_r));
 
 	// Video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(raiden_ms_state::screen_update));
 	m_screen->set_palette("palette");
 	m_screen->screen_vblank().set(FUNC(raiden_ms_state::vblank_irq));
@@ -476,6 +476,11 @@ void raiden_ms_state::raidenm(machine_config &config)
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_raiden_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
+	mod21.set_screen(m_screen);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
 	m_mod4[0]->set_palette(m_palette);
@@ -497,7 +502,7 @@ void raiden_ms_state::raidenm(machine_config &config)
 	// Sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'193'182); // unknown, gives the pitch (an octave lower) and tempo of the original game
 	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -551,10 +556,12 @@ ROM_START( raidenm )
 	ROM_LOAD32_BYTE( "msraid_51-3_rd503.ic41",   0x00001, 0x20000, CRC(ae4001e9) SHA1(5f21a042cad1807d2ef5e7f4f2cfd86cadc0503b) )
 	ROM_LOAD32_BYTE( "msraid_51-3_rd504.ic40",   0x00000, 0x20000, CRC(0452eb10) SHA1(3b998da404bd7133d12aadcadd57ee21a0cfc226) )
 
-	ROM_REGION( 0x0600, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "msraid_21-1_211_82s129.ic4",      0x0000, 0x0100, CRC(4f8c3e63) SHA1(0aa68fa1de6ca945027366a06752e834bbbc8d09) )
 	ROM_LOAD( "msraid_21-1_p0202_82s129.ic12",   0x0100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "msraid_51-3_502_82129.ic10",      0x0500, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "msraid_51-3_502_82129.ic10",      0x0000, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "msraid_4-3-1_pc403_pal16r8.ic29",    0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )

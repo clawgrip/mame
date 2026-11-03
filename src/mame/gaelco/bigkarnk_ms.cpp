@@ -282,6 +282,7 @@ Sound Board 9/2
 
 
 #include "emu.h"
+#include "gaelco_ms_mod51.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "emupal.h"
@@ -309,6 +310,7 @@ public:
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
+		m_mod51(*this, "mod51"),
 		m_spriteram(*this, "spriteram"),
 		m_videoram1(*this, "videoram1"),
 		m_videoram2(*this, "videoram2"),
@@ -333,6 +335,7 @@ private:
 
 	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_videoram1;
 	required_shared_ptr<uint16_t> m_videoram2;
@@ -543,7 +546,7 @@ uint32_t bigkarnk_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 		int flipx = (attr1 & 0x0040);
 		int flipy = (attr1 & 0x0080);
 
-		gfx->transpen(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,15);
+		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,m_mod51->transmask());
 	}
 
 	m_bg_tilemap1->draw(screen, bitmap, cliprect, 0, 0);
@@ -729,6 +732,8 @@ void bigkarnk_ms_state::bigkarnkm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_bigkarnk_ms);
 
+	GAELCO_MS_MOD51(config, m_mod51);
+
 	GENERIC_LATCH_8(config, m_soundlatch);
 	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
 
@@ -810,7 +815,7 @@ ROM_START( bigkarnkm )
 	ROM_LOAD32_BYTE( "8_ka_829.ic29", 0x080001, 0x020000, CRC(8c5df0ec) SHA1(15a5b847d6d035f27300435a03bd254dd9b3f99c) )
 	ROM_LOAD32_BYTE( "8_ka_836.ic36", 0x080000, 0x020000, CRC(43de75db) SHA1(419e7702d17c52365addb8bfda582e916762ead5) )
 
-	ROM_REGION( 0x100, "prom", ROMREGION_ERASEFF )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51_p0502_n82s129n.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
 	ROM_REGION( 0x157, "plds", 0 )

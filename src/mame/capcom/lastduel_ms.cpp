@@ -34,7 +34,9 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -54,6 +56,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%c", 'a'),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
@@ -72,6 +75,7 @@ private:
 	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
@@ -129,20 +133,21 @@ void lastduel_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		u8 const attr = sprite_byte(offs + 3);
 		u32 const code = sprite_byte(offs) | ((attr & 0x0f) << 8);
 		u32 const color = sprite_byte(offs + 0x200) & 0x0f;
-		int const sx = sprite_byte(offs + 2) | (BIT(~attr, 7) << 8);
+		int const sx = (sprite_byte(offs + 2) | (BIT(~attr, 7) << 8)) - 4;
 		int const sy = 0xff - 13 - sprite_byte(offs + 1);
 
-		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, 15);
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, m_mod51->transmask());
 	}
 }
 
 uint32_t lastduel_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes the x scroll of the original game plus 36, or 40 for the text board
+	// the program writes the x scroll of the original game plus 36, or 40 for the text board, and the
+	// screen bitmap is 4 pixels to the left of the original game's
 	for (int i = 0; i < 3; i++)
 	{
 		gaelco_ms_mod4_device &board = (i < 2) ? *m_mod4[i] : *m_mod4_tx;
-		board.set_scrollx((m_scroll[i][0] | (m_scroll[i][1] << 8)) - ((i < 2) ? 36 : 40));
+		board.set_scrollx((m_scroll[i][0] | (m_scroll[i][1] << 8)) - ((i < 2) ? 36 : 40) + 4);
 		board.set_scrolly(m_scroll[i][2] | (m_scroll[i][3] << 8));
 	}
 
@@ -258,7 +263,6 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_raw(28_MHz_XTAL / 4, 450, 96, 448, 266, 16, 240); // from the MOD 21/1 PROMs (204 horizontal, 203 vertical), vertical position guessed
 	m_screen->set_screen_update(FUNC(lastduel_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(lastduel_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -266,6 +270,13 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_lastduel_ms);
+
+	// the first visible pixel is column 96 of the original game, the vertical position is a guess
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(92, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
 	m_mod4[0]->set_palette(m_palette);
@@ -293,7 +304,7 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'789'773); // unknown, gives the pitch and tempo of the original game
 	m_mod1->set_int_period(attotime::from_hz(4 * 60)); // unknown source, the program reads the inputs every 4th interrupt
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -340,10 +351,12 @@ ROM_START( lastduelm )
 	ROM_LOAD32_BYTE( "mod_51-3_ld_503.ic41",  0x00001, 0x20000, CRC(055a1575) SHA1(fbcf5fa79eaf3b1e363b9ce8b20c17d5fe3f7bf2) )
 	ROM_LOAD32_BYTE( "mod_51-3_ld_504.ic40",  0x00000, 0x20000, CRC(227415bc) SHA1(b7bdcfc45a67074d77fa8d5ce8372b2834ce81ce) )
 
-	ROM_REGION( 0x300, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21-1_204_82s129.ic4",      0x00000, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
 	ROM_LOAD( "mod_21-1_203_82s129.ic12",     0x00100, 0x00100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
-	ROM_LOAD( "mod_21-1_204_82s129.ic4",      0x00200, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x0200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_604_gal16v8.ic13",     0x00000, 0x00117, CRC(8b725626) SHA1(69caeaf3681452e6743605aa05cc5651eabaca3b) )

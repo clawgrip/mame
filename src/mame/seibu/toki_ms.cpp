@@ -255,6 +255,8 @@ IC46->PAL16V8H 74LS393N 74LS368AP 74LS377B1|U||    |   |                        
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 #include "video/bufsprite.h"
@@ -274,6 +276,7 @@ public:
 		driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
 		, m_mod1(*this, "mod1")
+		, m_mod51(*this, "mod51")
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
@@ -282,6 +285,8 @@ public:
 		, m_vram(*this, "vram")
 		, m_spriteram(*this, "spriteram")
 		, m_scrollram(*this, "scrollram")
+		, m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG)
+		, m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
 	void tokim(machine_config &config);
@@ -290,6 +295,7 @@ public:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -299,6 +305,8 @@ private:
 	required_shared_ptr<u16> m_vram;
 	required_device<buffered_spriteram16_device> m_spriteram;
 	required_shared_ptr<u16> m_scrollram;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
 
 	virtual void video_start() override ATTR_COLD;
 
@@ -312,10 +320,6 @@ private:
 	tilemap_t *m_bk1_tilemap = nullptr;
 	tilemap_t *m_bk2_tilemap = nullptr;
 	tilemap_t *m_tx_tilemap = nullptr;
-
-	u8 palette_r(offs_t offset);
-	void palette_w(offs_t offset, u8 data);
-	std::unique_ptr<u8 []> m_paletteram;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -398,11 +402,11 @@ void toki_ms_state::draw_sprites(bitmap_ind16 &bitmap,const rectangle &cliprect)
 
 		color = (hibank[0] & 0x0f00) >> 8;
 
-		m_gfxdecode->gfx(1)->transpen(bitmap,cliprect,
+		m_gfxdecode->gfx(1)->transmask(bitmap,cliprect,
 				tile,
 				color,
 				flipx,0,
-				x,y,15);
+				x,y,m_mod51->transmask());
 	}
 }
 
@@ -415,10 +419,6 @@ void toki_ms_state::video_start()
 	m_bk1_tilemap->set_transparent_pen(15);
 	m_bk2_tilemap->set_transparent_pen(15);
 	m_tx_tilemap->set_transparent_pen(15);
-
-	m_paletteram = std::make_unique<u8 []>(0x800);
-	std::fill_n(m_paletteram.get(), 0x800, 0);
-	save_pointer(NAME(m_paletteram), 0x800);
 }
 
 uint32_t toki_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -463,24 +463,6 @@ void toki_ms_state::vram_w(offs_t offset, u16 data, u16 mem_mask)
 	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
-u8 toki_ms_state::palette_r(offs_t offset)
-{
-	return m_paletteram[offset];
-}
-
-void toki_ms_state::palette_w(offs_t offset, u8 data)
-{
-	m_paletteram[offset] = data;
-	// xBGR444 over an 8-bit bus
-	int r,g,b;
-	u16 pal_entry = offset & 0x3ff;
-	b = (m_paletteram[pal_entry|0x400] & 0xf);
-	g = (m_paletteram[pal_entry] & 0xf0) >> 4;
-	r = m_paletteram[pal_entry] & 0xf;
-
-	m_palette->set_pen_color(pal_entry, pal4bit(r),pal4bit(g),pal4bit(b));
-}
-
 void toki_ms_state::tokim_map(address_map &map)
 {
 	map(0x000000, 0x05ffff).rom();
@@ -488,7 +470,8 @@ void toki_ms_state::tokim_map(address_map &map)
 	map(0x06e800, 0x06efff).ram().w(FUNC(toki_ms_state::bk1vram_w)).share("bk1vram");
 	map(0x06f000, 0x06f7ff).ram().w(FUNC(toki_ms_state::bk2vram_w)).share("bk2vram");
 	map(0x06f800, 0x06ffff).ram().w(FUNC(toki_ms_state::vram_w)).share("vram");
-	map(0x070000, 0x0707ff).rw(FUNC(toki_ms_state::palette_r), FUNC(toki_ms_state::palette_w)).umask16(0xffff);
+	map(0x070000, 0x0703ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0x070400, 0x0707ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 	map(0x071000, 0x0713ff).ram().share("spriteram");
 	map(0x072000, 0x072001).nopr(); // irq ack?
 	map(0x073000, 0x07300f).ram().share("scrollram");
@@ -592,21 +575,26 @@ void toki_ms_state::tokim(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_raw(20_MHz_XTAL / 3, 426, 0, 256, 272, 16, 240); // FIXME: generic, not measured
 	m_screen->set_screen_update(FUNC(toki_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 	m_screen->screen_vblank().set("spriteram", FUNC(buffered_spriteram16_device::vblank_copy_rising));
 
-	PALETTE(config, m_palette).set_entries(0x400);
+	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_toki_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL)); // crystal not seen, the other boards with 201 have 20 MHz
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	BUFFERED_SPRITERAM16(config, m_spriteram);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'193'182); // unknown, gives the pitch (an octave lower) and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -688,10 +676,12 @@ ROM_START( tokim )
 	ROM_LOAD( "7_7640_gal20v8-20hb1.ic44",   0x000, 0x157, CRC(ce03bb39) SHA1(355cc48238f82796befb454adec84bfb50bf3184) )
 	ROM_LOAD( "51_503_palce16v8h-25pc.ic46", 0x000, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
 
-	ROM_REGION( 0x400, "proms", ROMREGION_ERASE00 )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "21_201_82s129.ic4",    0x0000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "21_202_82s129.ic12",   0x0100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51_502_82s129an.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular bootleg
-	ROM_LOAD( "21_201_82s129.ic4",    0x0100, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
-	ROM_LOAD( "21_202_82s129.ic12",   0x0200, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 ROM_END
 
 // reorganize graphics into something we can decode with a single pass

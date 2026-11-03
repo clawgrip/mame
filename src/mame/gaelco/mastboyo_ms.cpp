@@ -202,7 +202,7 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // Unknown clock and divisor
+	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	// Unknown clock and divisor, 2.5 MHz gives the pitch of the single board version with the prescaler the program selects
 	m_mod1->set_ym_clock(20_MHz_XTAL / 8);
 	// unknown source, 4 times the 256.244 Hz measured on the single board version gives its music tempo

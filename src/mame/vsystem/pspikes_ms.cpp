@@ -25,7 +25,9 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -44,6 +46,7 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
+		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_scrollram(*this, "scrollram"),
 		m_spriteram(*this, "spriteram")
@@ -58,6 +61,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint16_t> m_scrollram;
@@ -116,7 +120,7 @@ void pspikes_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clipr
 		int const flipx = (attr1 & 0x0040);
 		int const flipy = (attr2 & 0x4000);
 
-		gfx->transpen(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16, ypos - 16, 15);
+		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16, ypos - 16, m_mod51->transmask());
 	}
 }
 
@@ -230,16 +234,18 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
-	screen.set_refresh_hz(60);
-	screen.set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	screen.set_size(64*8, 32*8);
-	screen.set_visarea(0*8+4, 44*8+4-1, 2*8, 30*8-1); // TODO
 	screen.set_screen_update(FUNC(pspikes_ms_state::screen_update));
 	screen.set_palette("palette");
 
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_pspikes_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
+	mod21.set_screen(screen);
+	mod21.set_origin(4, 0);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4);
 	m_mod4->set_palette("palette");
@@ -251,7 +257,7 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -295,10 +301,12 @@ ROM_START( pspikesm )
 	ROM_LOAD32_BYTE( "mod_5-1_ps_521.ic21", 0xc0001, 0x10000, CRC(b652bb25) SHA1(87976d9ac16e2471e7b87b3509ad1ab34e0d9eaa) )
 	ROM_LOAD32_BYTE( "mod_5-1_ps_527.ic27", 0xc0000, 0x10000, CRC(39d9b0a5) SHA1(1396a96fe662bf53a2e86d39518f00a3f9693918) )
 
-	ROM_REGION( 0x300, "proms", 0 ) // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21-1_p0204_82s129.ic4",  0x00000, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
+	ROM_LOAD( "mod_21-1_209_82s129.ic12",   0x00100, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) ) // same contents as 205, Legend of Hero Tonma's 209 differs
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
 	ROM_LOAD( "mod_51-1_p0502_8s2129.ic10", 0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-	ROM_LOAD( "mod_21-1_209_82s129.ic12",   0x00100, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_21-1_p0204_82s129.ic4",  0x00200, 0x00100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_606_gal16v8.ic13",   0x00000, 0x00117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )

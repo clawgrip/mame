@@ -14,6 +14,8 @@
 #include "emu.h"
 #include "wc90b.h"
 
+#include "../gaelco/gaelco_ms_mod51.h"
+
 #include "cpu/z80/z80.h"
 #include "machine/gen_latch.h"
 #include "sound/ymopn.h"
@@ -28,6 +30,7 @@ class euroleag_ms_state : public wc90b_state
 public:
 	euroleag_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		wc90b_state(mconfig, type, tag),
+		m_mod51(*this, "mod51"),
 		m_bgscroll(*this, "bgscroll")
 	{ }
 
@@ -38,6 +41,7 @@ protected:
 	virtual void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect, int priority) override;
 
 private:
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_shared_ptr<uint8_t> m_bgscroll;
 
 	void master_irq_ack_w(uint8_t data);
@@ -76,12 +80,12 @@ void euroleag_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 
 			int sy = 240 - m_spriteram[offs + 1];
 
-			m_gfxdecode->gfx(2)->transpen(bitmap, cliprect, tilehigh,
+			m_gfxdecode->gfx(2)->transmask(bitmap, cliprect, tilehigh,
 					(flags & 0x7) | 8, // color - palettes 0x0 - 0x7 never written?
 					attr & 4,   // flipx
 					attr & 8,   // flipy
 					sx,
-					sy, 15);
+					sy, m_mod51->transmask());
 		}
 	}
 }
@@ -172,6 +176,7 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	screen.set_palette(m_palette);
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_wc90b);
+	GAELCO_MS_MOD51(config, m_mod51);
 	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 1024).set_endianness(ENDIANNESS_BIG);
 
 	// sound hardware
@@ -227,7 +232,7 @@ ROM_START( euroleagm )
 	ROM_LOAD( "r4_fu501.bin",  0x060000, 0x10000, CRC(d5a60096) SHA1(a8e351a4b020b4fc2b2cb7d3f0fdfb43fc44d7d9) )
 	ROM_LOAD( "r4_fu5a01.bin", 0x070000, 0x10000, CRC(36bbf467) SHA1(627b5847ffb098c92edfd58c25391799f3b209e0) )
 
-	ROM_REGION( 0x100, "prom", ROMREGION_ERASEFF )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "r4_p0502_82s129.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASEFF )

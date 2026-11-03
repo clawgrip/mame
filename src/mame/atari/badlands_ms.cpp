@@ -26,15 +26,16 @@
     - sprite priority
     - the game comes up in free play with blank EEPROM settings; the DIP switches, which the sound
       program passes where the original game reads the coin and self test inputs, aren't mapped
-    - screen timing: the MOD 21/1 PROMs give 450 x 266 with a 336 x 240 visible area, as on Last Duel's
-      28 MHz cage
+    - MOD 21/1 crystal, 28 MHz as on Last Duel, whose horizontal PROM also has 450 pixel lines
 */
 
 
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprompar.h"
@@ -54,6 +55,7 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
@@ -71,6 +73,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
@@ -125,7 +128,7 @@ void badlands_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		int const sx = 96 + (sprite_byte(offs + 2) | (BIT(~color, 7) << 8));
 		int const sy = 241 - sprite_byte(offs + 1);
 
-		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color & 0x0f, 0, 0, sx, sy, 15);
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color & 0x0f, 0, 0, sx, sy, m_mod51->transmask());
 	}
 }
 
@@ -218,7 +221,6 @@ void badlands_ms_state::badlandsm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_raw(28_MHz_XTAL / 4, 450, 96, 432, 266, 16, 256); // from the MOD 21/1 PROMs, 210 horizontal and 205 vertical
 	m_screen->set_screen_update(FUNC(badlands_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(badlands_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -226,6 +228,12 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_badlands_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(96, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4);
 	m_mod4->set_palette(m_palette);
@@ -236,7 +244,7 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'750'000); // unknown, gives the pitch and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -278,10 +286,12 @@ ROM_START( badlandsm )
 	ROM_LOAD32_BYTE( "mod-5-1_ba_520.ic20",  0x80001, 0x10000, CRC(f4e132ae) SHA1(c34b4a3b204035e2f4d5209aee48673f758f3ceb) )
 	ROM_LOAD32_BYTE( "mod-5-1_ba_526.ic26",  0x80000, 0x10000, CRC(243a6bc8) SHA1(7f3e6031824c28f37afafc80fc9757bb5f80e660) )
 
-	ROM_REGION( 0x300, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "mod-51-1_502_82s129a.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21_1_210_82s129.ic4",       0x000, 0x100, CRC(d3e676aa) SHA1(241a9f9df88e8f796ca8c773ae7930f6e7ce4db8) )
 	ROM_LOAD( "mod_21_1_205_82s129.ic12",      0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_21_1_210_82s129.ic4",       0x200, 0x100, CRC(d3e676aa) SHA1(241a9f9df88e8f796ca8c773ae7930f6e7ce4db8) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
+	ROM_LOAD( "mod-51-1_502_82s129a.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod-6-1_cpu_644_gal16v8.ic13", 0x000, 0x117, CRC(180a4125) SHA1(bc056d08d3f330cdba4edfdd1544be828e63c2d1) )

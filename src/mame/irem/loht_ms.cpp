@@ -12,9 +12,9 @@
     in the Z80 EPROM) at I/O 0x00-0x0f and 0x20-0x2f.
 
     TODO:
-    - video is the M72 one, which this program mostly fits; colors are wrong and the tilemaps
-      don't scroll (I/O 0x1000-0x100e and 0x2000 are written every frame, maybe the MOD 8
-      registers)
+    - video is the M72 one, which this program mostly fits; the tilemaps don't scroll (I/O
+      0x1000-0x100e and 0x2000 are written every frame, maybe the MOD 8 registers) and colors are
+      wrong: nothing writes 0xc8000-0xccbff, the program keeps M72 format colors at 0xa2c00
     - sprites: copying the list at vblank is a guess and they look misplaced
     - clocks
 */
@@ -22,6 +22,8 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/nec/nec.h"
 #include "video/bufsprite.h"
@@ -41,6 +43,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
 		m_spriteram(*this, "spriteram"),
@@ -56,6 +59,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
 	required_device<buffered_spriteram16_device> m_spriteram;
@@ -183,7 +187,7 @@ void loht_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, co
 			for (int y = 0; y < h; y++)
 			{
 				u32 const c = code + 8 * (flipx ? (w - 1 - x) : x) + (flipy ? (h - 1 - y) : y);
-				m_gfxdecode->gfx(0)->prio_transpen(bitmap, cliprect, c, color, flipx, flipy, sx + 16 * x, sy + 16 * y, screen.priority(), ~1, 0);
+				m_gfxdecode->gfx(0)->prio_transmask(bitmap, cliprect, c, color, flipx, flipy, sx + 16 * x, sy + 16 * y, screen.priority(), ~1, m_mod51->transmask());
 			}
 		}
 	}
@@ -338,19 +342,25 @@ void loht_ms_state::lohtm(machine_config &config)
 	BUFFERED_SPRITERAM16(config, m_spriteram);
 
 	screen_device &screen(SCREEN(config, "screen"));
-	screen.set_raw(8'000'000, 512, 64, 448, 284, 0, 256); // timings copied from M72
 	screen.set_screen_update(FUNC(loht_ms_state::screen_update));
 	screen.set_palette(m_palette);
 	screen.screen_vblank().set_inputline(m_maincpu, 0);
 	screen.screen_vblank().append(m_spriteram, FUNC(buffered_spriteram16_device::vblank_copy_rising));
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_loht_ms);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 	PALETTE(config, m_palette).set_entries(512);
+
+	// the horizontal position is a guess
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL)); // crystal not seen, Last Duel and Power Spikes have 28 MHz with 204
+	mod21.set_screen(screen);
+	mod21.set_origin(92, 0);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown clock
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'750'000); // unknown, gives the pitch and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -600,7 +610,7 @@ ROM_START( lohtm ) // really similar to lohtb, even if it runs on 'Modular Hardw
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "1_105_82s123n.ic20", 0x00, 0x20, CRC(14d72781) SHA1(372dc021d8aaf4aa6fd46e69a3d8f1c68113426f) )
 
-	ROM_REGION( 0x080000, "sprites", 0 ) // Sprites
+	ROM_REGION( 0x080000, "sprites", ROMREGION_INVERT ) // on MOD 5/1 board
 	ROM_LOAD( "5_lg_501.ic5",   0x00000, 0x10000, CRC(df5ac5ee) SHA1(5b45417ada402047d97dfb6cee6545686ad26e37) )
 	ROM_LOAD( "5_lg_503.ic14",  0x20000, 0x10000, CRC(45220b01) SHA1(83715cf155f91c82067d69f14b3b01ed77777b7d) )
 	ROM_LOAD( "5_lg_505.ic20",  0x40000, 0x10000, CRC(25b85cfc) SHA1(c7a9962165379193dc6553ed1f977795a79e0f78) )
@@ -623,10 +633,12 @@ ROM_START( lohtm ) // really similar to lohtb, even if it runs on 'Modular Hardw
 	ROM_LOAD( "8_lg_808.ic36",  0x30000, 0x10000, CRC(f923183c) SHA1(a6b578191864aefa81e0cad3ba12a2ca491c91cf) )
 
 
-	ROM_REGION( 0x300, "prom", ROMREGION_ERASEFF )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "21_204_82s129an.ic4",      0x000, 0x100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
+	ROM_LOAD( "21_209_82s129an.ic12",     0x100, 0x100, CRC(7922a7ab) SHA1(e7ec2b1fc61bd7d2cf921bfc50d975f91b938e8a) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51_502_82s129n.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-	ROM_LOAD( "21_204_82s129an.ic4",      0x100, 0x100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
-	ROM_LOAD( "21_209_82s129an.ic12",     0x200, 0x100, CRC(7922a7ab) SHA1(e7ec2b1fc61bd7d2cf921bfc50d975f91b938e8a) )
 
 	ROM_REGION( 0x104, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "51_p0503_pal16r6.ic46",       0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )

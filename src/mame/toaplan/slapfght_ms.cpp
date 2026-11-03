@@ -27,7 +27,9 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/z80/z80.h"
 #include "machine/74259.h"
@@ -48,6 +50,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4_pf(*this, "mod4_pf"),
 		m_mod4_fix(*this, "mod4_fix"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_spriteram(*this, "spriteram"),
@@ -66,6 +69,7 @@ private:
 	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4_pf;
 	required_device<gaelco_ms_mod4_device> m_mod4_fix;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 
@@ -126,7 +130,7 @@ void slapfght_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		if (sy > 256-8)
 			sy -= 256;
 
-		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, fx, fy, sx, sy, 0);
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, fx, fy, sx, sy, m_mod51->transmask());
 	}
 }
 
@@ -250,18 +254,21 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	mainlatch.q_out_cb<3>().set(FUNC(slapfght_ms_state::irq_enable_w));
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	m_screen->set_size(64*8, 32*8);
-	m_screen->set_visarea(0*8, 32*8-1, 2*8, 32*8-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(slapfght_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(slapfght_ms_state::vblank_irq));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::xRGB_444, 256);
+	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_slapfighm);
+
+	// the vertical position is a guess
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4_pf);
 	m_mod4_pf->set_palette("palette");
@@ -273,13 +280,13 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_mod4_fix->set_tile_size(8);
 	m_mod4_fix->set_planes(2);
 	m_mod4_fix->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
-	m_mod4_fix->set_transparent_pen(0);
+	m_mod4_fix->set_transparent_pen(3);
 	m_mod4_fix->set_tile_callback(FUNC(slapfght_ms_state::fix_tile_cb));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(24_MHz_XTAL / 16); // divisor unknown, gives the pitch of the original game
 	m_mod1->set_int_period(attotime::from_hz(360)); // unknown source, gives the tempo of the original game (music every other interrupt)
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -302,13 +309,13 @@ ROM_START( slapfighm )
 	ROM_LOAD( "1_snd_p0102_82s123.ic20", 0x00, 0x20, CRC(6228a653) SHA1(a8cfceba0546875940e9124c5ca2a6c625232856) )
 
 	// only the upper half of the EPROMs is used
-	ROM_REGION( 0x8000, "mod4_fix", 0 ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
+	ROM_REGION( 0x8000, "mod4_fix", ROMREGION_INVERT ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
 	ROM_LOAD16_BYTE( "4-2_fi_401.ic17", 0x0000, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
 	ROM_CONTINUE(                       0x0000, 0x4000 )
 	ROM_LOAD16_BYTE( "4-2_fi_402.ic16", 0x0001, 0x4000, CRC(6e9ce9ea) SHA1(9b80360050022fb7b938a874d5c9adb344907bab) ) // BADADDR  x-xxxxxxxxxxxxx, 4-2_fi_402.ic16  [3/4] a77_04.6f IDENTICAL
 	ROM_CONTINUE(                       0x0001, 0x4000 )
 
-	ROM_REGION( 0x20000, "mod4_pf", 0 ) // on a second MOD 4/2 board, identical to the original
+	ROM_REGION( 0x20000, "mod4_pf", ROMREGION_INVERT ) // on a second MOD 4/2 board, identical to the original
 	ROM_LOAD32_BYTE( "4-2-b_fi_4a01.ic17", 0x00000, 0x8000, CRC(974e2ea9) SHA1(3840550fc3a833828dad8f3e300d2ea583d69ce7) )
 	ROM_LOAD32_BYTE( "4-2-b_fi_4a02.ic16", 0x00001, 0x8000, CRC(5faeeea3) SHA1(696fba24bcf1f3a7e914a4403854da5eededaf7f) )
 	ROM_LOAD32_BYTE( "4-2-b_fi_4a03.ic15", 0x00002, 0x8000, CRC(e92d9d60) SHA1(2554617e0e6615ca8c85a49299a4a0e762478339) )
@@ -320,11 +327,15 @@ ROM_START( slapfighm )
 	ROM_LOAD32_BYTE( "51-1_fi_503.ic41", 0x0001, 0x8000, CRC(b03543cf) SHA1(2b8f0e8c60dbccc40e82f4af799d151efc259d52) )
 	ROM_LOAD32_BYTE( "51-1_fi_504.ic40", 0x0000, 0x8000, CRC(b80afe0a) SHA1(02efc3cb0c968d24ae0da4d16515c244f59d1d93) )
 
-	ROM_REGION( 0x0500, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "21-1_p0201_82s129.ic5",      0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21-1_p0203_82s129.ic12",     0x100, 0x100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
-	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x200, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )
-	ROM_LOAD( "51-1_p0502.ic10",            0x400, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
+	ROM_LOAD( "51-1_p0502.ic10",            0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x200, "proms", 0 )    // PROMs (function unknown)
+	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x000, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )
 
 	ROM_REGION( 0x104, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "4-2_0400_pal16r6acn.ic29", 0x000, 0x104, CRC(cfbed5c6) SHA1(5ec184b973ed4b82a49678a84ebaf9e8e33ccd90) )

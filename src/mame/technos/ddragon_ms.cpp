@@ -25,6 +25,8 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m6809/m6809.h"
 
@@ -114,15 +116,17 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 3); // MC68B09EP, divisor unknown
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(ddragon_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::IRGB_1555, 256).set_membits(8);
+	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 8);
+
+	GAELCO_MS_MOD51(config, "mod51");
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -170,11 +174,15 @@ ROM_START( ddragonm )
 	ROM_LOAD( "mod_51_sub_dr5a03_27512.bin", 0x60000, 0x10000, CRC(6248bcc4) SHA1(27d160ad489ea32f4bda652f7f8f5e32257f34a1) )
 	ROM_LOAD( "mod_51_sub_dr5a04-27512.bin", 0x70000, 0x10000, CRC(a4baa5ba) SHA1(25a7434a0a3ea33faa0881e6a372b1ee50b19cdd) )
 
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21-1_p0201_82s129.ic4",    0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "mod_21-1_p0205_82s129.ic12",   0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
+	ROM_LOAD( "mod_51_p0502_82s129.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
 	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
 	ROM_LOAD( "mod_3-4_sub_p0320_82s147.bin", 0x000, 0x200, CRC(9bc0d387) SHA1(bac95901cacf883fcde0662b444c443364227def) )
-	ROM_LOAD( "mod_21-1_p0205_82s129.ic12",   0x000, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_21-1_p0201_82s129.ic4",    0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
-	ROM_LOAD( "mod_51_p0502_82s129.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_3-4_sub_p36_pal20x4.bin",   0x000, 0x0cc, CRC(896e285d) SHA1(5a49890c396fb9f3625d421ff4a8823d3b76ccb9) )

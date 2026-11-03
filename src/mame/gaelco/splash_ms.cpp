@@ -7,6 +7,7 @@
 
 
 #include "emu.h"
+#include "gaelco_ms_mod51.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "emupal.h"
@@ -31,6 +32,7 @@ public:
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
+		m_mod51(*this, "mod51"),
 		m_videoram(*this, "videoram"),
 		m_videoram2(*this, "videoram2"),
 		m_bitmapram(*this, "bitmapram"),
@@ -56,6 +58,7 @@ private:
 
 	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_shared_ptr<uint16_t> m_videoram;
 	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint8_t> m_bitmapram;
@@ -228,7 +231,7 @@ uint32_t splashms_state::screen_update(screen_device &screen, bitmap_ind16 &bitm
 		int flipx = (attr1 & 0x0040);
 		int flipy = (attr1 & 0x0080);
 
-		gfx->transpen(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,15);
+		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,m_mod51->transmask());
 	}
 
 	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
@@ -480,6 +483,8 @@ void splashms_state::splashm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_splashms);
 
+	GAELCO_MS_MOD51(config, m_mod51);
+
 	GENERIC_LATCH_8(config, m_soundlatch);
 	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
 
@@ -554,7 +559,7 @@ ROM_START( splashm )
 	ROM_LOAD32_BYTE( "8_sp_818.ic18", 0x00002, 0x20000, CRC(ae62a832) SHA1(f825a186e25a1c292aa6f880055341ec14373c0b) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_811.ic11", 0x00003, 0x20000, CRC(02e474b4) SHA1(11446655cb73ec4961339fa4ee41200f8b2b81d3) ) // 111xxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x100, "prom", ROMREGION_ERASEFF )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
 	ROM_REGION( 0x157, "plds", 0 )
@@ -613,7 +618,7 @@ ROM_START( splashma )
 	ROM_LOAD32_BYTE( "8_sp_818.ic18", 0x00002, 0x20000, CRC(ae62a832) SHA1(f825a186e25a1c292aa6f880055341ec14373c0b) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_811.ic11", 0x00003, 0x20000, CRC(02e474b4) SHA1(11446655cb73ec4961339fa4ee41200f8b2b81d3) ) // 111xxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x100, "prom", ROMREGION_ERASEFF )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x157, "plds", 0 )

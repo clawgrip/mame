@@ -29,7 +29,9 @@ TODO:
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -49,6 +51,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%c", 'a'),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_spriteram(*this, "spriteram")
 	{ }
@@ -63,6 +66,7 @@ private:
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 
 	required_shared_ptr<uint16_t> m_spriteram;
@@ -109,8 +113,8 @@ void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		int const flipx = (attr1 & 0x0020);
 		int const flipy = (attr2 & 0x4000);
 
-		// TODO: switch to prio_transpen
-		gfx->transpen(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, 15);
+		// TODO: switch to prio_transmask
+		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, m_mod51->transmask());
 	}
 }
 
@@ -247,16 +251,18 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
-	screen.set_refresh_hz(60);
-	screen.set_vblank_time(ATTOSECONDS_IN_USEC(2500)); // not accurate
-	screen.set_size(256, 256);
-	screen.set_visarea(0, 256-1, 16, 240-1);
 	screen.set_screen_update(FUNC(bloodbro_ms_state::screen_update));
 	screen.set_palette("palette");
 
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_bloodbro_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
+	mod21.set_screen(screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
 	m_mod4[0]->set_palette("palette");
@@ -277,8 +283,7 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	// divisors unknown, no XTAL on the PCB, might also use the 20 MHz one
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 24_MHz_XTAL / 8);
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'193'182); // unknown, gives the pitch of the original game (an octave lower)
 	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified
 	m_mod1->in_callback<0>().set_ioport("IN0");
@@ -302,19 +307,7 @@ ROM_START( bloodbrom )
 	ROM_LOAD( "1-2_bb101.ic12",  0x00000, 0x10000, CRC(3e184e74) SHA1(031cd37fe6d09daf8c9e88562da99fde03f52109) )
 
 	ROM_REGION( 0x20, "mod1:prom", 0 )
-	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
-	// not dumped, hand-made with the 110 contents, which fit the sound program
-	ROM_FILL( 0x00, 0x08, 0xfc )
-	ROM_FILL( 0x08, 0x08, 0xfd )
-	ROM_FILL( 0x10, 0x02, 0xdc )
-	ROM_FILL( 0x12, 0x02, 0xdd )
-	ROM_FILL( 0x14, 0x02, 0xfc )
-	ROM_FILL( 0x16, 0x02, 0xfd )
-	ROM_FILL( 0x18, 0x04, 0xfb )
-	ROM_FILL( 0x1c, 0x01, 0xef )
-	ROM_FILL( 0x1d, 0x01, 0xf7 )
-	ROM_FILL( 0x1e, 0x01, 0xbf )
-	ROM_FILL( 0x1f, 0x01, 0x7f )
+	ROM_LOAD( "1-2_110_tbp18s030.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
 	// dumper's note: ROMs [bb4b1, bb4b2, bb4b3, bb4b4] and [bb4a1, bb4a2, bb4a3, bb4a4] have a strange setup
 	// with pins 32, 31 and 30 soldered together and pin 2 connected between all four chips,
@@ -356,11 +349,12 @@ ROM_START( bloodbrom )
 	ROM_LOAD32_BYTE( "51-1-b_bb521.ic21", 0xc0001, 0x10000, CRC(fb8cff4c) SHA1(5fa0b52140959e029911a28928b3efad4aa9f1db) )
 	ROM_LOAD32_BYTE( "51-1-b_bb527.ic27", 0xc0000, 0x10000, CRC(a73cd7a5) SHA1(9106565d1c8a8e0efa8f5035106f3cdac2189107) )
 
-	ROM_REGION( 0x0400, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "1-2_110_tbp18s030.ic20",  0x000, 0x020, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
-	ROM_LOAD( "2_211_82s129.ic4",        0x100, 0x100, CRC(4f8c3e63) SHA1(0aa68fa1de6ca945027366a06752e834bbbc8d09) )
-	ROM_LOAD( "2_202_82s129.ic12",       0x200, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "51-1_p0502_82s129n.ic10", 0x300, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "2_211_82s129.ic4",        0x000, 0x100, CRC(4f8c3e63) SHA1(0aa68fa1de6ca945027366a06752e834bbbc8d09) )
+	ROM_LOAD( "2_202_82s129.ic12",       0x100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
+	ROM_LOAD( "51-1_p0502_82s129n.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "6-1_606_gal16v8-20hb1.ic13",    0x000, 0x117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )

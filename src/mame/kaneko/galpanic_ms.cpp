@@ -28,6 +28,7 @@
 
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -46,6 +47,7 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
+		m_mod51(*this, "mod51"),
 		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
@@ -62,6 +64,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -208,7 +211,7 @@ uint32_t galspanic_ms_state::screen_update(screen_device &screen, bitmap_ind16 &
 		int flipx = 0; // different
 		int flipy = (attr2 & 0x4000);
 
-		gfx->transpen(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-14,15);
+		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-14,m_mod51->transmask());
 	}
 
 
@@ -296,6 +299,8 @@ void galspanic_ms_state::newquiz(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_galspanic_ms);
 
+	GAELCO_MS_MOD51(config, m_mod51);
+
 	GAELCO_MS_MOD4(config, m_mod4);
 	m_mod4->set_palette(m_palette);
 	m_mod4->set_color_base(0x400);
@@ -305,7 +310,7 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	/* sound hardware */
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 16_MHz_XTAL / 4);
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(20_MHz_XTAL / 16);
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -324,19 +329,7 @@ ROM_START( galpanicm )
 	ROM_LOAD( "snd_1.ic12", 0x000000, 0x10000, CRC(409e9233) SHA1(f13de7ddc00857c889250621ebccdae1b494cfd0) ) // TMS27C512
 
 	ROM_REGION( 0x20, "mod1:prom", 0 )
-	ROM_LOAD( "82s123.ic20", 0x00, 0x20, NO_DUMP )
-	// not dumped, hand-made: RAM at 0x8000, YM2203s at 0xa000, latch and EPROM window at 0xc000, as the sound program needs
-	ROM_FILL( 0x00, 0x08, 0xfc )
-	ROM_FILL( 0x08, 0x08, 0xfd )
-	ROM_FILL( 0x10, 0x04, 0xfb )
-	ROM_FILL( 0x14, 0x01, 0xef )
-	ROM_FILL( 0x15, 0x01, 0xff )
-	ROM_FILL( 0x16, 0x01, 0xbf )
-	ROM_FILL( 0x17, 0x01, 0xff )
-	ROM_FILL( 0x18, 0x02, 0xdc )
-	ROM_FILL( 0x1a, 0x02, 0xdd )
-	ROM_FILL( 0x1c, 0x02, 0xfc )
-	ROM_FILL( 0x1e, 0x02, 0xfd )
+	ROM_LOAD( "snd_p0115_74s288.ic20", 0x00, 0x20, CRC(50bba48d) SHA1(0d677a67d3c3faca49ea3fe372d2df6802daefb0) )
 
 	ROM_REGION16_BE( 0x100000, "userx", ROMREGION_ERASEFF ) // 68000 data @ 0x200000
 
@@ -383,10 +376,7 @@ ROM_START( galpanicm )
 	ROM_LOAD32_BYTE( "4_gp_403.ic15",        0x000001, 0x010000, CRC(35d2bce4) SHA1(050e7adad47ea10a59761e59d8d4aee11960b0db) ) // MC27C512AQ
 	ROM_LOAD32_BYTE( "4_gp_404.ic14",        0x000000, 0x010000, CRC(ea8eda3a) SHA1(dc2535d77788935322d1fb20097c1918b659d2b9) ) // MC27C512AQ
 
-	ROM_REGION( 0x100, "soundprom", 0 )
-	ROM_LOAD( "snd_p0115_74s288.ic20", 0x0000, 0x20, CRC(50bba48d) SHA1(0d677a67d3c3faca49ea3fe372d2df6802daefb0) )
-
-	ROM_REGION( 0x100, "prom", 0 )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "51_502_63s141n.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as Euro League modular bootleg
 
 	ROM_REGION( 0x157, "gal", 0 )

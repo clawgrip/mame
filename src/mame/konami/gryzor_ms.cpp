@@ -26,6 +26,8 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m6809/m6809.h"
 
@@ -115,15 +117,17 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	MC6809(config, m_subcpu, 22.1184_MHz_XTAL / 3); // Motorola SC84014P, divisor unknown
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(gryzor_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::IRGB_1555, 256).set_membits(8);
+	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, "mod51");
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -175,11 +179,15 @@ ROM_START( gryzorm )
 	ROM_LOAD( "mod_51_sub_gz5a03_27512.bin", 0x60000, 0x10000, CRC(abd7b5b7) SHA1(94326d7ff8bba1299a5be193d06c1e019d38ce5c) )
 	ROM_LOAD( "mod_51_sub_gz5a04_27512.bin", 0x70000, 0x10000, CRC(e0b11c30) SHA1(a35c94a2dd48f10eec623356655f25bd9e533eaf) )
 
-	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",      0x000, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "mod_21-1_p0206_82s129.ic4",       0x000, 0x100, CRC(a47680d5) SHA1(6475cad53b91f6ef1043e7330b79f58695fd7ec9) )
-	ROM_LOAD( "mod_3-4_sub_p0318_mmi63s481.bin", 0x000, 0x200, CRC(67a4bbc7) SHA1(441be3a810225813bf2667ddf9b2fdc7de35196e) )
+	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",      0x100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51_p0502_mmi63s141.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
+	ROM_LOAD( "mod_3-4_sub_p0318_mmi63s481.bin", 0x000, 0x200, CRC(67a4bbc7) SHA1(441be3a810225813bf2667ddf9b2fdc7de35196e) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_3-4_sub_p36_pal20x4.bin",  0x000, 0x0cc, CRC(896e285d) SHA1(5a49890c396fb9f3625d421ff4a8823d3b76ccb9) )

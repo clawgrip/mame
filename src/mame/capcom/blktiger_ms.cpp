@@ -10,7 +10,7 @@
     The Modular System cage contains 6 main boards for this game.
 
     MOD3-4 - Z80 board (CPU + 5 ROMs + RAM + 24MHz XTAL).
-    MOD21/1 - RAM board? 20 MHz XTAL.
+    MOD21/1 - Logic, 2 PROMs, palette RAM, 20 MHz XTAL.
     MOD1/5 - Sound board (Z80, 2xYM2203C). 2 8-dips banks.
     MOD51/1 - Sprite board, has logic + 4 sprite ROMs.
     MOD 4/3 - Tilemap board, has logic + 2 tilemap ROMs, long thin sub-board (CAR-0484/1 SOLD) with no chips, just routing along one edge.
@@ -40,7 +40,9 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/z80/z80.h"
 
@@ -60,6 +62,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
@@ -83,6 +86,7 @@ private:
 	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
@@ -190,11 +194,11 @@ void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 			flipx = !flipx;
 		}
 
-		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect,
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect,
 				code,
 				color,
 				flipx, flip_screen(),
-				sx, sy, 15);
+				sx, sy, m_mod51->transmask());
 	}
 }
 
@@ -308,11 +312,7 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_hold));
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(0));
-	m_screen->set_size(32*8, 32*8);
-	m_screen->set_visarea(0*8, 32*8-1, 2*8, 30*8-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(blktiger_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
@@ -320,6 +320,12 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 1024);
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_blktiger_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
 	m_mod4_bg->set_palette(m_palette);
@@ -339,7 +345,7 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1(config, m_mod1, 24_MHz_XTAL / 8); // divisor unknown, no XTAL on the PCB, might also use the 20 MHz one
+	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'789'773); // unknown, gives the pitch of the original game
 	m_mod1->set_int_period(attotime::from_hz(950)); // unknown source, about 950 Hz gives the tempo of the original game
 	m_mod1->set_host_nmi(true);
@@ -385,11 +391,15 @@ ROM_START( blktigerm )
 	ROM_LOAD32_BYTE( "51_bl_503.ic41",   0x00001, 0x10000, CRC(61e3ae0b) SHA1(cbb83827f027acd6b905f4210476810bcd4b03a9) )
 	ROM_LOAD32_BYTE( "51_bl_504.ic40",   0x00000, 0x10000, CRC(2cb45034) SHA1(b2fd3b7b7b9d68b6ff1985166b106e65b17dbb23) )
 
-	ROM_REGION( 0x0600, "proms", 0 )    // PROMs (function unknown)
-	ROM_LOAD( "21_p0201_82s129.ic4",       0x0000, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
-	ROM_LOAD( "21_p0202_82s129.ic12",      0x0100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0200, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
-	ROM_LOAD( "51_p0502_82s129.ic10",      0x0500, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
+	ROM_LOAD( "51_p0502_82s129.ic10",      0x000, 0x0100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "21_p0201_82s129.ic4",       0x000, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "21_p0202_82s129.ic12",      0x100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x0200, "proms", 0 )    // PROMs (function unknown)
+	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0000, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "4_p0403_pal16r8a-2cn.ic29",      0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )

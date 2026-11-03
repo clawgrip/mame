@@ -37,6 +37,8 @@
 
 #include "emu.h"
 
+#include "gaelco_ms_mod51.h"
+
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 
@@ -61,6 +63,7 @@ public:
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
+		, m_mod51(*this, "mod51")
 		, m_vram(*this, "vram")
 		, m_bg_vram(*this, "bg_vram")
 		, m_bg2_vram(*this, "bg2_vram")
@@ -85,6 +88,7 @@ private:
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_shared_ptr<u16> m_vram;
 	required_shared_ptr<u16> m_bg_vram;
 	required_shared_ptr<u16> m_bg2_vram;
@@ -220,7 +224,7 @@ void wrally_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, 
 		else
 			pri_mask = 0x00;
 
-		gfx->prio_transpen(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, 15);
+		gfx->prio_transmask(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, m_mod51->transmask());
 	}
 }
 
@@ -457,6 +461,8 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_wrally_ms);
 
+	GAELCO_MS_MOD51(config, m_mod51);
+
 	// Sound hardware
 
 	SPEAKER(config, "mono").front_center();
@@ -567,7 +573,7 @@ ROM_START( wrallym )
 	ROM_LOAD( "aud-oki_sorally_1_27c040.bin", 0x000000, 0x080000, CRC(449aae4a) SHA1(3915e7b85fde0521c89c206c0022db6477f2797e) )
 	ROM_LOAD( "aud-oki_sorally_2_27c040.bin", 0x080000, 0x080000, CRC(09967f05) SHA1(56306414bcc73e0880d3f069666f3c696d687009) )
 
-	ROM_REGION( 0x100, "proms", ROMREGION_ERASE00 )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-1_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )

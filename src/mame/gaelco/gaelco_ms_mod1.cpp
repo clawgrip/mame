@@ -41,12 +41,12 @@
     P0102  0000-3fff         c000-dfff  e000    -      Slap Fight
     105    0000-bfff banked  e000-ffff  c000    8000   Bad Lands, Legend of Hero Tonma, Power Spikes,
                                                        Shadow Warriors (PROM not dumped)
-    110    0000-bfff banked  c000-dfff  e000    8000   Automat, Dragon Ninja, Fighting Fantasy, Raiden,
-                                                       Secret Agent, Toki, Blood Bros. (PROM not dumped)
+    110    0000-bfff banked  c000-dfff  e000    8000   Automat, Blood Bros., Dragon Ninja, Fighting Fantasy,
+                                                       Raiden, Secret Agent, Toki
     112    0000-7fff         8000-9fff  c000    -      Twin Cobra
     116    0000-bfff         e000-ffff  c000    8000   Last Duel
-    -      0000-7fff, c000-ffff banked
-                             8000-9fff  a000    c000   Gals Panic (PROM not dumped)
+    P0115  0000-7fff, c000-ffff banked
+                             8000-9fff  a000    c000   Gals Panic
     P0109  0000-3fff, 8000-ffff
                              6000-7fff  4000    0000   Gryzor (6809 version)
     P0111  4000-ffff, 4000-7fff banked

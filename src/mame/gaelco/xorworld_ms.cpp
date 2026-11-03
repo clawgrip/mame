@@ -28,6 +28,8 @@
 
 #include "emu.h"
 
+#include "gaelco_ms_mod51.h"
+
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 
@@ -53,6 +55,7 @@ public:
 		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
+		, m_mod51(*this, "mod51")
 		, m_videoram_8x8_mg(*this, "videoram_8x8mg")
 		, m_videoram_8x8_mg_8x8_fg(*this, "videoram_8x8fg")
 		, m_videoram_16x16_bg(*this, "videoram16x16bg")
@@ -77,6 +80,7 @@ private:
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_shared_ptr<uint16_t> m_videoram_8x8_mg;
 	required_shared_ptr<uint16_t> m_videoram_8x8_mg_8x8_fg;
 	required_shared_ptr<uint16_t> m_videoram_16x16_bg;
@@ -180,7 +184,7 @@ u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 		int flipx = (attr1 & 0x0040);
 		int flipy = (attr1 & 0x0080);
 
-		gfx->transpen(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, 15);
+		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, m_mod51->transmask());
 	}
 
 	return 0;
@@ -404,6 +408,8 @@ void xorworld_ms_state::xorworld_ms(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_xorworld_ms);
 
+	GAELCO_MS_MOD51(config, m_mod51);
+
 	// Sound hardware
 	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
 	m_soundcpu->set_addrmap(AS_PROGRAM, &xorworld_ms_state::sound_map);
@@ -457,7 +463,7 @@ ROM_START( xorworldm )
 	ROM_REGION( 0x010000, "soundcpu", 0 )
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
-	ROM_REGION( 0x100, "proms", ROMREGION_ERASE00 )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
@@ -509,7 +515,7 @@ ROM_START( xorworldma )
 	ROM_REGION( 0x010000, "soundcpu", 0 )
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
-	ROM_REGION( 0x100, "proms", ROMREGION_ERASE00 )
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )

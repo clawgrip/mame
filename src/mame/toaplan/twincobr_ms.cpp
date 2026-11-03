@@ -41,7 +41,9 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -61,6 +63,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%c", 'a'),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
@@ -79,6 +82,7 @@ private:
 	required_device<gaelco_ms_mod1_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
@@ -149,7 +153,7 @@ void twincobr_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &clip
 		int const sx = (((sprite_byte(offs + 2) | (BIT(~attr, 7) << 8)) + 199 + 16) & 0x1ff) - 16;
 		int const sy = 0xff - 8 - sprite_byte(offs + 1);
 
-		m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, 15);
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, m_mod51->transmask());
 	}
 }
 
@@ -264,7 +268,6 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 320, 266, 16, 256); // from the MOD 21/1 PROMs, 207 horizontal and 205 vertical
 	m_screen->set_screen_update(FUNC(twincobr_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(twincobr_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -272,6 +275,12 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_twincobr_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 16);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
 	m_mod4[0]->set_palette(m_palette);
@@ -298,7 +307,7 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->set_int_period(attotime::from_hz(972)); // unknown source, gives the tempo of the original game (the sound program runs every 10th interrupt)
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
@@ -344,10 +353,12 @@ ROM_START( twincobrm )
 	ROM_LOAD32_BYTE( "mod_51-3_tw_503.ic41",   0x00001, 0x10000, CRC(41de100a) SHA1(cceba1083e89d667cd67a71e992913f8ab314e62) )
 	ROM_LOAD32_BYTE( "mod_51-3_tw_504.ic40",   0x00000, 0x10000, CRC(f318d76e) SHA1(c124aec667e98489cc7adcfa4b48b5a147101cb7) )
 
-	ROM_REGION( 0x300, "proms", 0 ) // PROMs (function unknown)
-	ROM_LOAD( "mod_21-1_205_tbp24s10.ic12",    0x00000, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_21-1_207_tbp24s10.ic4",     0x00100, 0x00100, CRC(7a63d740) SHA1(5b6d73153d0c058e02c55cbcaa40c4f5e5cb5ce4) )
-	ROM_LOAD( "mod_51-3_502_82s129.ic10",      0x00200, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21-1_207_tbp24s10.ic4",     0x00000, 0x00100, CRC(7a63d740) SHA1(5b6d73153d0c058e02c55cbcaa40c4f5e5cb5ce4) )
+	ROM_LOAD( "mod_21-1_205_tbp24s10.ic12",    0x00100, 0x00100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "mod_51-3_502_82s129.ic10",      0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x00117, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_4-3_403_pal16r8.ic29",      0x00000, 0x00104, CRC(16379b0d) SHA1(5379560b0ec7c67cbe131a581a347b86395f34ac) )

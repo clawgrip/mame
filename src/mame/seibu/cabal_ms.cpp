@@ -14,7 +14,7 @@
     MOD 1/4  - Sound board (Z8400BB1, 2 x YM2203C, 2 x Y3014B), one EPROM, two 8 dip switches banks, a small sub board with OKI M5205.
     MOD 4/2a - Tilemap board, has logic + 4 ROMs, long thin sub-board (C0466-1) with no chips, just routing along one edge.
     MOD 4/3  - Tilemap board, has logic + 2 ROMs, long thin sub-board (C0465-1) with no chips, just routing along one edge.
-    MOD 21/1 - Logic, 2 PROMs, 28.000 MHz XTAL.
+    MOD 21/1 - Logic, 2 PROMs, 20.000 MHz XTAL.
     MOD 51/3 - Sprite board, has logic + 4 ROMs and 1 PROM.
 
     The program is the one of cabal with the hardware accesses moved. The text and background maps
@@ -27,14 +27,14 @@
     - MOD 1/4: the decoder PROM in the set doesn't fit the sound program (it wants RAM at 0x2000, the
       YM2203s at 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), so the sound
       board and with it the inputs and DIP switches aren't hooked up
-    - screen timing: the MOD 21/1 PROMs give 320 x 266 with a 256 x 224 visible area, the pixel
-      clock divisor of the 28 MHz crystal is a guess
 */
 
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
@@ -56,6 +56,7 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_palette(*this, "palette"),
@@ -73,6 +74,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<palette_device> m_palette;
@@ -119,7 +121,7 @@ void cabal_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprec
 
 		// 8-bit x position, sprites wrap around
 		for (int wrap = 0; wrap < 2; wrap++)
-			m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, BIT(attr, 7), 0, sx - (wrap << 8), sy, 15);
+			m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 7), 0, sx - (wrap << 8), sy, m_mod51->transmask());
 	}
 }
 
@@ -214,7 +216,6 @@ void cabal_ms_state::cabalm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_raw(28_MHz_XTAL / 6, 320, 0, 256, 266, 24, 248); // from the MOD 21/1 PROMs, the divisor is a guess
 	m_screen->set_screen_update(FUNC(cabal_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(cabal_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -222,6 +223,12 @@ void cabal_ms_state::cabalm(machine_config &config)
 	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_cabal_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 24);
+
+	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
 	m_mod4_bg->set_palette(m_palette);
@@ -275,13 +282,17 @@ ROM_START( cabalm )
 	ROM_LOAD32_BYTE( "mod_51-3_ca_503.ic41",  0x00001, 0x20000, CRC(14d8720b) SHA1(f8438345482d244593d61d848e991cd28ff9997b) )
 	ROM_LOAD32_BYTE( "mod_51-3_ca_504.ic40",  0x00000, 0x20000, CRC(3048eb6d) SHA1(7af78233aeef1fcd4edab10bba562502b57a747d) )
 
-	ROM_REGION( 0x320, "proms", 0 ) // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
+	ROM_LOAD( "mod_21-1_201_82s129.ic4",      0x00000, 0x00100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",   0x00100, 0x00100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x20, "proms", 0 ) // MOD 1/4 decoder, the board isn't hooked up
 	// the 112 decoder PROM of Twin Cobra, which doesn't fit this sound program (it wants RAM at 0x2000, the YM2203s at
 	// 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), needs a redump to confirm
 	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) BAD_DUMP )
-	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00020, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",   0x00120, 0x00100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-	ROM_LOAD( "mod_21-1_201_82s129.ic4",      0x00220, 0x00100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_605_gal16v8.ic13",     0x00000, 0x00117, CRC(45b8e164) SHA1(2e227ac5171ebf14e1d1f7214626ef4df0d5ae99) )

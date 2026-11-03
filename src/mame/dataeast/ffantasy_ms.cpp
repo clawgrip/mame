@@ -68,6 +68,8 @@
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod1.h"
+#include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -156,22 +158,24 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::ffantasym_map);
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::xBRG_444, 1024);
+	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
 
 	GFXDECODE(config, "gfxdecode", "palette", gfx_ffantasy_ms);
+
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
+	mod21.set_screen(m_screen);
+	mod21.set_origin(0, 8);
+
+	GAELCO_MS_MOD51(config, "mod51");
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 20_MHz_XTAL / 5); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -216,7 +220,41 @@ ROM_START( automatm )
 	ROM_LOAD( "mod_51-3_automat_2au_503.ic41", 0x40000, 0x20000, CRC(e174cdaf) SHA1(e66c8adc6df08e30365bd0e360e78397b495582c) )
 	ROM_LOAD( "mod_51-3_automat_2au_504.ic40", 0x60000, 0x20000, CRC(e8662060) SHA1(f59f55fe5bf79be0c66f4984a0ecab17504438c7) )
 
-	ROM_REGION( 0x100, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", ROMREGION_ERASE00 ) // on MOD 2 board
+	ROM_LOAD( "82s129.ic4",  0x000, 0x100, NO_DUMP )
+	ROM_LOAD( "82s129.ic12", 0x100, 0x100, NO_DUMP )
+	// not dumped, the 201 and 205 contents of the other Data East games
+	ROM_FILL( 0x000, 0x01, 0x04 )
+	ROM_FILL( 0x001, 0x02, 0x05 )
+	ROM_FILL( 0x003, 0x0c, 0x01 )
+	ROM_FILL( 0x00f, 0x10, 0x05 )
+	ROM_FILL( 0x01f, 0x02, 0x07 )
+	ROM_FILL( 0x021, 0x7e, 0x06 )
+	ROM_FILL( 0x09f, 0x01, 0x0c )
+	ROM_FILL( 0x100, 0x04, 0x03 )
+	ROM_FILL( 0x104, 0x04, 0x07 )
+	ROM_FILL( 0x108, 0x78, 0x05 )
+	ROM_FILL( 0x180, 0x04, 0x07 )
+	ROM_FILL( 0x184, 0x01, 0x0b )
+	// bit 0 pulses
+	ROM_FILL( 0x107, 0x01, 0x06 )
+	ROM_FILL( 0x10f, 0x01, 0x04 )
+	ROM_FILL( 0x117, 0x01, 0x04 )
+	ROM_FILL( 0x11f, 0x01, 0x04 )
+	ROM_FILL( 0x127, 0x01, 0x04 )
+	ROM_FILL( 0x12f, 0x01, 0x04 )
+	ROM_FILL( 0x137, 0x01, 0x04 )
+	ROM_FILL( 0x13f, 0x01, 0x04 )
+	ROM_FILL( 0x147, 0x01, 0x04 )
+	ROM_FILL( 0x14f, 0x01, 0x04 )
+	ROM_FILL( 0x157, 0x01, 0x04 )
+	ROM_FILL( 0x15f, 0x01, 0x04 )
+	ROM_FILL( 0x167, 0x01, 0x04 )
+	ROM_FILL( 0x170, 0x01, 0x04 )
+	ROM_FILL( 0x179, 0x01, 0x04 )
+	ROM_FILL( 0x182, 0x01, 0x06 )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "mod_51-3_a502_63s141.ic10",       0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
@@ -267,10 +305,12 @@ ROM_START( drgninjam )
 	ROM_LOAD( "51-3_dn_503.ic41", 0x40000, 0x20000, CRC(b3c97ad1) SHA1(f77426e1ee347b8cae9c5aef1e31058344c019c2) )
 	ROM_LOAD( "51-3_dn_504.ic40", 0x60000, 0x20000, CRC(1445dccb) SHA1(fddbb9d136ea6dbb2704ac93e5536ed0e6bfb19c) )
 
-	ROM_REGION( 0x0300, "proms", 0 ) // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "21-1_p0201_tbp24s10n.ic4", 0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21-1_p0205_82s129n.ic12",  0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "51-3_502_82s129.ic10",     0x200, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "51-3_502_82s129.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0xc00, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "6-1_cpu_604_gal16v8.ic13", 0x000, 0x117, NO_DUMP )
@@ -322,10 +362,12 @@ ROM_START( ffantasym )
 	ROM_LOAD( "ff_5-1_5fa_523.ic26", 0xe0000, 0x10000, CRC(a541c879) SHA1(53133cb2ad5378f101025fc758d08a54e23f3c87) )
 	ROM_LOAD( "ff_5-1_5fa_524.ic27", 0xf0000, 0x10000, CRC(1e7351c5) SHA1(88d83b45f25fe58726e5158b97395443cf065564) )
 
-	ROM_REGION( 0x0300, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "ff_21-1_201_82s129.ic4",  0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "ff_21-1_205_82s129.ic12", 0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "ff_51-3_502_82s129.ic10", 0x200, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "ff_51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "ff_6-1_604_gal16v8.ic13",      0x000, 0x117, NO_DUMP )
@@ -379,10 +421,12 @@ ROM_START( secretagm )
 	ROM_LOAD( "mod_5-1_ag_507.ic26", 0xe0000, 0x10000, CRC(ff72b838) SHA1(fdc48ecdd2225fc69472313f34973f6add8fb558) )
 	ROM_LOAD( "mod_5-1_ag_508.ic27", 0xf0000, 0x10000, CRC(54fcbc39) SHA1(293a6799193b01424c3eac86cf90cc023aa771db) )
 
-	ROM_REGION( 0x0300, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "mod_21-1_201_82s129.ic4",    0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "mod_21-1_205_82s129.ic12",   0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
-	ROM_LOAD( "mod_51-3_p0502_82s129.ic10", 0x200, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+
+	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
+	ROM_LOAD( "mod_51-3_p0502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_604_gal16v8.ic13",      0x000, 0x117, NO_DUMP )
