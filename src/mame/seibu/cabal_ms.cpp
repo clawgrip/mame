@@ -17,24 +17,33 @@
     MOD 21/1 - Logic, 2 PROMs, 28.000 MHz XTAL.
     MOD 51/3 - Sprite board, has logic + 4 ROMs and 1 PROM.
 
+    The program is the one of cabal with the hardware accesses moved. The text and background maps
+    are written straight to the MOD 4 boards, in the order of the original game. The program keeps
+    the sprites in a five byte list and converts it every frame, giving the sprite colours in use 8
+    palettes on the sprite board, and reads the inputs and DIP switches from the MOD 1 board. It
+    also moves the grenade counters a column inwards and changes a few sprite colours.
+
     TODO:
-    - everything,
-    - redump the MOD 1/4 decoder PROM (IC20): the dumped one doesn't fit the sound program,
+    - MOD 1/4: the decoder PROM in the set doesn't fit the sound program (it wants RAM at 0x2000, the
+      YM2203s at 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), so the sound
+      board and with it the inputs and DIP switches aren't hooked up
+    - screen timing: the MOD 21/1 PROMs give 320 x 266 with a 256 x 224 visible area, the pixel
+      clock divisor of the 28 MHz crystal is a guess
 */
 
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod4.h"
+
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
 #include "sound/msm5205.h"
 #include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-#include "tilemap.h"
 
 
 namespace {
@@ -45,37 +54,116 @@ public:
 	cabal_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
-		m_screen(*this, "screen")
+		m_mod4_bg(*this, "mod4_bg"),
+		m_mod4_tx(*this, "mod4_tx"),
+		m_screen(*this, "screen"),
+		m_gfxdecode(*this, "gfxdecode"),
+		m_palette(*this, "palette"),
+		m_spriteram(*this, "spriteram"),
+		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
+		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
-	void cabalm(machine_config &config);
+	void cabalm(machine_config &config) ATTR_COLD;
 
 protected:
-	virtual void machine_start() override;
+	virtual void machine_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod4_device> m_mod4_bg;
+	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<screen_device> m_screen;
+	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<palette_device> m_palette;
 
+	required_shared_ptr<u16> m_spriteram;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
+
+	u8 m_scroll[2][2]{}; // background and text boards
+
+	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void vblank_irq(int state);
 
-	void main_map(address_map &map);
+	void main_map(address_map &map) ATTR_COLD;
 };
-
-
-uint32_t cabal_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
-{
-	return 0;
-}
 
 
 void cabal_ms_state::machine_start()
 {
+	save_item(NAME(m_scroll));
+}
+
+
+void cabal_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
+{
+	// the original game format, the characters are in the upper half of the EPROMs
+	code = (data & 0x03ff) | 0x0800;
+	color = data >> 10;
+}
+
+void cabal_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	// 4 bytes per sprite: code, y, x and attributes (flip X, palette, code)
+	for (int offs = 0x400 - 4; offs >= 0; offs -= 4)
+	{
+		u8 const attr = sprite_byte(offs + 3);
+		u32 const code = sprite_byte(offs) | ((attr & 0x0f) << 8);
+		u32 const color = BIT(attr, 4, 3);
+		int const sx = sprite_byte(offs + 2);
+		int const sy = 0xff - 7 - sprite_byte(offs + 1);
+
+		// 8-bit x position, sprites wrap around
+		for (int wrap = 0; wrap < 2; wrap++)
+			m_gfxdecode->gfx(0)->transpen(bitmap, cliprect, code, color, BIT(attr, 7), 0, sx - (wrap << 8), sy, 15);
+	}
+}
+
+uint32_t cabal_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	// the program writes 0xe6 and 0 to both boards, the offsets line the layers up with the original game
+	for (int i = 0; i < 2; i++)
+	{
+		gaelco_ms_mod4_device &board = i ? *m_mod4_tx : *m_mod4_bg;
+		board.set_scrollx(m_scroll[i][0] + 26);
+		board.set_scrolly(m_scroll[i][1] - 8);
+	}
+
+	m_mod4_bg->draw(screen, bitmap, cliprect);
+	draw_sprites(bitmap, cliprect);
+	m_mod4_tx->draw(screen, bitmap, cliprect);
+
+	return 0;
+}
+
+void cabal_ms_state::vblank_irq(int state)
+{
+	if (state)
+		m_maincpu->set_input_line(4, ASSERT_LINE);
 }
 
 
 void cabal_ms_state::main_map(address_map &map)
 {
+	// the program runs the attract demo only if the word at 0x3fff0 isn't 0 (erased EPROM area in the
+	// original game), nothing is fitted there; it also gives idle inputs while the MOD 1 isn't hooked up
+	map.unmap_value_high();
+
+	map(0x000000, 0x02ffff).rom();
+	map(0x040000, 0x043fff).ram();
+	map(0x046000, 0x0463ff).ram().share(m_spriteram);
+	map(0x060000, 0x0607ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x060800, 0x060803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[1][offset] = data; })).umask16(0xff00);
+	map(0x080000, 0x0807ff).rw(m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x080800, 0x080803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[0][offset] = data; })).umask16(0xff00);
+	// 0xa0000-0xa000f MOD 1 board, not hooked up
+	map(0x0c0000, 0x0c0000).lw8(NAME([this] (u8 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
+	map(0x0e0000, 0x0e03ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0x0e0400, 0x0e07ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 }
 
 
@@ -100,6 +188,22 @@ static INPUT_PORTS_START( cabalm )
 INPUT_PORTS_END
 
 
+static const gfx_layout sprite_layout =
+{
+	16, 16,
+	RGN_FRAC(1, 1),
+	4,
+	{ 0, 8, 16, 24 },
+	{ STEP8(0, 1), STEP8(16 * 32, 1) },
+	{ STEP16(15 * 32, -32) },
+	16 * 16 * 4
+};
+
+static GFXDECODE_START( gfx_cabal_ms )
+	GFXDECODE_ENTRY( "sprites", 0, sprite_layout, 0x100, 8 )
+GFXDECODE_END
+
+
 void cabal_ms_state::cabalm(machine_config &config)
 {
 	// basic machine hardware
@@ -109,15 +213,29 @@ void cabal_ms_state::cabalm(machine_config &config)
 	Z80(config, "audiocpu", 20_MHz_XTAL / 5).set_disable(); // divisor unknown
 
 	// video hardware
-	SCREEN(config, m_screen); // all wrong
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500));
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	SCREEN(config, m_screen);
+	m_screen->set_raw(28_MHz_XTAL / 6, 320, 0, 256, 266, 24, 248); // from the MOD 21/1 PROMs, the divisor is a guess
 	m_screen->set_screen_update(FUNC(cabal_ms_state::screen_update));
-	m_screen->set_palette("palette");
+	m_screen->screen_vblank().set(FUNC(cabal_ms_state::vblank_irq));
+	m_screen->set_palette(m_palette);
 
-	PALETTE(config, "palette").set_format(palette_device::IRGB_1555, 256).set_membits(8);
+	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
+
+	GFXDECODE(config, m_gfxdecode, m_palette, gfx_cabal_ms);
+
+	GAELCO_MS_MOD4(config, m_mod4_bg);
+	m_mod4_bg->set_palette(m_palette);
+	m_mod4_bg->set_color_base(0x300);
+	m_mod4_bg->set_half_lines(9);
+	m_mod4_bg->set_layout(TILEMAP_SCAN_ROWS, 16, 16);
+
+	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_palette(m_palette);
+	m_mod4_tx->set_tile_size(8);
+	m_mod4_tx->set_planes(2);
+	m_mod4_tx->set_layout(TILEMAP_SCAN_ROWS, 32, 32);
+	m_mod4_tx->set_transparent_pen(3);
+	m_mod4_tx->set_tile_callback(FUNC(cabal_ms_state::tx_tile_cb));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -141,21 +259,21 @@ ROM_START( cabalm )
 	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod_1-4_ca_101.ic12",          0x00000, 0x10000, CRC(1189d0ce) SHA1(a992006377c3b0c952337a2331d437458027bba4) )
 
-	ROM_REGION( 0x80000, "tiles1", ROMREGION_INVERT ) // on MOD 4/2a board
+	ROM_REGION( 0x80000, "mod4_bg", ROMREGION_INVERT ) // on MOD 4/2a board
 	ROM_LOAD32_BYTE( "mod_4-2a_ca_4a01.ic17", 0x00003, 0x20000, CRC(f84786bb) SHA1(16f035eea5ff1978877951661a8e8fe8991e340c) )
 	ROM_LOAD32_BYTE( "mod_4-2a_ca_4a02.ic16", 0x00002, 0x20000, CRC(8de8c6b2) SHA1(da06ceaa01158821205ba74419be012e94597db8) )
 	ROM_LOAD32_BYTE( "mod_4-2a_ca_4a03.ic15", 0x00001, 0x20000, CRC(3b5d606b) SHA1(b09bf470fcda3e8bc8f5f3a893266abad4b56f26) )
 	ROM_LOAD32_BYTE( "mod_4-2a_ca_4a04.ic14", 0x00000, 0x20000, CRC(9df7e3d9) SHA1(8ce55381d9087ca14cec3924222f0c277580e6c9) )
 
-	ROM_REGION( 0x40000, "tiles2", ROMREGION_INVERT ) // on MOD 4/3 board
-	ROM_LOAD32_BYTE( "mod_4-3_ca_401.ic17",   0x00001, 0x10000, CRC(fad717b2) SHA1(0654abf09c473f3b6c868f1198edd37e358fdd13) )
-	ROM_LOAD32_BYTE( "mod_4-3_ca_402.ic16",   0x00000, 0x10000, CRC(c203912c) SHA1(702a0f2841aa18cb4573128ca19cc4a8d8fa3f3e) )
+	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on MOD 4/3 board
+	ROM_LOAD16_BYTE( "mod_4-3_ca_401.ic17",   0x00001, 0x10000, CRC(fad717b2) SHA1(0654abf09c473f3b6c868f1198edd37e358fdd13) ) // 0x0000-0x3fff empty, the rest 4 copies of the same 8 KB
+	ROM_LOAD16_BYTE( "mod_4-3_ca_402.ic16",   0x00000, 0x10000, CRC(c203912c) SHA1(702a0f2841aa18cb4573128ca19cc4a8d8fa3f3e) ) // 0x0000-0x3fff empty, the rest 4 copies of the same 8 KB
 
-	ROM_REGION( 0x80000, "sprites", 0 ) // on MOD 51/3
-	ROM_LOAD( "mod_51-3_ca_501.ic43",         0x00000, 0x20000, CRC(9786bffd) SHA1(31341475f2c0dea6e4bc3e2f14888e52de03a6c7) )
-	ROM_LOAD( "mod_51-3_ca_502.ic42",         0x20000, 0x20000, CRC(8dc0ff51) SHA1(b4d4755ed31574cd0206d4d5f4f6ea23bc8bf27e) )
-	ROM_LOAD( "mod_51-3_ca_503.ic41",         0x40000, 0x20000, CRC(14d8720b) SHA1(f8438345482d244593d61d848e991cd28ff9997b) )
-	ROM_LOAD( "mod_51-3_ca_504.ic40",         0x60000, 0x20000, CRC(3048eb6d) SHA1(7af78233aeef1fcd4edab10bba562502b57a747d) )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_INVERT ) // on MOD 51/3
+	ROM_LOAD32_BYTE( "mod_51-3_ca_501.ic43",  0x00003, 0x20000, CRC(9786bffd) SHA1(31341475f2c0dea6e4bc3e2f14888e52de03a6c7) )
+	ROM_LOAD32_BYTE( "mod_51-3_ca_502.ic42",  0x00002, 0x20000, CRC(8dc0ff51) SHA1(b4d4755ed31574cd0206d4d5f4f6ea23bc8bf27e) )
+	ROM_LOAD32_BYTE( "mod_51-3_ca_503.ic41",  0x00001, 0x20000, CRC(14d8720b) SHA1(f8438345482d244593d61d848e991cd28ff9997b) )
+	ROM_LOAD32_BYTE( "mod_51-3_ca_504.ic40",  0x00000, 0x20000, CRC(3048eb6d) SHA1(7af78233aeef1fcd4edab10bba562502b57a747d) )
 
 	ROM_REGION( 0x320, "proms", 0 ) // PROMs (function unknown)
 	// the 112 decoder PROM of Twin Cobra, which doesn't fit this sound program (it wants RAM at 0x2000, the YM2203s at
