@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:ClawGrip
+// copyright-holders:Tomás García-Merás Capote
 /***************************************************************************
 
     UMC UM487F HCGA (Hercules + CGA) single-chip video controller
@@ -64,7 +64,7 @@ public:
 	// external character generator ROM (8 KiB, 2764 style) fed through CD0-CD7
 	template <typename T> void set_chargen(T &&tag) { m_chargen.set_tag(std::forward<T>(tag)); }
 	// RGBI (bit 3 = IOUT ... bit 0 = BOUT) to monitor color conversion done by the board
-	typedef device_delegate<rgb_t (uint8_t rgbi)> rgbi_delegate;
+	using rgbi_delegate = device_delegate<rgb_t (uint8_t rgbi)>;
 	template <typename... T> void set_rgbi_callback(T &&... args) { m_rgbi_cb.set(std::forward<T>(args)...); }
 
 	auto hsync_callback() { return m_hsync_cb.bind(); }
@@ -85,7 +85,7 @@ protected:
 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
-	virtual void device_post_load() override;
+	virtual void device_post_load() override ATTR_COLD;
 
 	// device_palette_interface implementation
 	virtual uint32_t palette_entries() const noexcept override { return 16 + 3; }
@@ -148,6 +148,7 @@ private:
 
 	required_device<mc6845_device> m_crtc;
 	optional_region_ptr<uint8_t> m_chargen;
+	memory_share_creator<uint8_t> m_vram;
 
 	devcb_write_line m_hsync_cb;
 	devcb_write_line m_vsync_cb;
@@ -159,7 +160,6 @@ private:
 	bool m_strap_change_enable;
 
 	// internal state
-	std::unique_ptr<uint8_t[]> m_vram;
 	bool m_mga;             // current display mode
 	uint8_t m_mode;
 	uint8_t m_color;

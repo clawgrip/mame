@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:David Haywood, Roberto Fresca, Tomás García-Merás Capote (ClawGrip)
+// copyright-holders:David Haywood, Roberto Fresca, Tomás García-Merás Capote
 
 /*************************************************************************
 
@@ -135,7 +135,8 @@
      video parts (IC6 EPROM, 6264, CM3080, GAL, the 74HC245 and the IC9/IC10
      link buffers), and the Z84C00HB6 along with the master ones (IC19 EPROM,
      9046, AY-3-8910 and the 8 MHz crystal). So the 4 MHz rated Z80A would be
-     the one running at 8 MHz.
+     the one running at 8 MHz. TODO: confirm by tracing the CM3080 clock
+     output.
   - The 8952 CM 32 looks like a 32-bit serial input latched driver: it gets
      the master to video CPU link words from the 9046 (pins 17 & 18), and
      drives 16 bits to the video CPU data bus through IC9/IC10 and the other
@@ -154,14 +155,14 @@
 
   - [DUMPED]  4 en Línea (Compumatic).
   - [DUMPED]  Dardos (Oper Coin).
-  - [DUMPED]  Olympic Darts (K7 Kursaal.
+  - [DUMPED]  Olympic Darts (K7 Kursaal).
               There is another (undumped) Z180-based board with a 27C4001 EPROM, a DAC
-              for sound and a monochrome monitor output).
+              for sound and a monochrome monitor output.
   - [DUMPED]  Sport Darts TV (Compumatic / Desarrollos y Recambios S.L.).
               The dumped version never shows the "Desarrollos y Recambios S.L." screen,
-			  but it's on the ROM, and there's no DIP switch to activate it.
-			  So, there's another (undumped) version that does show it (see pics at
-			  https://www.recreativas.org/sport-dart-tv-4371-compumatic).
+              but it's on the ROM, and there's no DIP switch to activate it.
+              So, there's another (undumped) version that does show it (see pics at
+              https://www.recreativas.org/sport-dart-tv-4371-compumatic).
   - [MISSING] Dart Queen (Compumatic / Daryde).
 
 **************************************************************************
@@ -192,6 +193,10 @@
   The EEPROM holds the settings, high scores and accounting. The darts games
   initialize it when it's blank.
 
+  Port 1 bit 5 is the coin inhibit for Olympic Darts v3.00 and Sport Darts,
+  which accept coins below a credit limit, while Olympic Darts v3.11 blinks
+  it at the end of each turn, until the next player starts.
+
   Sport Darts T.V. schematics (Compumatic "YDESUS" CPU board, 1992):
 
   - The CM3080 gets the UM487F clock on XTAL1, and outputs the CPU clock, an
@@ -202,12 +207,18 @@
      board replaces it with a 74HC74 dividing the clock and setting /INT on
      every UM487 horizontal retrace (HRET), and 4011 gates for /NMI and
      /RESET.
-  - Port 0 and port 1 outputs are 74LS273 latches, port 1 inputs a 74LS541.
-    The dart board columns and the buttons common are driven through MOSFETs,
-    the coin counter and inhibit lines through BDX33 transistors and the
-    lamps through ULN2003 drivers.
-  - A GAL drives the Z80 /WAIT from the UM487F IORDY on video memory
-    accesses.
+  - Port 0 and port 1 outputs are 74LS273 latches cleared on reset, port 1
+    inputs a 74LS541. The dart board columns and the buttons common are
+    driven through inverting MOSFETs (a set bit selects the line, as the K7
+    programs do), the coin counter and inhibit lines through BDX33
+    transistors and the lamps through ULN2003 drivers. Port 1 bit 7 drives
+    the UM487F RESET through an inverter, and port 1 input bit 5 is the
+    UM487F red output (ROUT).
+  - TODO: the dumped Sport Darts program selects the dart board lines with
+    a clear bit, so its board differs from these schematics.
+  - A GAL decodes the I/O ports from A0, A1, A8 and A9 only. Another one
+    decodes the memory and the ROM banks, and drives the Z80 /WAIT from the
+    UM487F IORDY on video memory accesses.
   - The AY outputs are mixed through resistors to a TDA2003 amplifier with a
     volume trimmer.
 
@@ -217,10 +228,11 @@
 
   - IRQ sources (see the machine configurations).
   - Master to video CPU link timing.
-  - Master CPU wait states (see machine_start).
+  - Master CPU wait states (see the machine configuration).
   - Unknown inputs of the Compumatic boards (9046 port A and some port C/D lines).
   - Outputs of the Compumatic boards (9046 port A, CN1/CN2) and Olympic Darts v3.00 lamps.
   - UM487F IORDY wait states.
+  - UM487F RESET and ROUT lines of the K7 / Sport Darts boards.
 
 *************************************************************************/
 
@@ -236,6 +248,7 @@
 #include "speaker.h"
 
 #include <algorithm>
+#include <iterator>
 
 #include "dartboard.lh"
 
@@ -256,8 +269,8 @@ protected:
 	void hcga_config(machine_config &config) ATTR_COLD;
 
 	// A15 = 1 selects the CGA video memory window of the UM487F
-	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 | offset); }
-	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 | offset, data); }
+	uint8_t vram_r(offs_t offset) { return m_video->mem_r(0x8000 + offset); }
+	void vram_w(offs_t offset, uint8_t data) { m_video->mem_w(0x8000 + offset, data); }
 	rgb_t rgbi_to_rgb(uint8_t rgbi);
 
 	required_device<z80_device> m_maincpu;
@@ -312,7 +325,7 @@ private:
 	void main_portmap(address_map &map) ATTR_COLD;
 
 	required_device<z80_device> m_mastercpu;
-	optional_ioport_array<4> m_matrix;
+	required_ioport_array<4> m_matrix;
 	required_ioport_array<2> m_buttons;
 	required_ioport m_in_pc;
 	required_ioport m_in_pd;
@@ -336,9 +349,6 @@ public:
 		, m_rombank(*this, "rombank")
 		, m_matrix(*this, "MATRIX%u", 0U)
 		, m_buttons(*this, "BUTTONS%u", 0U)
-		, m_in1(*this, "IN1")
-		, m_in1_col(*this, "IN1_COL")
-		, m_in1_alt(*this, "IN1_ALT")
 		, m_lamp(*this, "lamp0")
 	{ }
 
@@ -346,17 +356,18 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
+	virtual void machine_reset() override ATTR_COLD;
 
 	void io_map(address_map &map) ATTR_COLD;
 
 	void out0_w(uint8_t data);
 
+	uint8_t m_out0 = 0;
 	uint8_t m_selected_lines = 0;
 
 private:
 	void mem_map(address_map &map) ATTR_COLD;
 
-	uint8_t in1_r();
 	void out1_w(uint8_t data);
 	uint8_t ay_porta_r();
 	uint8_t ay_portb_r();
@@ -365,13 +376,36 @@ private:
 	required_memory_bank m_rombank;
 	required_ioport_array<4> m_matrix;
 	required_ioport_array<2> m_buttons;
-	required_ioport m_in1;
-	optional_ioport m_in1_col;
-	optional_ioport m_in1_alt;
 	output_finder<> m_lamp;
 
-	uint8_t m_out0 = 0;
 	uint8_t m_hsync_count = 0;
+};
+
+
+class k7olym30_state : public k7_state
+{
+public:
+	k7olym30_state(const machine_config &mconfig, device_type type, const char *tag)
+		: k7_state(mconfig, type, tag)
+		, m_in1(*this, "IN1")
+		, m_in1_col(*this, "IN1_COL")
+		, m_in1_alt(*this, "IN1_ALT")
+	{ }
+
+	void k7_olym30(machine_config &config) ATTR_COLD;
+
+protected:
+	virtual void machine_reset() override ATTR_COLD;
+
+private:
+	void k7olym30_io_map(address_map &map) ATTR_COLD;
+
+	uint8_t k7olym30_in1_r();
+	void k7olym30_out1_w(uint8_t data);
+
+	required_ioport m_in1;
+	required_ioport m_in1_col;
+	required_ioport m_in1_alt;
 };
 
 
@@ -385,11 +419,14 @@ public:
 
 	void sprtdart(machine_config &config) ATTR_COLD;
 
-private:
-	void io_map(address_map &map) ATTR_COLD;
+protected:
+	virtual void machine_reset() override ATTR_COLD;
 
-	void out0_w(uint8_t data);
-	void out1_w(uint8_t data);
+private:
+	void sprtdart_io_map(address_map &map) ATTR_COLD;
+
+	void sprtdart_out0_w(uint8_t data);
+	void sprtdart_out1_w(uint8_t data);
 
 	output_finder<4> m_lamps;
 };
@@ -469,7 +506,7 @@ void _4enlinea_state::link_control_w(uint8_t data)
 	if (!BIT(data, 0))
 	{
 		m_link_ready = false;
-		m_link_timer->adjust(attotime::from_usec(100));
+		m_link_timer->adjust(attotime::from_usec(100)); // guess
 		send_to_video(m_link_data[3], m_link_data[2]);
 	}
 }
@@ -528,7 +565,7 @@ uint8_t _4enlinea_state::ay_porta_r()
 	for (int i = 0; i < 4; i++)
 	{
 		if (BIT(columns, i))
-			data &= m_matrix[i].read_safe(0xffff);
+			data &= m_matrix[i]->read();
 	}
 
 	if (BIT(port_out(3), 7))
@@ -545,7 +582,7 @@ uint8_t _4enlinea_state::ay_portb_r()
 	for (int i = 0; i < 4; i++)
 	{
 		if (BIT(columns, i))
-			data &= m_matrix[i].read_safe(0xffff) >> 8;
+			data &= m_matrix[i]->read() >> 8;
 	}
 
 	if (BIT(port_out(3), 7))
@@ -585,18 +622,6 @@ void _4enlinea_state::master_map(address_map &map)
 }
 
 
-uint8_t k7_state::in1_r()
-{
-	if (BIT(m_out0, 7) && m_in1_alt)
-		return m_in1_alt->read();
-
-	uint8_t data = m_in1->read();
-	if (BIT(m_selected_lines, 4) && m_in1_col)
-		data = (data & ~0x0c) | (m_in1_col->read() & 0x0c);
-
-	return data;
-}
-
 void k7_state::out0_w(uint8_t data)
 {
 	m_out0 = data;
@@ -605,11 +630,10 @@ void k7_state::out0_w(uint8_t data)
 	m_eeprom->write_sda(!BIT(data, 3)); // through an open collector transistor
 }
 
-// bit 7 is pulsed low at boot (unknown)
 void k7_state::out1_w(uint8_t data)
 {
 	m_selected_lines = data;
-	m_lamp = BIT(data, 5); // blinks while waiting for a player to start
+	m_lamp = BIT(data, 5); // guess: NP button lamp
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
@@ -662,7 +686,7 @@ void k7_state::mem_map(address_map &map)
 void k7_state::io_map(address_map &map)
 {
 	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(k7_state::out0_w));
-	map(0x0001, 0x0001).mirror(0xfc00).rw(FUNC(k7_state::in1_r), FUNC(k7_state::out1_w));
+	map(0x0001, 0x0001).mirror(0xfc00).portr("IN1").w(FUNC(k7_state::out1_w));
 	map(0x0100, 0x0100).w(m_ay, FUNC(ay8910_device::address_w));
 	map(0x0101, 0x0101).r(m_ay, FUNC(ay8910_device::data_r));
 	map(0x0102, 0x0102).w(m_ay, FUNC(ay8910_device::data_w));
@@ -670,26 +694,52 @@ void k7_state::io_map(address_map &map)
 }
 
 
-void sprtdart_state::out0_w(uint8_t data)
+uint8_t k7olym30_state::k7olym30_in1_r()
 {
-	k7_state::out0_w(data);
+	if (BIT(m_out0, 7))
+		return m_in1_alt->read();
+
+	uint8_t data = m_in1->read();
+	if (BIT(m_selected_lines, 4))
+		data = (data & ~0x0c) | (m_in1_col->read() & 0x0c);
+
+	return data;
+}
+
+void k7olym30_state::k7olym30_out1_w(uint8_t data)
+{
+	m_selected_lines = data;
+	machine().bookkeeping().coin_lockout_global_w(!BIT(data, 5));
+	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
+}
+
+void k7olym30_state::k7olym30_io_map(address_map &map)
+{
+	io_map(map);
+	map(0x0001, 0x0001).mirror(0xfc00).rw(FUNC(k7olym30_state::k7olym30_in1_r), FUNC(k7olym30_state::k7olym30_out1_w));
+}
+
+
+void sprtdart_state::sprtdart_out0_w(uint8_t data)
+{
+	out0_w(data);
 
 	for (int i = 0; i < 4; i++)
 		m_lamps[i] = BIT(data, 4 + i);
 }
 
-void sprtdart_state::out1_w(uint8_t data)
+void sprtdart_state::sprtdart_out1_w(uint8_t data)
 {
 	m_selected_lines = ~data;
 	machine().bookkeeping().coin_lockout_global_w(!BIT(data, 5));
 	machine().bookkeeping().coin_counter_w(0, BIT(data, 6));
 }
 
-void sprtdart_state::io_map(address_map &map)
+void sprtdart_state::sprtdart_io_map(address_map &map)
 {
-	k7_state::io_map(map);
-	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(sprtdart_state::out0_w));
-	map(0x0001, 0x0001).mirror(0xfc00).w(FUNC(sprtdart_state::out1_w));
+	io_map(map);
+	map(0x0000, 0x0000).mirror(0xfc00).w(FUNC(sprtdart_state::sprtdart_out0_w));
+	map(0x0001, 0x0001).mirror(0xfc00).w(FUNC(sprtdart_state::sprtdart_out1_w));
 }
 
 
@@ -716,7 +766,20 @@ static INPUT_PORTS_START( 4enlinea )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY  PORT_PLAYER(1)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )                   PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )                   PORT_PLAYER(1)
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_TOGGLE
+
+	// no dart board
+	PORT_START("MATRIX0")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("MATRIX1")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("MATRIX2")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("MATRIX3")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	// each coin line adds a credit (with its own counter)
 	PORT_START("IN_PC")
@@ -821,7 +884,7 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_NAME("Coin 2 (100 Pts)")
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED ) // coin selector lines 2-3, ignored by the games
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", FUNC(i2cmem_device::read_sda))
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) // must be low at boot
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNUSED ) // UM487F ROUT (not emulated), the boot code reinitializes the UM487F until it reads low
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Missed Dart Sensor") PORT_CODE(KEYCODE_D)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Player Sensor") PORT_CODE(KEYCODE_S)
 
@@ -830,7 +893,7 @@ static INPUT_PORTS_START( k7_olym )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("NP (Start / Next Player)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Player")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_TOGGLE
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -847,7 +910,7 @@ static INPUT_PORTS_START( dardos )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Down")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("OK")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Play")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Setup") PORT_TOGGLE // only read at power on
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_TOGGLE // only read at power on
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Reset (Clear Credits)")
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -920,27 +983,6 @@ void _4enlinea_state::machine_start()
 {
 	m_link_timer = timer_alloc(FUNC(_4enlinea_state::link_ready), this);
 
-	/* TODO: guessed wait state for every memory access of the master CPU.
-	   Without it, Dardos registers a dart every few milliseconds while a
-	   dart board sector is held down, instead of showing "SECTOR PISADO"
-	   (stuck sector) after half a second as the real board does: the main
-	   loop discards the sector when it doesn't get a new matrix scan from
-	   the IRQ handler since the previous pass, so it must be slower than the
-	   IRQ period. */
-	address_space &space = m_mastercpu->space(AS_PROGRAM);
-	space.install_read_tap(0x0000, 0xffff, "master_wait_r",
-			[this] (offs_t offset, u8 &data, u8 mem_mask)
-			{
-				if (!machine().side_effects_disabled())
-					m_mastercpu->adjust_icount(-1);
-			});
-	space.install_write_tap(0x0000, 0xffff, "master_wait_w",
-			[this] (offs_t offset, u8 &data, u8 mem_mask)
-			{
-				if (!machine().side_effects_disabled())
-					m_mastercpu->adjust_icount(-1);
-			});
-
 	save_item(NAME(m_handshake_status));
 	save_item(NAME(m_link_latch));
 	save_item(NAME(m_link_data));
@@ -968,6 +1010,25 @@ void k7_state::machine_start()
 	save_item(NAME(m_hsync_count));
 }
 
+void k7_state::machine_reset()
+{
+	out0_w(0);
+	out1_w(0);
+}
+
+void k7olym30_state::machine_reset()
+{
+	k7_state::machine_reset();
+	k7olym30_out1_w(0);
+}
+
+void sprtdart_state::machine_reset()
+{
+	k7_state::machine_reset();
+	sprtdart_out0_w(0);
+	sprtdart_out1_w(0);
+}
+
 
 /***********************************
 *         Machine Drivers          *
@@ -988,14 +1049,14 @@ void sysi_state::hcga_config(machine_config &config)
 /*
   RGB output stage (Sport Darts and K7 schematics): each UM487F color output
   drives the monitor through a 100 ohm resistor, loaded with another 100 ohm
-  resistor by a 2N2369 switched by IOUT. None of the games set the intensity,
-  and real Sport Darts screens show yellow instead of the CGA brown.
+  resistor by a 2N2369 switched by IOUT. None of the games use intensified
+  colors, and real Sport Darts screens show yellow instead of the CGA brown.
   TODO: the dual CPU boards have the transistor footprints bypassed by
   jumpers, assume the same levels.
 */
 rgb_t sysi_state::rgbi_to_rgb(uint8_t rgbi)
 {
-	uint8_t const level = BIT(rgbi, 3) ? 0x80 : 0xff;
+	uint8_t const level = BIT(rgbi, 3) ? 0x80 : 0xff; // guess: half level when loaded
 	return rgb_t(BIT(rgbi, 2) ? level : 0, BIT(rgbi, 1) ? level : 0, BIT(rgbi, 0) ? level : 0);
 }
 
@@ -1015,11 +1076,21 @@ void _4enlinea_state::_4enlinea(machine_config &config)
 	   - Sport Darts runs its IRQ routine every 16 horizontal syncs.
 	   The CM3080 gets the 16 MHz crystal and drives the video CPU /INT, the
 	   master one probably comes from the 9046. */
-	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(16_MHz_XTAL / 16384));
+	m_maincpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_assert), attotime::from_hz(16_MHz_XTAL / 16384));
+	m_maincpu->irqack_cb().set_inputline(m_maincpu, INPUT_LINE_IRQ0, CLEAR_LINE); // the CM3080 gets /M1
 
-	Z80(config, m_mastercpu, 8_MHz_XTAL / 2); // measured, wait states added in machine_start()
+	Z80(config, m_mastercpu, 8_MHz_XTAL / 2); // measured
 	m_mastercpu->set_addrmap(AS_PROGRAM, &_4enlinea_state::master_map);
 	m_mastercpu->set_periodic_int(FUNC(_4enlinea_state::irq0_line_hold), attotime::from_hz(8_MHz_XTAL / 8192));
+	/* guess: one wait state for every memory access.
+	   Without it, Dardos registers a dart every few milliseconds while a
+	   dart board sector is held down, instead of showing "SECTOR PISADO"
+	   (stuck sector) after half a second as the real board does: the main
+	   loop discards the sector when it doesn't get a new matrix scan from
+	   the IRQ handler since the previous pass, so it must be slower than the
+	   IRQ period. */
+	m_mastercpu->z80_set_m1_cycles(4 + 1);
+	m_mastercpu->z80_set_mreq_cycles(3 + 1);
 
 	I2C_24C16(config, m_eeprom); // X24C16P
 
@@ -1062,14 +1133,23 @@ void k7_state::k7_olym(machine_config &config)
 	m_ay->add_route(ALL_OUTPUTS, "mono", 0.50);
 }
 
+void k7olym30_state::k7_olym30(machine_config &config)
+{
+	k7_olym(config);
+
+	m_maincpu->set_addrmap(AS_IO, &k7olym30_state::k7olym30_io_map);
+}
+
 void sprtdart_state::sprtdart(machine_config &config)
 {
 	k7_olym(config);
 
-	m_maincpu->set_addrmap(AS_IO, &sprtdart_state::io_map);
+	m_maincpu->set_addrmap(AS_IO, &sprtdart_state::sprtdart_io_map);
 
-	/* The IRQ handler counts the IRQs from the vertical retrace to change the
-	   background color at a given raster line. */
+	/* guess: an IRQ every horizontal sync.
+	   The CM3080 derives /INT from the UM487F clock, it has no horizontal sync
+	   input, but the IRQ handler counts the IRQs from the vertical retrace to
+	   change the background color at a given raster line. */
 	m_video->hsync_callback().set_inputline(m_maincpu, INPUT_LINE_IRQ0, ASSERT_LINE); // TODO: polarity
 }
 
@@ -1192,5 +1272,5 @@ GAME( 1991, 4enlinea,  0,        _4enlinea, 4enlinea,  _4enlinea_state, empty_in
 GAME( 1991, 4enlineb,  4enlinea, _4enlinea, 4enlinea,  _4enlinea_state, empty_init, ROT0, "Compumatic / CIC Play",                     "Cuatro en Linea (rev. A-06)", MACHINE_SUPPORTS_SAVE )
 GAMEL(1992, dardos,    0,        _4enlinea, dardos,    _4enlinea_state, empty_init, ROT0, "Oper Coin",                                 "Dardos",                      MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
 GAMEL(1994, k7_olym,   0,        k7_olym,   k7_olym,   k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.11)",    MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
-GAMEL(1994, k7_olym30, k7_olym,  k7_olym,   k7_olym30, k7_state,        empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
+GAMEL(1994, k7_olym30, k7_olym,  k7_olym30, k7_olym30, k7olym30_state,  empty_init, ROT0, "K7 Kursaal / NMI Electronics",              "Olympic Darts K7 (v3.00)",    MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )
 GAMEL(1993, sprtdart,  0,        sprtdart,  sprtdart,  sprtdart_state,  empty_init, ROT0, "Compumatic / Desarrollos y Recambios S.L.", "Sport Darts T.V.",            MACHINE_MECHANICAL | MACHINE_SUPPORTS_SAVE, layout_dartboard )

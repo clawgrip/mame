@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:ClawGrip
+// copyright-holders:Tomás García-Merás Capote
 /***************************************************************************
 
     UMC UM487F HCGA (Hercules + CGA) single-chip video controller
@@ -36,6 +36,11 @@
     - IORDY wait states for flicker free CPU access.
     - Border (overscan) color.
     - Composite and monochrome monitor outputs.
+    - The datasheet gives CD0 as the first pixel, check the character
+      generator bit order.
+    - The datasheet only lists 3x4/3x5 for the CRTC, the mirrors at 3x0-3x7
+      are a guess.
+    - Verify the CGA text, 640x200 and MGA modes with real software.
 
 ***************************************************************************/
 
@@ -43,6 +48,9 @@
 #include "um487f.h"
 
 #include "screen.h"
+
+#include <algorithm>
+#include <iterator>
 
 #define LOG_REGS    (1U << 1)
 #define LOG_MODE    (1U << 2)
@@ -63,6 +71,7 @@ um487f_device::um487f_device(const machine_config &mconfig, const char *tag, dev
 	, device_palette_interface(mconfig, *this)
 	, m_crtc(*this, "crtc")
 	, m_chargen(*this, finder_base::DUMMY_TAG)
+	, m_vram(*this, "vram", 0x10000, ENDIANNESS_LITTLE)
 	, m_hsync_cb(*this)
 	, m_vsync_cb(*this)
 	, m_rgbi_cb(*this)
@@ -100,9 +109,6 @@ void um487f_device::device_start()
 	if (m_strap_mga && !m_mga_clock)
 		logerror("MGA mode selected at power on, but no MGA clock\n");
 
-	m_vram = std::make_unique<uint8_t[]>(0x10000);
-	std::fill_n(m_vram.get(), 0x10000, 0);
-
 	// default: IBM 5153 compatible monitor (dark yellow shown as brown)
 	m_rgbi_cb.resolve();
 	for (int i = 0; i < 16; i++)
@@ -131,7 +137,6 @@ void um487f_device::device_start()
 
 	std::fill(std::begin(m_palette_lut_2bpp), std::end(m_palette_lut_2bpp), 0);
 
-	save_pointer(NAME(m_vram), 0x10000);
 	save_item(NAME(m_mga));
 	save_item(NAME(m_mode));
 	save_item(NAME(m_color));
@@ -139,7 +144,6 @@ void um487f_device::device_start()
 	save_item(NAME(m_lpen_latched));
 	save_item(NAME(m_video_dot));
 	save_item(NAME(m_framecnt));
-	save_item(NAME(m_palette_lut_2bpp));
 }
 
 
@@ -160,6 +164,7 @@ void um487f_device::device_reset()
 void um487f_device::device_post_load()
 {
 	update_crtc_clock();
+	update_palette_lut();
 }
 
 
@@ -276,7 +281,7 @@ uint8_t um487f_device::chargen_r(uint8_t chr, uint8_t ra) const
 
 MC6845_UPDATE_ROW(um487f_device::crtc_update_row)
 {
-	if (!(m_mode & MODE_VIDEO) || (y > cliprect.max_y) || (y < cliprect.min_y))
+	if (!(m_mode & MODE_VIDEO) || (y > cliprect.bottom()) || (y < cliprect.top()))
 		return;
 
 	if (m_mga)
@@ -503,9 +508,10 @@ uint8_t um487f_device::status_r()
 			data |= STATUS_MGA_HSYNC;
 
 		// fake pixel stream
+		uint8_t const dot = m_video_dot ^ STATUS_MGA_VIDEO;
 		if (!machine().side_effects_disabled())
-			m_video_dot ^= STATUS_MGA_VIDEO;
-		data |= m_video_dot;
+			m_video_dot = dot;
+		data |= dot;
 	}
 	else
 	{
