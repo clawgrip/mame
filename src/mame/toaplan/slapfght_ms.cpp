@@ -16,6 +16,11 @@
     MOD 4/2 - Tilemap board, has logic + 2 ROMs.
     MOD 4/2 - Tilemap board, has logic + 4 ROMs, long thin sub-board (C0425) with no chips, just routing along one edge.
 
+    The decoder PROM on the CPU sub board (P0312) maps the CPU address space in 256 byte areas from
+    A8-A15 and bit 0 of the bank latch at 0xe900. With the bit set, the 16 KB EPROM replaces the
+    second half of the other one at 0x8000-0xbfff and the text layer area at 0xf000-0xffff becomes
+    EPROM, an unknown board (0xf400-0xf5ff), RAM and, by its decoding, the palette (0xf800-0xffff).
+
     TODO:
     - stuck at RAM CHECK OK due to wrong main CPU IRQ handling, if prodded via debugger it passes ROM CHECK too, but then stops at SOUND OK again due to IRQs;
     - colors (no color PROMs?);
@@ -28,6 +33,7 @@
 
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod3.h"
 #include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
@@ -48,13 +54,18 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod3(*this, "mod3"),
 		m_mod4_pf(*this, "mod4_pf"),
 		m_mod4_fix(*this, "mod4_fix"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_spriteram(*this, "spriteram"),
-		m_mainbank(*this, "mainbank")
+		m_palette(*this, "palette"),
+		m_rom(*this, "maincpu"),
+		m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
+		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_LITTLE),
+		m_paletteram(*this, "palette", 0x400, ENDIANNESS_LITTLE),
+		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_LITTLE)
 	{ }
 
 	void slapfighm(machine_config &config);
@@ -67,14 +78,19 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
 	required_device<gaelco_ms_mod4_device> m_mod4_pf;
 	required_device<gaelco_ms_mod4_device> m_mod4_fix;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
+	required_device<palette_device> m_palette;
 
-	required_shared_ptr<uint8_t> m_spriteram;
-	required_memory_bank m_mainbank;
+	required_region_ptr<u8> m_rom;
+	memory_share_creator<u8> m_ram;
+	memory_share_creator<u8> m_spriteram;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
 
 	bool m_main_irq_enabled = false;
 	bool m_sound_nmi_enabled = false;
@@ -83,6 +99,7 @@ private:
 	void irq_enable_w(int state);
 	void sound_reset_w(int state);
 
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
 	void fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -100,7 +117,7 @@ void slapfght_ms_state::fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 
 void slapfght_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect) // TODO: verify
 {
-	const uint8_t *src = m_spriteram;
+	const uint8_t *src = &m_spriteram[0];
 
 	for (int offs = 0; offs < m_spriteram.bytes(); offs += 4)
 	{
@@ -169,29 +186,110 @@ void slapfght_ms_state::sound_reset_w(int state)
 
 void slapfght_ms_state::machine_start()
 {
-	// 2 x 0x4000 banks, 0xc000 - 0xffff is 0xff filled but for the 0xea00 - 0xefff range which is mapped directly
-	m_mainbank->configure_entry(0, memregion("maincpu")->base() + 0x8000);
-	m_mainbank->configure_entry(1, memregion("maincpu")->base() + 0x10000);
-
 	save_item(NAME(m_main_irq_enabled));
 	save_item(NAME(m_sound_nmi_enabled));
 }
 
 
+void slapfght_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch)
+{
+	if (BIT(code, 7))
+	{
+		u8 const socket = BIT(code, 4, 3);
+		if (socket == 6)
+		{
+			// 8 KB RAM
+			if (write)
+				view.install_writeonly(start, end, &m_ram[start & 0x1fff]);
+			else
+				view.install_rom(start, end, &m_ram[start & 0x1fff]);
+		}
+		else if (!write)
+		{
+			// EPROMs: 303, 302 and the 16 KB 301
+			switch (socket)
+			{
+			case 0: view.install_rom(start, end, &m_rom[0x00000 | (start & 0x7fff)]); break;
+			case 2: view.install_rom(start, end, &m_rom[0x08000 | (start & 0x7fff)]); break;
+			case 4: view.install_rom(start, end, &m_rom[0x10000 | (start & 0x3fff)]); break;
+			}
+		}
+		else if ((socket == 4) && BIT(start, 14))
+		{
+			view.install_write_handler(start, end, write8smo_delegate(*m_mod3, FUNC(gaelco_ms_mod3_decoder_device::latch_w)));
+		}
+		return;
+	}
+
+	// the boards tell their areas apart with the lower address lines
+	switch (code)
+	{
+	case 0x7d: // MOD 1 board
+		for (offs_t page = start; page < end; page += 0x100)
+		{
+			if (write)
+				view.install_write_handler(page, page + 0x0f, 0, 0xf0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+			else
+				view.install_read_handler(page, page + 0x0f, 0, 0xf0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+		}
+		break;
+
+	case 0x75: // MOD 4 boards for the playfield and the text layer, A11 selects the attributes
+	case 0x6d:
+		for (offs_t area = start; area < end; area += 0x800)
+		{
+			gaelco_ms_mod4_device &board = (code == 0x75) ? *m_mod4_pf : *m_mod4_fix;
+			offs_t const last = std::min<offs_t>(end, area | 0x7ff);
+			if (write)
+			{
+				view.install_write_handler(area, last, BIT(area, 11) ?
+						write8sm_delegate(board, FUNC(gaelco_ms_mod4_device::attr_w)) :
+						write8sm_delegate(board, FUNC(gaelco_ms_mod4_device::code_w)));
+			}
+			else
+			{
+				view.install_read_handler(area, last, BIT(area, 11) ?
+						read8sm_delegate(board, FUNC(gaelco_ms_mod4_device::attr_r)) :
+						read8sm_delegate(board, FUNC(gaelco_ms_mod4_device::code_r)));
+			}
+		}
+		break;
+
+	case 0x79: // sprite board RAM, the area above it is unknown
+		if (!BIT(start, 11))
+		{
+			offs_t const last = std::min<offs_t>(end, start | 0x7ff);
+			if (write)
+				view.install_writeonly(start, last, &m_spriteram[start & 0x7ff]);
+			else
+				view.install_rom(start, last, &m_spriteram[start & 0x7ff]);
+		}
+		break;
+
+	case 0x61: // palette, A10 selects the blue byte
+		for (offs_t area = start; area < end; area = (area | 0x3ff) + 1)
+		{
+			offs_t const last = std::min<offs_t>(end, area | 0x3ff);
+			u8 *const ram = BIT(area, 10) ? &m_paletteram_ext[0] : &m_paletteram[0];
+			if (write)
+			{
+				view.install_write_handler(area, last, BIT(area, 10) ?
+						write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
+						write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+			}
+			else
+			{
+				view.install_rom(area, last, &ram[area & 0x3ff]);
+			}
+		}
+		break;
+	}
+}
+
+
 void slapfght_ms_state::main_prg_map(address_map &map)
 {
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0xbfff).bankr(m_mainbank);
-	map(0xc000, 0xc7ff).ram();
-	map(0xc800, 0xc80f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
-	map(0xc810, 0xcfff).ram();
-	map(0xd000, 0xd7ff).rw(m_mod4_pf, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
-	map(0xd800, 0xdfff).rw(m_mod4_pf, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
-	map(0xe000, 0xe7ff).ram().share(m_spriteram);
-	map(0xe900, 0xe900).lw8(NAME([this] (uint8_t data) { m_mainbank->set_entry(data & 0x01); }));
-	map(0xea00, 0xefff).rom().region("maincpu", 0xea00); // title screen data gets loaded here like slapfighb2
-	map(0xf000, 0xf7ff).rw(m_mod4_fix, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
-	map(0xf800, 0xffff).rw(m_mod4_fix, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
+	map(0x0000, 0xffff).m(m_mod3, FUNC(gaelco_ms_mod3_decoder_device::map));
 }
 
 void slapfght_ms_state::main_io_map(address_map &map)
@@ -248,6 +346,12 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &slapfght_ms_state::main_prg_map);
 	m_maincpu->set_addrmap(AS_IO, &slapfght_ms_state::main_io_map);
 
+	using decoder = gaelco_ms_mod3_decoder_device;
+	GAELCO_MS_MOD3_DECODER(config, m_mod3);
+	m_mod3->set_lines({ decoder::A(8), decoder::A(9), decoder::A(10), decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0) });
+	m_mod3->set_latch_mask(0x01);
+	m_mod3->set_install_callback(FUNC(slapfght_ms_state::mod3_install));
+
 	ls259_device &mainlatch(LS259(config, "mainlatch"));
 	mainlatch.q_out_cb<0>().set(FUNC(slapfght_ms_state::sound_reset_w));
 	//mainlatch.q_out_cb<1>().set(FUNC(slapfght_ms_state::flipscreen_w));
@@ -259,7 +363,7 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_screen->screen_vblank().set(FUNC(slapfght_ms_state::vblank_irq));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_slapfighm);
 
@@ -334,7 +438,7 @@ ROM_START( slapfighm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
 	ROM_LOAD( "51-1_p0502.ic10",            0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x200, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x000, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )
 
 	ROM_REGION( 0x104, "plds", ROMREGION_ERASEFF )
@@ -343,21 +447,9 @@ ROM_START( slapfighm )
 	ROM_LOAD( "51-1_p0503_pal16r6.ic46",  0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
 ROM_END
 
-void slapfght_ms_state::init_decryption() // same as the one for blktiger_ms
+void slapfght_ms_state::init_decryption()
 {
-	uint8_t *const src = memregion("maincpu")->base();
-	auto const len = memregion("maincpu")->bytes();
-
-	// bitswap data
-	for (int i = 0; i < len; i++)
-		src[i] = bitswap<8>(src[i], 5, 3, 7, 2, 0, 1, 4, 6);
-
-	// descramble address
-	std::vector<uint8_t> buffer(len);
-	memcpy(&buffer[0], src, len);
-
-	for (int i = 0; i < len; i++)
-		src[i] = buffer[bitswap<24>(i, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, 4, 0, 2, 7, 3, 1, 9, 11, 5)];
+	gaelco_ms_mod3_descramble(&m_rom[0], m_rom.bytes());
 }
 
 } // anonymous namespace

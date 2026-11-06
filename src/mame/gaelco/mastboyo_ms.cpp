@@ -24,7 +24,9 @@
       align the picture.
 
   The MOD 3 address decoder (P0314) only takes two bank bits, so the four question banks repeat.
-  The program drops the repeated question blocks at boot.
+  The program drops the repeated question blocks at boot. Its outputs select the program EPROM at
+  0x0000-0x3fff and the question EPROMs at 0x8000-0xffff, and give one code to each 2 KB area of
+  0x4000-0x7fff, where the boards tell their registers apart with A12, A11 and A10.
 
   TODO:
   - clocks, screen timing and sound interrupt source
@@ -34,6 +36,7 @@
 #include "emu.h"
 
 #include "gaelco_ms_mod1.h"
+#include "gaelco_ms_mod3.h"
 #include "gaelco_ms_mod4.h"
 
 #include "cpu/z80/z80.h"
@@ -42,8 +45,6 @@
 #include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
-
-#include <vector>
 
 
 namespace {
@@ -55,9 +56,14 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod3(*this, "mod3"),
 		m_mod4(*this, "mod4"),
 		m_palette(*this, "palette"),
-		m_rombank(*this, "rombank")
+		m_program(*this, "maincpu"),
+		m_questions(*this, "questions"),
+		m_ram(*this, "nvram", 0x800, ENDIANNESS_LITTLE),
+		m_paletteram(*this, "palette", 0x100, ENDIANNESS_LITTLE),
+		m_paletteram_ext(*this, "palette_ext", 0x100, ENDIANNESS_LITTLE)
 	{ }
 
 	void mastboyo_ms(machine_config &config) ATTR_COLD;
@@ -65,19 +71,21 @@ public:
 
 	void init_mastboyom() ATTR_COLD;
 
-protected:
-	virtual void machine_start() override ATTR_COLD;
-
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
 	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<palette_device> m_palette;
-	required_memory_bank m_rombank;
+	required_region_ptr<u8> m_program;
+	required_region_ptr<u8> m_questions;
+	memory_share_creator<u8> m_ram;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
 
 	void main_program_map(address_map &map) ATTR_COLD;
 
-	void rombank_w(uint8_t data);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
 	uint8_t irq_ack_r();
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -99,15 +107,83 @@ uint32_t mastboyo_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 }
 
 
-void mastboyo_ms_state::machine_start()
+void mastboyo_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch)
 {
-	m_rombank->configure_entries(0, 4, memregion("questions")->base(), 0x8000);
-	m_rombank->set_entry(0);
-}
+	if (BIT(code, 7))
+	{
+		// EPROM sockets: 6 program, 3 and 5 questions; bits 2-3 drive EPROM A14 and A15
+		u8 *base = nullptr;
+		switch (BIT(code, 4, 3))
+		{
+		case 3: base = &m_questions[0x00000]; break;
+		case 5: base = &m_questions[0x10000]; break;
+		case 6: base = &m_program[0]; break;
+		}
+		if (base && !write)
+			view.install_rom(start, end, &base[(BIT(code, 2, 2) << 14) | (start & 0x3fff)]);
+		return;
+	}
 
-void mastboyo_ms_state::rombank_w(uint8_t data)
-{
-	m_rombank->set_entry(data & 0x03);
+	for (offs_t block = start; block < end; block += 0x400)
+	{
+		offs_t const last = block + 0x3ff;
+		bool const a10 = BIT(block, 10);
+		switch (code)
+		{
+		case 0x6d: // RAM, and the MOD 4 board at A12 for writes
+			if (!BIT(block, 12))
+			{
+				if (write)
+					view.install_writeonly(block, last, &m_ram[block & 0x400]);
+				else
+					view.install_rom(block, last, &m_ram[block & 0x400]);
+			}
+			else if (write)
+			{
+				view.install_write_handler(block, last, a10 ?
+						write8sm_delegate(*m_mod4, FUNC(gaelco_ms_mod4_device::attr_w)) :
+						write8sm_delegate(*m_mod4, FUNC(gaelco_ms_mod4_device::code_w)));
+			}
+			break;
+
+		case 0x71: // writes: bank latch, MOD 1 board at A10; reads: MOD 4 board
+			if (write)
+			{
+				if (a10)
+					view.install_write_handler(block, block + 0x00f, 0, 0x3f0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+				else
+					view.install_write_handler(block, last, write8smo_delegate(*m_mod3, FUNC(gaelco_ms_mod3_decoder_device::latch_w)));
+			}
+			else if (!BIT(block, 11))
+			{
+				view.install_read_handler(block, last, a10 ?
+						read8sm_delegate(*m_mod4, FUNC(gaelco_ms_mod4_device::attr_r)) :
+						read8sm_delegate(*m_mod4, FUNC(gaelco_ms_mod4_device::code_r)));
+			}
+			break;
+
+		case 0x61: // reads: MOD 1 board at A10, palette at A11
+			if (BIT(block, 11))
+				view.install_rom(block, block + 0x0ff, 0x300, a10 ? &m_paletteram_ext[0] : &m_paletteram[0]);
+			else if (a10)
+				view.install_read_handler(block, block + 0x00f, 0, 0x3f0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+			break;
+
+		case 0x65: // MOD 4 board scroll registers, written once with fixed values
+			break;
+
+		case 0x42: // palette writes
+			view.install_write_handler(block, block + 0x0ff, 0, 0x300, 0, a10 ?
+					write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
+					write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+			break;
+
+		case 0x7d: // interrupt acknowledge
+			if (!write)
+				view.install_read_handler(block, last, read8smo_delegate(*this, FUNC(mastboyo_ms_state::irq_ack_r)));
+			break;
+		}
+	}
 }
 
 uint8_t mastboyo_ms_state::irq_ack_r()
@@ -121,17 +197,7 @@ uint8_t mastboyo_ms_state::irq_ack_r()
 
 void mastboyo_ms_state::main_program_map(address_map &map)
 {
-	map(0x0000, 0x3fff).rom();
-	map(0x4000, 0x47ff).ram().share("nvram");
-	map(0x5000, 0x53ff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
-	map(0x5400, 0x57ff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
-	map(0x5800, 0x5803).nopw(); // MOD 4 scroll registers
-	map(0x6000, 0x6000).w(FUNC(mastboyo_ms_state::rombank_w));
-	map(0x6400, 0x640f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
-	map(0x6800, 0x68ff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	map(0x6c00, 0x6cff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	map(0x7000, 0x7000).r(FUNC(mastboyo_ms_state::irq_ack_r));
-	map(0x8000, 0xffff).bankr(m_rombank);
+	map(0x0000, 0xffff).m(m_mod3, FUNC(gaelco_ms_mod3_decoder_device::map));
 }
 
 
@@ -180,6 +246,12 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 	Z80(config, m_maincpu, 20_MHz_XTAL / 6); // Unknown clock and divisor
 	m_maincpu->set_addrmap(AS_PROGRAM, &mastboyo_ms_state::main_program_map);
 	m_maincpu->set_vblank_int("screen", FUNC(mastboyo_ms_state::irq0_line_assert));
+
+	using decoder = gaelco_ms_mod3_decoder_device;
+	GAELCO_MS_MOD3_DECODER(config, m_mod3);
+	m_mod3->set_lines({ decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::NOT_A(15), decoder::HIGH, decoder::WRITE, decoder::LATCH(0), decoder::LATCH(1) });
+	m_mod3->set_latch_mask(0x03);
+	m_mod3->set_install_callback(FUNC(mastboyo_ms_state::mod3_install));
 
 	NVRAM(config, "nvram", nvram_device::DEFAULT_ALL_0);
 
@@ -252,7 +324,7 @@ ROM_START( mastboyom )
 	ROM_LOAD32_BYTE( "ma_0403_27128.bin", 0x00001, 0x04000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
 	ROM_LOAD32_BYTE( "ma_0404_27128.bin", 0x00000, 0x04000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
 
-	ROM_REGION( 0x200, "proms", 0 ) // address decoder
+	ROM_REGION( 0x200, "mod3", 0 ) // on MOD-3 board, address decoder
 	ROM_LOAD( "p0314_82s147a.bin", 0x000, 0x200, CRC(aea2bbab) SHA1(506cca2acd8e65e5dbddef3a7e93950d54cf3d5a) )
 ROM_END
 
@@ -286,28 +358,15 @@ ROM_START( mastboyoma )
 	ROM_LOAD32_BYTE( "ma_0403_27128.bin", 0x00001, 0x04000, CRC(58abbe25) SHA1(0747985ceaf74c9f1fd34b6927d2d5dc9e8d8ad9) ) // 1ST AND 2ND HALF IDENTICAL
 	ROM_LOAD32_BYTE( "ma_0404_27128.bin", 0x00000, 0x04000, CRC(7e9286c2) SHA1(495b065ee5cf0f5a88dee7eb999a54dae53921bd) ) // 1ST AND 2ND HALF IDENTICAL
 
-	ROM_REGION( 0x200, "proms", 0 ) // address decoder
+	ROM_REGION( 0x200, "mod3", 0 ) // on MOD-3 board, address decoder
 	ROM_LOAD( "p0314_82s147a.bin", 0x000, 0x200, CRC(aea2bbab) SHA1(506cca2acd8e65e5dbddef3a7e93950d54cf3d5a) )
 ROM_END
 
 
 void mastboyo_ms_state::init_mastboyom()
 {
-	for (char const *const tag : { "maincpu", "questions" })
-	{
-		uint8_t *const src = memregion(tag)->base();
-		int const len = memregion(tag)->bytes();
-
-		// bitswap data
-		for (int i = 0; i < len; i++)
-			src[i] = bitswap<8>(src[i], 5, 3, 7, 2, 0, 1, 4, 6);
-
-		// descramble address
-		std::vector<uint8_t> const buffer(src, src + len);
-
-		for (int i = 0; i < len; i++)
-			src[i] = buffer[bitswap<24>(i, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, 4, 0, 2, 7, 3, 1, 9, 11, 5)];
-	}
+	gaelco_ms_mod3_descramble(&m_program[0], m_program.bytes());
+	gaelco_ms_mod3_descramble(&m_questions[0], m_questions.bytes());
 }
 
 } // anonymous namespace

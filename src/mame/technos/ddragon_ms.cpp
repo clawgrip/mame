@@ -17,8 +17,15 @@
     MOD 51    - Sprite board: logic, a PROM, and 8 ROMs on a small sub-board.
     MOD 21/1  - Logic, 20 MHz XTAL, two PROMs.
 
+    The decoder PROM on the CPU sub board (P0320) maps both 6809s from A11-A15, three bank bits and
+    which CPU makes the access. The first CPU gets the fixed EPROM area at 0x8000-0xffff, a window at
+    0x4000-0x7fff with the six banks of the original game, the program's own code at 0x2000-0x27ff and
+    RAM at 0x0000-0x0fff, shared with the second CPU, which runs from 0x8000-0xffff.
+
     TODO:
-    - everything,
+    - everything else: the bank latch and the other PROM outputs (video boards, MOD 1, inputs)
+    - the bank latch: the program writes each bank number twice to 0x8534, in bits 0-2 and then in
+      bits 1-3, which suits the PAL on the sub board (three registers, one shifting into another)
 */
 
 
@@ -26,6 +33,7 @@
 
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod3.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m6809/m6809.h"
@@ -46,10 +54,16 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
 		m_mod1(*this, "mod1"),
-		m_screen(*this, "screen")
+		m_mod3(*this, "mod3"),
+		m_mod3_sub(*this, "mod3_sub"),
+		m_screen(*this, "screen"),
+		m_rom(*this, "maincpu"),
+		m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG)
 	{ }
 
 	void ddragonm(machine_config &config);
+
+	void init_ddragonm();
 
 protected:
 	virtual void machine_start() override;
@@ -58,11 +72,17 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_6809_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
+	required_device<gaelco_ms_mod3_decoder_device> m_mod3_sub;
 	required_device<screen_device> m_screen;
+	required_region_ptr<u8> m_rom;
+	memory_share_creator<u8> m_ram;
 
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
-	void main_map(address_map &map);
+	void main_map(address_map &map) ATTR_COLD;
+	void sub_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -77,8 +97,42 @@ void ddragon_ms_state::machine_start()
 }
 
 
+void ddragon_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch)
+{
+	// the other boards aren't hooked up yet
+	if (!BIT(code, 7))
+		return;
+
+	// bits 5-6 pick the chip, IC12, IC13, IC14 or the RAM, and bits 2-4 drive A13-A15
+	offs_t const offset = (BIT(code, 2, 3) << 13) | (start & 0x1fff);
+	if (BIT(code, 5, 2) == 3)
+	{
+		if (write)
+			view.install_writeonly(start, end, &m_ram[offset & 0x1fff]);
+		else
+			view.install_rom(start, end, &m_ram[offset & 0x1fff]);
+	}
+	else if (!write)
+	{
+		view.install_rom(start, end, &m_rom[(BIT(code, 5, 2) << 16) | offset]);
+	}
+}
+
+
 void ddragon_ms_state::main_map(address_map &map)
 {
+	map(0x0000, 0xffff).m(m_mod3, FUNC(gaelco_ms_mod3_decoder_device::map));
+}
+
+void ddragon_ms_state::sub_map(address_map &map)
+{
+	map(0x0000, 0xffff).m(m_mod3_sub, FUNC(gaelco_ms_mod3_decoder_device::map));
+}
+
+
+void ddragon_ms_state::init_ddragonm()
+{
+	gaelco_ms_mod3_descramble(&m_rom[0], m_rom.bytes());
 }
 
 
@@ -114,6 +168,21 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &ddragon_ms_state::main_map);
 
 	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 3); // MC68B09EP, divisor unknown
+	m_subcpu->set_addrmap(AS_PROGRAM, &ddragon_ms_state::sub_map);
+
+	// one PROM for both CPUs
+	using decoder = gaelco_ms_mod3_decoder_device;
+	constexpr std::array<u8, 9> lines{ decoder::LATCH(2), decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0), decoder::LATCH(1), decoder::SELECT };
+	GAELCO_MS_MOD3_DECODER(config, m_mod3);
+	m_mod3->set_lines(lines);
+	m_mod3->set_latch_mask(0x07);
+	m_mod3->set_install_callback(FUNC(ddragon_ms_state::mod3_install));
+
+	GAELCO_MS_MOD3_DECODER(config, m_mod3_sub);
+	m_mod3_sub->set_lines(lines);
+	m_mod3_sub->set_select(1);
+	m_mod3_sub->set_prom("mod3");
+	m_mod3_sub->set_install_callback(FUNC(ddragon_ms_state::mod3_install));
 
 	// video hardware
 	SCREEN(config, m_screen);
@@ -181,7 +250,7 @@ ROM_START( ddragonm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51_p0502_82s129.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x200, "proms", 0 ) // PROMs (function unknown)
+	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "mod_3-4_sub_p0320_82s147.bin", 0x000, 0x200, CRC(9bc0d387) SHA1(bac95901cacf883fcde0662b444c443364227def) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
@@ -194,4 +263,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 1987, ddragonm, ddragon, ddragonm, ddragonm, ddragon_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Double Dragon (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 1987, ddragonm, ddragon, ddragonm, ddragonm, ddragon_ms_state, init_ddragonm, ROT0, "bootleg (Gaelco / Ervisa)", "Double Dragon (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )

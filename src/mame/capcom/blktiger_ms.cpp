@@ -19,8 +19,10 @@
     The program keeps the whole background map of the original game in 16 KB of RAM and, as the screen
     scrolls, copies the tiles around it to the background MOD 4 board, whose tile map is 32 x 16 tiles.
 
-    The latch at 0xd800 selects the 16 KB ROM bank at 0x8000-0xbfff with bits 0-2 and 4, the program
-    writes the bank of the original game plus 8. It also selects what appears at 0xc000-0xcfff:
+    The decoder PROM on the CPU sub board (P0322) takes A11-A15, the write signal and bits 0, 2 and 4 of
+    the latch at 0xd800. For the 16 KB bank at 0x8000-0xbfff, latch bits 2 and 4 pick the EPROM and bits 0
+    and 1 its quarter (bit 1 drives EPROM A15 directly); the program writes the bank of the original game
+    plus 8. The latch also selects what appears at 0xc000-0xcfff:
     0x00       background MOD 4 board: tile map at 0xc000-0xc3ff, scroll registers at 0xc400-0xc403
     0x04       sprite board
     0x06       palette, 0xc000 is read once per frame
@@ -41,6 +43,7 @@
 
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod3.h"
 #include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
@@ -60,17 +63,18 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod3(*this, "mod3"),
 		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_spriteram(*this, "spriteram"),
+		m_rom(*this, "maincpu"),
+		m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
 		m_mapram(*this, "mapram", 0x4000, ENDIANNESS_LITTLE),
-		m_mainbank(*this, "mainbank"),
-		m_mapbank(*this, "mapbank"),
-		m_view(*this, "view")
+		m_paletteram(*this, "palette", 0x400, ENDIANNESS_LITTLE),
+		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_LITTLE)
 	{ }
 
 	void blktigerm(machine_config &config);
@@ -79,11 +83,11 @@ public:
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
-	virtual void device_post_load() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_device> m_mod1;
+	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<gaelco_ms_mod51_device> m_mod51;
@@ -91,21 +95,20 @@ private:
 	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 
-	required_shared_ptr<uint8_t> m_spriteram;
+	required_region_ptr<u8> m_rom;
+	memory_share_creator<u8> m_ram;
 	memory_share_creator<u8> m_mapram;
-	required_memory_bank m_mainbank;
-	memory_bank_creator m_mapbank;
-	memory_view m_view;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
 
-	u8 m_bank_latch = 0;
 	u8 m_bg_scroll[4]{};
 	u8 m_tx_scroll[4]{};
 
 	TILEMAP_MAPPER_MEMBER(bg_scan);
 	void bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void bank_w(u8 data);
-	void select_view();
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
+	void install_palette(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -115,75 +118,162 @@ private:
 
 void blktiger_ms_state::main_map(address_map &map)
 {
-	map(0x0000, 0x7fff).rom().region("maincpu", 0);
-	map(0x8000, 0xbfff).bankr(m_mainbank);
-	map(0xc000, 0xcfff).view(m_view);
-	m_view[0](0xc000, 0xc00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host_r), FUNC(gaelco_ms_mod1_device::host_w));
-	m_view[0](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	m_view[0](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	m_view[1](0xc000, 0xcfff).bankrw(m_mapbank);
-	m_view[2](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	m_view[2](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	m_view[3](0xc000, 0xc3ff).rw(m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_r), FUNC(gaelco_ms_mod4_device::vram8_w));
-	m_view[3](0xc400, 0xc403).lw8(NAME([this] (offs_t offset, u8 data) { m_bg_scroll[offset] = data; }));
-	m_view[3](0xc800, 0xcbff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
-	m_view[3](0xcc00, 0xcfff).ram().w(m_palette, FUNC(palette_device::write8_ext)).share("palette_ext");
-	m_view[4](0xc800, 0xc803).lw8(NAME([this] (offs_t offset, u8 data) { m_tx_scroll[offset] = data; }));
-	map(0xd000, 0xd3ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::code_r), FUNC(gaelco_ms_mod4_device::code_w));
-	map(0xd400, 0xd7ff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::attr_r), FUNC(gaelco_ms_mod4_device::attr_w));
-	map(0xd800, 0xd800).mirror(0x07ff).w(FUNC(blktiger_ms_state::bank_w));
-	map(0xe000, 0xfdff).ram();
-	map(0xfe00, 0xffff).ram().share(m_spriteram);
+	map(0x0000, 0xffff).m(m_mod3, FUNC(gaelco_ms_mod3_decoder_device::map));
 }
 
-void blktiger_ms_state::machine_start()
+void blktiger_ms_state::install_palette(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write)
 {
-	m_mainbank->configure_entries(0, 16, memregion("maincpu")->base() + 0x10000, 0x4000);
-	m_mapbank->configure_entries(0, 4, &m_mapram[0], 0x1000);
-
-	save_item(NAME(m_bank_latch));
-	save_item(NAME(m_bg_scroll));
-	save_item(NAME(m_tx_scroll));
-}
-
-void blktiger_ms_state::device_post_load()
-{
-	select_view();
-}
-
-void blktiger_ms_state::bank_w(u8 data)
-{
-	m_bank_latch = data;
-	m_mainbank->set_entry(bitswap<4>(data, 4, 2, 1, 0));
-	select_view();
-}
-
-void blktiger_ms_state::select_view()
-{
-	if (BIT(m_bank_latch, 4))
+	// A10 selects the blue byte
+	for (offs_t area = start; area < end; area += 0x400)
 	{
-		m_view.select(BIT(m_bank_latch, 2) ? 4 : 1);
-		m_mapbank->set_entry(m_bank_latch & 0x03);
-	}
-	else
-	{
-		switch (m_bank_latch & 0x0f)
+		if (write)
 		{
-		case 0x00: m_view.select(3); break;
-		case 0x07: m_view.select(0); break;
-		default:   m_view.select(2); break;
+			view.install_write_handler(area, area + 0x3ff, BIT(area, 10) ?
+					write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
+					write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+		}
+		else
+		{
+			view.install_rom(area, area + 0x3ff, BIT(area, 10) ? &m_paletteram_ext[0] : &m_paletteram[0]);
 		}
 	}
 }
 
+void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch)
+{
+	// the boards at 0xc000-0xcfff tell from the latch whether they are selected
+	bool const map_ram = BIT(latch, 4) && !BIT(latch, 2);
+	bool const bg_board = !BIT(latch, 4) && ((latch & 0x0f) == 0x00);
+	bool const mod1 = !BIT(latch, 4) && ((latch & 0x0f) == 0x07);
+	u8 *const map_bank = &m_mapram[(latch & 0x03) << 12];
+
+	if (BIT(code, 7))
+	{
+		offs_t const low = (BIT(code, 2, 2) << 13) | (start & 0x1fff);
+		switch (BIT(code, 4, 3))
+		{
+		case 0: // banked EPROMs 305, 304, 302 and 303, latch bit 1 drives A15
+		case 1:
+		case 2:
+		case 3:
+			if (!write)
+			{
+				static constexpr offs_t base[4] = { 0x30000, 0x40000, 0x10000, 0x20000 };
+				view.install_rom(start, end, &m_rom[base[BIT(code, 4, 2)] | (BIT(latch, 1) << 15) | low]);
+			}
+			break;
+
+		case 5: // 301, output 0 clocks the latch
+			if (!write)
+				view.install_rom(start, end, &m_rom[low]);
+			else if (!BIT(code, 0))
+				view.install_write_handler(start, end, write8smo_delegate(*m_mod3, FUNC(gaelco_ms_mod3_decoder_device::latch_w)));
+			break;
+
+		case 6: // 8 KB RAM, the sprite list at the top
+			if (write)
+				view.install_writeonly(start, end, &m_ram[start & 0x1fff]);
+			else
+				view.install_rom(start, end, &m_ram[start & 0x1fff]);
+			break;
+
+		case 7: // writes to the boards at 0xc000-0xcfff
+			for (offs_t area = start; area < end; area += 0x400)
+			{
+				switch (BIT(area, 10, 2))
+				{
+				case 0:
+					if (bg_board)
+						view.install_write_handler(area, area + 0x3ff, write8sm_delegate(*m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_w)));
+					else if (mod1)
+						view.install_write_handler(area, area + 0x00f, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+					break;
+				case 1:
+					if (bg_board)
+						view.install_write_handler(area, area + 0x003, write8sm_delegate(*this, NAME([this] (offs_t offset, u8 data) { m_bg_scroll[offset] = data; })));
+					break;
+				default:
+					install_palette(view, area, area + 0x3ff, true);
+					break;
+				}
+			}
+			break;
+		}
+		return;
+	}
+
+	switch (code)
+	{
+	case 0x71: // background MOD 4 board or MOD 1 board
+		if (write)
+			break;
+		if (bg_board)
+			view.install_read_handler(start, start + 0x3ff, read8sm_delegate(*m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_r)));
+		else if (mod1)
+			view.install_read_handler(start, start + 0x00f, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+		break;
+
+	case 0x61: // palette, or the upper half of a background map RAM bank
+		if (write)
+			break;
+		if (!BIT(latch, 4))
+			install_palette(view, start, end, false);
+		else if (map_ram)
+			view.install_rom(start, end, &map_bank[start & 0xfff]);
+		break;
+
+	case 0x65: // background map RAM
+	case 0x6b:
+		if (!map_ram)
+			break;
+		if (write)
+			view.install_writeonly(start, end, &map_bank[start & 0xfff]);
+		else
+			view.install_rom(start, end, &map_bank[start & 0xfff]);
+		break;
+
+	case 0x6d: // text MOD 4 board, its scroll registers at 0xc800-0xc803
+		if (BIT(start, 12))
+		{
+			for (offs_t area = start; area < end; area += 0x400)
+			{
+				if (write)
+				{
+					view.install_write_handler(area, area + 0x3ff, BIT(area, 10) ?
+							write8sm_delegate(*m_mod4_tx, FUNC(gaelco_ms_mod4_device::attr_w)) :
+							write8sm_delegate(*m_mod4_tx, FUNC(gaelco_ms_mod4_device::code_w)));
+				}
+				else
+				{
+					view.install_read_handler(area, area + 0x3ff, BIT(area, 10) ?
+							read8sm_delegate(*m_mod4_tx, FUNC(gaelco_ms_mod4_device::attr_r)) :
+							read8sm_delegate(*m_mod4_tx, FUNC(gaelco_ms_mod4_device::code_r)));
+				}
+			}
+		}
+		else if (write)
+		{
+			view.install_write_handler(start, start + 0x003, write8sm_delegate(*this, NAME([this] (offs_t offset, u8 data) { m_tx_scroll[offset] = data; })));
+		}
+		break;
+	}
+}
+
+void blktiger_ms_state::machine_start()
+{
+	save_item(NAME(m_bg_scroll));
+	save_item(NAME(m_tx_scroll));
+}
+
 void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	for (int offs = m_spriteram.bytes() - 4; offs >= 0; offs -= 4)
+	u8 const *const spriteram = &m_ram[0x1e00];
+	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
 	{
-		int attr = m_spriteram[offs + 1];
-		int sx = m_spriteram[offs + 3] - ((attr & 0x10) << 4);
-		int sy = m_spriteram[offs + 2];
-		int code = m_spriteram[offs] | ((attr & 0xe0) << 3);
+		int attr = spriteram[offs + 1];
+		int sx = spriteram[offs + 3] - ((attr & 0x10) << 4);
+		int sy = spriteram[offs + 2];
+		int code = spriteram[offs] | ((attr & 0xe0) << 3);
 		int color = attr & 0x07;
 		int flipx = attr & 0x08;
 
@@ -309,6 +399,12 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	// basic machine hardware
 	Z80(config, m_maincpu, 24_MHz_XTAL / 4); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &blktiger_ms_state::main_map);
+
+	using decoder = gaelco_ms_mod3_decoder_device;
+	GAELCO_MS_MOD3_DECODER(config, m_mod3);
+	m_mod3->set_lines({ decoder::WRITE, decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0), decoder::LATCH(2), decoder::LATCH(4) });
+	m_mod3->set_latch_mask(0x1f);
+	m_mod3->set_install_callback(FUNC(blktiger_ms_state::mod3_install));
 	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_hold));
 
 	// video hardware
@@ -398,7 +494,7 @@ ROM_START( blktigerm )
 	ROM_LOAD( "21_p0201_82s129.ic4",       0x000, 0x0100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_p0202_82s129.ic12",      0x100, 0x0100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 
-	ROM_REGION( 0x0200, "proms", 0 )    // PROMs (function unknown)
+	ROM_REGION( 0x0200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "3_subcpu_p0322_82s147.bin", 0x0000, 0x0200, CRC(6d427336) SHA1(6ce1ef41df2b450fafe11c3021991618bdb771ed) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
@@ -409,19 +505,7 @@ ROM_END
 
 void blktiger_ms_state::init_blktigerm()
 {
-	uint8_t *const src = memregion("maincpu")->base();
-	int const len = 0x50000;
-
-	// bitswap data
-	for (int i = 0; i < len; i++)
-		src[i] = bitswap<8>(src[i], 5, 3, 7, 2, 0, 1, 4, 6);
-
-	// descramble address
-	std::vector<uint8_t> buffer(len);
-	memcpy(&buffer[0], src, len);
-
-	for (int i = 0; i < len; i++)
-		src[i] = buffer[bitswap<24>(i, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, 4, 0, 2, 7, 3, 1, 9, 11, 5)];
+	gaelco_ms_mod3_descramble(&m_rom[0], m_rom.bytes());
 }
 
 } // Anonymous namespace
