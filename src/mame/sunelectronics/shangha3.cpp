@@ -23,7 +23,7 @@ blocken:
 - incomplete zoom support, and missing rotation support. Setting the game in
   Game Mode B shows a decent test case for it by starting a play.
 - attract mode tries to read at 0x80000-0xfffff area, returning 0 in there
-  freezes the demo play for some frames (MT #00985). For now I've returned $ff,
+  freezes the demo play for some frames (MT00985). For now I've returned $ff,
   but needs HW tests to check out what lies in there (maybe a ROM mirror).
 - how to play screen is bogus, it basically loses sync pretty soon.
 
@@ -1092,9 +1092,6 @@ void shangha3_state::init_shangha3()
 void heberpop_state::init_heberpop()
 {
 	m_do_shadows = 0;
-
-	// sound CPU runs in IM 0
-	m_audiocpu->set_input_line_vector(0, 0xff);  // Z80 - RST 38h
 }
 
 void blocken_state::init_blocken()

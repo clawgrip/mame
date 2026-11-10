@@ -922,6 +922,7 @@ void m68000_musashi_device::execute_run()
 
 			/* Record previous program counter */
 			m_ppc = m_pc;
+			m68ki_rerun_expire();
 
 			/* Call external hook to peek at CPU */
 			debugger_instruction_hook(m_pc);
@@ -1102,6 +1103,12 @@ void m68000_musashi_device::init_cpu_common(void)
 	save_item(NAME(m_emmu_enabled));
 	save_item(NAME(m_can_instruction_restart));
 	save_item(NAME(m_restart_instruction));
+	save_item(NAME(m_rerun_pc));
+	save_item(NAME(m_rerun_count));
+	save_item(STRUCT_MEMBER(m_rerun, address));
+	save_item(STRUCT_MEMBER(m_rerun, size));
+	save_item(STRUCT_MEMBER(m_rerun, data));
+	save_item(STRUCT_MEMBER(m_rerun, write));
 
 	save_item(STRUCT_MEMBER(m_fpr, signExp));
 	save_item(STRUCT_MEMBER(m_fpr, signif));
@@ -1144,11 +1151,12 @@ void m68000_musashi_device::init_cpu_common(void)
 
 void m68000_musashi_device::device_reset()
 {
-	/* Disable the PMMU/HMMU on reset, if any */
+	/* Disable the on-chip PMMU/HMMU on reset. External MMU (emmu) is
+	 * board glue, not a CPU reset bit; keep it and recompute restart. */
 	m_pmmu_enabled = false;
 	m_hmmu_enabled = 0;
-	m_emmu_enabled = false;
-	m_can_instruction_restart = false;
+	m_can_instruction_restart = m_pmmu_enabled || m_emmu_enabled;
+	m_rerun_count = 0;
 
 	if (m_has_fpu)
 	{
@@ -2019,10 +2027,10 @@ void m68000_musashi_device::define_state(void)
 		state_add(M68K_ISP,    "SSP",       m_iotemp).callimport().callexport();
 
 	for (int regnum = 0; regnum < 8; regnum++) {
-		state_add(M68K_D0 + regnum, string_format("D%d", regnum).c_str(), m_dar[regnum]);
+		state_add(M68K_D0 + regnum, string_format("D%d", regnum), m_dar[regnum]);
 	}
 	for (int regnum = 0; regnum < 8; regnum++) {
-		state_add(M68K_A0 + regnum, string_format("A%d", regnum).c_str(), m_dar[8 + regnum]);
+		state_add(M68K_A0 + regnum, string_format("A%d", regnum), m_dar[8 + regnum]);
 	}
 
 	state_add(M68K_IR,         "IR",        m_ir);
@@ -2045,7 +2053,7 @@ void m68000_musashi_device::define_state(void)
 	if (m_cpu_type & MASK_020_OR_LATER)
 	{
 		for (int regnum = 0; regnum < 8; regnum++) {
-			state_add(M68K_FP0 + regnum, string_format("FP%d", regnum).c_str(), m_iotemp).callimport().callexport().formatstr("%10s");
+			state_add(M68K_FP0 + regnum, string_format("FP%d", regnum), m_iotemp).callimport().callexport().formatstr("%10s");
 		}
 		state_add(M68K_FPSR, "FPSR", m_fpsr);
 		state_add(M68K_FPCR, "FPCR", m_fpcr);
@@ -2088,6 +2096,7 @@ void m68000_musashi_device::define_state(void)
 
 	if (m_cpu_type == CPU_TYPE_COLDFIRE)
 	{
+		state_add(M68K_VBR, "VBR", m_vbr);
 		state_add(COLDFIRE_ROMBAR0, "ROMBAR0", m_rombar[0]);
 		state_add(COLDFIRE_ROMBAR1, "ROMBAR1", m_rombar[1]);
 		state_add(COLDFIRE_RAMBAR0, "RAMBAR0", m_rambar[0]);
@@ -2701,6 +2710,8 @@ void m68000_musashi_device::clear_all()
 	m_mmu_tmp_buserror_address = 0;
 	m_mmu_tmp_buserror_occurred = false;
 	m_restart_instruction = false;
+	m_rerun_pc = 0;
+	m_rerun_count = 0;
 	m_mmu_tmp_buserror_fc = 0;
 	m_mmu_tmp_buserror_rw = 0;
 

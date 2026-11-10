@@ -129,6 +129,7 @@ protected:
 	// device_t implementation
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
+	virtual void device_post_load() override ATTR_COLD;
 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
 	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
 
@@ -144,6 +145,7 @@ private:
 	uint16_t rom_r(offs_t offset);
 	uint16_t ram_r(offs_t offset, uint16_t mem_mask = ~0);
 	void ram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
+	void ram_bus_error(offs_t offset, bool read);
 
 	// a decoder asking for the next part of the system stream
 	void fma_drq_w(int state);

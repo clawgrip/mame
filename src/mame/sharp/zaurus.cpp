@@ -1652,7 +1652,7 @@ void zaurus_mie_state::mie21(machine_config &config)
 	SH7709(config, m_maincpu, 167'000'000);
 	m_maincpu->set_addrmap(AS_PROGRAM, &zaurus_mie_state::mie_map);
 
-	TOSHIBA_TC58256AFT(config, m_nand); // actually TC58128FT
+	TOSHIBA_TC58128FT(config, m_nand);
 }
 
 void zaurus_sa_state::zaurus_sa1110(machine_config &config)
@@ -1820,11 +1820,11 @@ ROM_END
 
 } // anonymous namespace
 
-COMP( 1996, zmi10, 0, 0, mi10, 0, zaurus_mi_state, empty_init, "Sharp", "Zaurus MI-10 \"Color Zaurus\" (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-COMP( 1998, zmi310, 0, 0, mi310, 0, zaurus_mi_state, empty_init, "Sharp", "Zaurus MI-310 \"Color Pocket\" (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-COMP( 1999, zmt300s, 0, 0, mt300, 0, zaurus_mi_state, empty_init, "Sharp", "Zaurus MT-300-S \"Communication Pal\" (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-COMP( 2000, zmie1, 0, 0, mie1, 0, zaurus_mie_state, empty_init, "Sharp", "Zaurus MI-E1 (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-COMP( 2001, zmie21, 0, 0, mie21, 0, zaurus_mie_state, empty_init, "Sharp", "Zaurus MI-E21 (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+COMP( 1996, zmi10,   0, 0, mi10,  0, zaurus_mi_state,  empty_init, "Sharp", "Zaurus MI-10 \"Color Zaurus\" (Japan)",         MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+COMP( 1998, zmi310,  0, 0, mi310, 0, zaurus_mi_state,  empty_init, "Sharp", "Zaurus MI-310 \"Color Pocket\" (Japan)",        MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+COMP( 1999, zmt300s, 0, 0, mt300, 0, zaurus_mi_state,  empty_init, "Sharp", "Zaurus MT-300-S \"Communication Pal\" (Japan)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+COMP( 2000, zmie1,   0, 0, mie1,  0, zaurus_mie_state, empty_init, "Sharp", "Zaurus MI-E1 (Japan)",                          MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+COMP( 2001, zmie21,  0, 0, mie21, 0, zaurus_mie_state, empty_init, "Sharp", "Zaurus MI-E21 (Japan)",                         MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
 
 COMP( 2002, zsl5500,  0, 0, zaurus_sa1110, zaurus_sa,  zaurus_sa_state,  empty_init, "Sharp", "Zaurus SL-5500 \"Collie\"",           MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
 COMP( 2002, zslc500,  0, 0, zaurus_pxa250, zaurus_pxa, zaurus_pxa_state, empty_init, "Sharp", "Zaurus SL-C500",                      MACHINE_NO_SOUND | MACHINE_NOT_WORKING )

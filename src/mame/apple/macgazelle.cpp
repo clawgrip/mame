@@ -2,26 +2,26 @@
 // copyright-holders:R. Belmont
 /****************************************************************************
 
-	Power Macintosh x500 and Twentieth Anniversary Macintosh "Gazelle" hardware
-	Emulation by R. Belmont
+    Power Macintosh x500 and Twentieth Anniversary Macintosh "Gazelle" hardware
+    Emulation by R. Belmont
 
-	Gazelle is a minor evolution of the Alchemy board, but it's a big upgrade.
-	Gone is Valkyrie-AR, and in is the ATI 264GT 3D RAGE.
+    Gazelle is a minor evolution of the Alchemy board, but it's a big upgrade.
+    Gone is Valkyrie-AR, and in is the ATI 264GT 3D RAGE.
 
-	Basic architecture:
-	- PowerPC 603e
-	- PSX+ (DRAM/ROM controller + Bandit PCI)
-	- ATI 264GT 3D RAGE
-	- O'Hare PCI-to-Mac I/O chip, same as in Power Mac 7500 "TNT"
+    Basic architecture:
+    - PowerPC 603e
+    - PSX+ (DRAM/ROM controller + Bandit PCI)
+    - ATI 264GT 3D RAGE
+    - O'Hare PCI-to-Mac I/O chip, same as in Power Mac 7500 "TNT"
 
-	Machine IDs:
-	0x30F0 - PM5500
-	0x30E0 - PM6500
-	0x70F0 - TAM
+    Machine IDs:
+    0x30F0 - PM5500
+    0x30E0 - PM6500
+    0x70F0 - TAM
 
-	Slot IRQs: (TODO)
-	0x17 for slot 0xd, 0x19 for slot 0xe, 0x1c for slot 0xf,
-	and 0x16 for the Comm Slot II.
+    Slot IRQs: (TODO)
+    0x17 for slot 0xd, 0x19 for slot 0xe, 0x1c for slot 0xf,
+    and 0x16 for the Comm Slot II.
 
  ****************************************************************************/
 
@@ -53,9 +53,10 @@
 //#define LOG_OUTPUT_FUNC osd_printf_info
 #include "logmacro.h"
 
-static constexpr u32 MAIN_BUS_FREQUENCY = 50'000'000;
 
 namespace { // anonymous namespace
+
+static constexpr u32 MAIN_BUS_FREQUENCY = 50'000'000;
 
 class gazelle_state : public driver_device
 {
@@ -75,16 +76,14 @@ public:
 	{
 	}
 
-	void gazelle(machine_config &config);
-	void gaz250(machine_config &config);
-	void gaz275(machine_config &config);
-	void gaz300(machine_config &config);
+	void gazelle(machine_config &config) ATTR_COLD;
+	void gaz250(machine_config &config) ATTR_COLD;
+	void gaz275(machine_config &config) ATTR_COLD;
+	void gaz300(machine_config &config) ATTR_COLD;
 
-	void pmac6500_map(address_map &map) ATTR_COLD;
-
-	void init_pmac5500();
-	void init_pmac6500();
-	void init_tam();
+	void init_pmac5500() ATTR_COLD;
+	void init_pmac6500() ATTR_COLD;
+	void init_tam() ATTR_COLD;
 
 private:
 	required_device<ppc603e_device> m_maincpu;
@@ -104,14 +103,13 @@ private:
 	virtual void machine_start() override ATTR_COLD;
 	virtual void machine_reset() override ATTR_COLD;
 
+	void pmac6500_map(address_map &map) ATTR_COLD;
+
 	u16 read_sense();
 	void write_sense(u16 data);
 
-	void cuda_reset_w(int state)
-	{
-		m_maincpu->set_input_line(INPUT_LINE_HALT, state);
-		m_maincpu->set_input_line(INPUT_LINE_RESET, state);
-	}
+	void cuda_reset_w(int state);
+	void cuda_power_w(int state);
 
 	void slot_irq_handler(int line, int state);
 };
@@ -192,6 +190,20 @@ void gazelle_state::write_sense(u16 data)
 	m_sense = data;
 }
 
+void gazelle_state::cuda_reset_w(int state)
+{
+	m_maincpu->set_input_line(INPUT_LINE_HALT, state);
+	m_maincpu->set_input_line(INPUT_LINE_RESET, state);
+}
+
+void gazelle_state::cuda_power_w(int state)
+{
+	if (state)
+	{
+		machine().schedule_exit();
+	}
+}
+
 void gazelle_state::slot_irq_handler(int line, int state)
 {
 }
@@ -219,14 +231,14 @@ static constexpr u8 ext6(u8 bc, u8 ac, u8 ab)
 static INPUT_PORTS_START( gazelle )
 	PORT_START("monitor")
 	PORT_CONFNAME(0xff, 0x06, "Monitor type")
-	PORT_CONFSETTING(0x00, u8"Mac 21\" Color Display (1152\u00d7870)")          // "RGB 2 Page" or "Kong"
-	PORT_CONFSETTING(0x01, u8"Mac Portrait Display (B&W 15\" 640\u00d7870)")    // "Full Page" or "Portrait"
-	PORT_CONFSETTING(0x02, u8"Mac RGB Display (12\" 512\u00d7384)")             // "Rubik" (modified IIgs AppleColor RGB)
-	PORT_CONFSETTING(0x03, u8"Mac Two-Page Display (B&W 21\" 1152\u00d7870)")   // "2 Page"
-	PORT_CONFSETTING(0x06, u8"Mac Hi-Res Display (12-14\" 640\u00d7480)")       // "High Res"
-	PORT_CONFSETTING(ext(1, 1, 3), u8"640\u00d7480 VGA")
-	PORT_CONFSETTING(ext(2, 3, 1), u8"832\u00d7624 16\" RGB")                   // "Goldfish" or "16 inch RGB"
-	PORT_CONFSETTING(ext(3, 2, 2), u8"1024\u00d7768 19\" RGB")
+	PORT_CONFSETTING(0x00, u8"Mac 21\" Color Display (1152×870)")          // "RGB 2 Page" or "Kong"
+	PORT_CONFSETTING(0x01, u8"Mac Portrait Display (B&W 15\" 640×870)")    // "Full Page" or "Portrait"
+	PORT_CONFSETTING(0x02, u8"Mac RGB Display (12\" 512×384)")             // "Rubik" (modified IIgs AppleColor RGB)
+	PORT_CONFSETTING(0x03, u8"Mac Two-Page Display (B&W 21\" 1152×870)")   // "2 Page"
+	PORT_CONFSETTING(0x06, u8"Mac Hi-Res Display (12-14\" 640×480)")       // "High Res"
+	PORT_CONFSETTING(ext(1, 1, 3), u8"640×480 VGA")
+	PORT_CONFSETTING(ext(2, 3, 1), u8"832×624 16\" RGB")                   // "Goldfish" or "16 inch RGB"
+	PORT_CONFSETTING(ext(3, 2, 2), u8"1024×768 19\" RGB")
 	PORT_CONFSETTING(ext6(0, 0, 3), u8"Multiple Scan 14\"")
 	PORT_CONFSETTING(ext6(0, 2, 3), u8"Multiple Scan 16\"")
 	PORT_CONFSETTING(ext6(2, 0, 3), u8"Multiple Scan 21\"")
@@ -235,7 +247,7 @@ INPUT_PORTS_END
 void gazelle_state::gazelle(machine_config &config)
 {
 	PPC603E(config, m_maincpu, 225'000'000);
-	m_maincpu->ppcdrc_set_options(PPCDRC_COMPATIBLE_OPTIONS | PPCDRC_MACOS_CACHE_HACK);
+	m_maincpu->ppcdrc_set_options(PPCDRC_COMPATIBLE_OPTIONS | PPCDRC_MACOS_CACHE_HACK | PPCDRC_BUS_RETRY);
 	m_maincpu->set_addrmap(AS_PROGRAM, &gazelle_state::pmac6500_map);
 	m_maincpu->set_bus_frequency(MAIN_BUS_FREQUENCY);
 	m_maincpu->set_tb_divisor(4);
@@ -255,6 +267,7 @@ void gazelle_state::gazelle(machine_config &config)
 
 	OHARE(config, m_ohare);
 	m_ohare->set_maincpu_tag("maincpu");
+	m_ohare->set_via_retry(true); // keep Cuda's shift clock edges in order with OF's VIA accesses
 	m_ohare->irq_callback().set_inputline(m_maincpu, PPC_IRQ);
 
 	m_ohare->ata(0).slot(0).set_default_option("hdd");
@@ -299,6 +312,7 @@ void gazelle_state::gazelle(machine_config &config)
 	CUDA_V2XX(config, m_cuda, XTAL(32'768));
 	m_cuda->set_default_bios_tag("341s0060");
 	m_cuda->reset_callback().set(FUNC(gazelle_state::cuda_reset_w));
+	m_cuda->poweroff_callback().set(FUNC(gazelle_state::cuda_power_w));
 	m_cuda->linechange_callback().set(m_adbbus, FUNC(adb_bus_device::adb_host_line_w));
 	m_cuda->via_clock_callback().set(m_ohare, FUNC(ohare_device::cb1_w));
 	m_cuda->via_data_callback().set(m_ohare, FUNC(ohare_device::cb2_w));
@@ -348,12 +362,12 @@ ROM_END
 // 6500: 225, 250, 275, 300
 // TAM: 250
 
-//    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT    CLASS           INIT            COMPANY           FULLNAME                   FLAGS
-COMP( 1997, pmac6500, 0,        0,      gazelle,  gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/225", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac6500_250, pmac6500, 0,  gaz250,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/250", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac6500_275, pmac6500, 0,  gaz275,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/275", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac6500_300, pmac6500, 0,  gaz300,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/300", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac5500, pmac6500, 0,      gazelle,  gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/225", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac5500_250, pmac6500, 0,  gaz250,   gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/250", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac5500_275, pmac6500, 0,  gaz275,   gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/275", MACHINE_SUPPORTS_SAVE)
-COMP( 1997, pmac20th, pmac6500, 0,      gaz250,   gazelle, gazelle_state, init_tam,       "Apple Computer", "Twentieth Anniversary Macintosh", MACHINE_SUPPORTS_SAVE)
+//    YEAR  NAME          PARENT    COMPAT  MACHINE   INPUT    CLASS          INIT            COMPANY           FULLNAME                    FLAGS
+COMP( 1997, pmac6500,     0,        0,      gazelle,  gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/225", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac6500_250, pmac6500, 0,      gaz250,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/250", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac6500_275, pmac6500, 0,      gaz275,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/275", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac6500_300, pmac6500, 0,      gaz300,   gazelle, gazelle_state, init_pmac6500,  "Apple Computer", "Power Macintosh 6500/300", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac5500,     pmac6500, 0,      gazelle,  gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/225", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac5500_250, pmac6500, 0,      gaz250,   gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/250", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac5500_275, pmac6500, 0,      gaz275,   gazelle, gazelle_state, init_pmac5500,  "Apple Computer", "Power Macintosh 5500/275", MACHINE_SUPPORTS_SAVE)
+COMP( 1997, pmac20th,     pmac6500, 0,      gaz250,   gazelle, gazelle_state, init_tam,       "Apple Computer", "Twentieth Anniversary Macintosh", MACHINE_SUPPORTS_SAVE)

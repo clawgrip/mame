@@ -27,7 +27,6 @@
 #include "machine/w83787f.h"
 #include "video/voodoo_pci.h"
 
-#include "softlist.h"
 #include "softlist_dev.h"
 
 namespace {
@@ -40,7 +39,7 @@ public:
 		, m_maincpu(*this, "maincpu")
 	{ }
 
-	void sis496(machine_config &config);
+	void sis496(machine_config &config) ATTR_COLD;
 
 protected:
 	required_device<i486dx4_device> m_maincpu;
@@ -63,7 +62,7 @@ public:
 		, m_screen(*this, "voodoo_screen")
 	{ }
 
-	void sis496_voodoo1(machine_config &config);
+	void sis496_voodoo1(machine_config &config) ATTR_COLD;
 
 protected:
 	required_device<voodoo_1_pci_device> m_voodoo;
