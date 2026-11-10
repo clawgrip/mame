@@ -23,13 +23,22 @@
     access. The first CPU gets the fixed EPROM area at 0x8000-0xffff, the 8 KB banks of the original
     game at 0x6000-0x7fff (0-7 from IC13, 8-11 from IC14) and RAM at 0x0000-0x1fff, shared with the
     second CPU, which runs its own program from 0xf000-0xffff. Both see the video boards at
-    0x2000-0x5fff.
+    0x2000-0x5fff, where the first CPU keeps the video RAM of the original game. The PAL on the sub
+    board keeps three bank bits, written at 0xf800.
+
+    The second CPU does the I/O of the original game: it copies the inputs and DIP switches from the
+    MOD 1 board (0x9000) to where the program reads its I/O ports, converts the palette through tables
+    of its own (0x7000), builds the MOD 51 sprite list (0x8000) and sets the scroll registers. At the
+    end of each interrupt the two CPUs wait for each other, and the second one acknowledges the
+    interrupt by reading 0x6000.
 
     TODO:
-    - everything else: the bank latch and the other PROM outputs (video boards, MOD 1, inputs)
-    - the bank latch: the program writes each bank number twice to 0xf800, in bits 0-3 and then in
-      bits 1-4, which suits the PAL on the sub board (three registers, one shifting into another);
-      where the fourth bank bit comes from is unknown
+    - video: tile maps of the three MOD 4 boards, text layer (the second CPU copies it to 0x5cc0),
+      sprites
+    - sound: nothing writes the MOD 1 board yet
+    - where the fourth bank bit comes from: the program writes each bank number twice to 0xf800,
+      in bits 0-3 and then in bits 1-4, and the PAL only holds three bits
+    - interrupts: one vblank interrupt for both CPUs, acknowledged by the second one, fits the programs
 */
 
 
@@ -38,6 +47,7 @@
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod3.h"
+#include "../gaelco/gaelco_ms_mod3_pal.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m6809/m6809.h"
@@ -60,9 +70,15 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod3(*this, "mod3"),
 		m_mod3_sub(*this, "mod3_sub"),
+		m_pal(*this, "mod3_pal"),
 		m_screen(*this, "screen"),
+		m_palette(*this, "palette"),
 		m_rom(*this, "maincpu"),
-		m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG)
+		m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
+		m_vram(*this, "vram", 0x4000, ENDIANNESS_BIG),
+		m_spriteram(*this, "spriteram", 0x1000, ENDIANNESS_BIG),
+		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
+		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
 	void gryzorm(machine_config &config);
@@ -78,11 +94,23 @@ private:
 	required_device<gaelco_ms_mod1_6809_device> m_mod1;
 	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
 	required_device<gaelco_ms_mod3_decoder_device> m_mod3_sub;
+	required_device<gaelco_ms_mod3_pal_device> m_pal;
 	required_device<screen_device> m_screen;
+	required_device<palette_device> m_palette;
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
+	memory_share_creator<u8> m_vram;
+	memory_share_creator<u8> m_spriteram;
+	memory_share_creator<u8> m_paletteram;
+	memory_share_creator<u8> m_paletteram_ext;
+
+	u8 m_bank3 = 0;
 
 	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
+	void bank_w(u8 data);
+	void vblank_w(int state);
+	u8 irq_ack_r();
+	void pal_outputs_w(u8 data);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -98,14 +126,109 @@ uint32_t gryzor_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bit
 
 void gryzor_ms_state::machine_start()
 {
+	save_item(NAME(m_bank3));
+}
+
+
+void gryzor_ms_state::bank_w(u8 data)
+{
+	// the PAL doesn't hold the fourth bank bit, the program has it in bit 4 of its second write
+	m_bank3 = BIT(data, 4);
+	m_pal->latch_w(data);
+}
+
+void gryzor_ms_state::pal_outputs_w(u8 data)
+{
+	m_mod3->latch_w(data | (m_bank3 << 4));
+}
+
+
+void gryzor_ms_state::vblank_w(int state)
+{
+	// one interrupt for both CPUs, acknowledged by the second one
+	if (state)
+	{
+		m_maincpu->set_input_line(M6809_IRQ_LINE, ASSERT_LINE);
+		m_subcpu->set_input_line(M6809_IRQ_LINE, ASSERT_LINE);
+	}
+}
+
+u8 gryzor_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+	{
+		m_maincpu->set_input_line(M6809_IRQ_LINE, CLEAR_LINE);
+		m_subcpu->set_input_line(M6809_IRQ_LINE, CLEAR_LINE);
+	}
+	return 0xff;
 }
 
 
 void gryzor_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch)
 {
-	// the other boards aren't hooked up yet
 	if (!BIT(code, 7))
+	{
+		// the boards in the cage
+		switch (code)
+		{
+		case 0x5f: // interrupt acknowledge
+			if (!write)
+				view.install_read_handler(start, end, read8smo_delegate(*this, FUNC(gryzor_ms_state::irq_ack_r)));
+			break;
+
+		case 0x61: // palette, A10 selects the blue byte
+			for (offs_t area = start; area < end; area += 0x800)
+			{
+				for (unsigned half = 0; half < 2; half++)
+				{
+					offs_t const first = area + (half << 10);
+					if (write)
+					{
+						view.install_write_handler(first, first + 0x3ff, half ?
+								write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
+								write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+					}
+					else
+					{
+						view.install_rom(first, first + 0x3ff, half ? &m_paletteram_ext[0] : &m_paletteram[0]);
+					}
+				}
+			}
+			break;
+
+		case 0x65: // MOD 51 sprite board
+			if (write)
+				view.install_writeonly(start, end, &m_spriteram[0]);
+			else
+				view.install_rom(start, end, &m_spriteram[0]);
+			break;
+
+		case 0x6d: // video RAM of the original game
+		case 0x71:
+		case 0x75:
+		case 0x79:
+			if (write)
+				view.install_writeonly(start, end, &m_vram[start - 0x2000]);
+			else
+				view.install_rom(start, end, &m_vram[start - 0x2000]);
+			break;
+
+		case 0x7d: // MOD 1 board
+			if (write)
+				view.install_write_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_device::host_w)));
+			else
+				view.install_read_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_device::host_r)));
+			break;
+		}
 		return;
+	}
+
+	// with output 0 low, writes clock the bank latch
+	if (write && !BIT(code, 0))
+	{
+		view.install_write_handler(start, end, write8smo_delegate(*this, FUNC(gryzor_ms_state::bank_w)));
+		return;
+	}
 
 	// bits 5-6 pick the chip, IC13, IC14 or the RAM, and bits 2-4 drive A13-A15
 	offs_t const offset = (BIT(code, 2, 3) << 13) | (start & 0x1fff);
@@ -180,12 +303,16 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	MC6809(config, m_subcpu, 22.1184_MHz_XTAL / 3); // Motorola SC84014P, divisor unknown
 	m_subcpu->set_addrmap(AS_PROGRAM, &gryzor_ms_state::sub_map);
 
-	// one PROM for both CPUs, the input that takes A11 on ddragonm is a fourth bank bit here
+	// the second CPU polls flags the first one sets only briefly
+	config.set_perfect_quantum(m_maincpu);
+
+	// one PROM for both CPUs, bank bits 0-2 come from PAL pins 18-20 and the input that takes A11 on
+	// ddragonm is the fourth bank bit here
 	using decoder = gaelco_ms_mod3_decoder_device;
-	constexpr std::array<u8, 9> lines{ decoder::LATCH(2), decoder::LATCH(3), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0), decoder::LATCH(1), decoder::SELECT };
+	constexpr std::array<u8, 9> lines{ decoder::LATCH(3), decoder::LATCH(4), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(1), decoder::LATCH(2), decoder::SELECT };
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
 	m_mod3->set_lines(lines);
-	m_mod3->set_latch_mask(0x0f);
+	m_mod3->set_latch_mask(0x1e);
 	m_mod3->set_install_callback(FUNC(gryzor_ms_state::mod3_install));
 
 	GAELCO_MS_MOD3_DECODER(config, m_mod3_sub);
@@ -194,12 +321,16 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod3_sub->set_prom("mod3");
 	m_mod3_sub->set_install_callback(FUNC(gryzor_ms_state::mod3_install));
 
+	GAELCO_MS_MOD3_PAL(config, m_pal);
+	m_pal->outputs_callback().set(FUNC(gryzor_ms_state::pal_outputs_w));
+
 	// video hardware
 	SCREEN(config, m_screen);
 	m_screen->set_screen_update(FUNC(gryzor_ms_state::screen_update));
+	m_screen->screen_vblank().set(FUNC(gryzor_ms_state::vblank_w));
 	m_screen->set_palette("palette");
 
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
 	mod21.set_screen(m_screen);
@@ -267,8 +398,10 @@ ROM_START( gryzorm )
 	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "mod_3-4_sub_p0318_mmi63s481.bin", 0x000, 0x200, CRC(67a4bbc7) SHA1(441be3a810225813bf2667ddf9b2fdc7de35196e) )
 
-	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
+	ROM_REGION( 0xcc, "mod3_pal", 0 ) // on the CPU sub board, bank latch
 	ROM_LOAD( "mod_3-4_sub_p36_pal20x4.bin",  0x000, 0x0cc, CRC(896e285d) SHA1(5a49890c396fb9f3625d421ff4a8823d3b76ccb9) )
+
+	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_4-3_p0403_pal16r8.ic29",   0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) ) // Same on all MOD 4/3 PCBs
 	ROM_LOAD( "mod_4-3_a_p0403_pal16r8.ic29", 0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) ) // Same on all MOD 4/3 PCBs
 	ROM_LOAD( "mod_4-3_b_p0403_pal16r8.ic29", 0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) ) // Same on all MOD 4/3 PCBs
