@@ -23,24 +23,24 @@
     palettes on the sprite board, and reads the inputs and DIP switches from the MOD 1 board. It
     also moves the grenade counters a column inwards and changes a few sprite colours.
 
+    The MOD 1/4 board takes EPROM A15 from its decoder PROM, and its program acknowledges the M5205
+    interrupt by writing 0x6002, next to the latch. The program copies the DIP switches to bytes 1 and
+    3 of the shared RAM, and the 68000 forces switches SW1:6-8 (button inversion, flip screen and
+    trackball size) and SW2:7 off.
+
     TODO:
-    - MOD 1/4: not hooked up, nor with it the inputs and DIP switches. Its decoder PROM puts RAM at
-      0x2000, the YM2203s at 0x4000 and the latch at 0x6000, and drives EPROM A15 from output 7: the
-      0x8000-0xffff window shows EPROM 0x4000-0xbfff, or 0xc000-0xffff and 0x0000-0x3fff with the
-      bank bit set
+    - MOD 1/4 clocks
 */
 
 
 #include "emu.h"
 
+#include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
 #include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
 #include "emupal.h"
 #include "screen.h"
@@ -55,6 +55,7 @@ public:
 	cabal_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_mod1(*this, "mod1"),
 		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
 		m_mod51(*this, "mod51"),
@@ -73,6 +74,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<gaelco_ms_mod51_device> m_mod51;
@@ -153,7 +155,7 @@ void cabal_ms_state::vblank_irq(int state)
 void cabal_ms_state::main_map(address_map &map)
 {
 	// the program runs the attract demo only if the word at 0x3fff0 isn't 0 (erased EPROM area in the
-	// original game), nothing is fitted there; it also gives idle inputs while the MOD 1 isn't hooked up
+	// original game), nothing is fitted there
 	map.unmap_value_high();
 
 	map(0x000000, 0x02ffff).rom();
@@ -163,7 +165,7 @@ void cabal_ms_state::main_map(address_map &map)
 	map(0x060800, 0x060803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[1][offset] = data; })).umask16(0xff00);
 	map(0x080000, 0x0807ff).rw(m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x080800, 0x080803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[0][offset] = data; })).umask16(0xff00);
-	// 0xa0000-0xa000f MOD 1 board, not hooked up
+	map(0x0a0000, 0x0a000f).rw(m_mod1, FUNC(gaelco_ms_mod1_adpcm_device::host16_r), FUNC(gaelco_ms_mod1_adpcm_device::host16_w));
 	map(0x0c0000, 0x0c0000).lw8(NAME([this] (u8 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
 	map(0x0e0000, 0x0e03ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
 	map(0x0e0400, 0x0e07ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
@@ -171,23 +173,63 @@ void cabal_ms_state::main_map(address_map &map)
 
 
 static INPUT_PORTS_START( cabalm )
-	PORT_START("DSW")
-	PORT_DIPUNKNOWN_DIPLOC(0x0001, 0x0001, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0002, 0x0002, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0004, 0x0004, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0008, 0x0008, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x0010, 0x0010, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x0020, 0x0020, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x0040, 0x0040, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x0080, 0x0080, "SW1:8")
-	PORT_DIPUNKNOWN_DIPLOC(0x0100, 0x0100, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x0200, 0x0200, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x0400, 0x0400, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x0800, 0x0800, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x1000, 0x1000, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x2000, 0x2000, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x4000, 0x4000, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x8000, 0x8000, "SW2:8")
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the low byte of the original game's DSW
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2,3,4") PORT_CONDITION("SW1", 0x10, NOTEQUALS, 0x00)
+	PORT_DIPSETTING(    0x0a, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 8C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 5C_3C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2") PORT_CONDITION("SW1", 0x10, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4") PORT_CONDITION("SW1", 0x10, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x10, 0x10, "Coin Mode" ) PORT_DIPLOCATION("SW1:5")
+	PORT_DIPSETTING(    0x10, "Mode 1" )
+	PORT_DIPSETTING(    0x00, "Mode 2" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW1:8" )
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A, the high byte of the original game's DSW
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x01, "5" )
+	PORT_DIPSETTING(    0x00, "121 (Cheat)")
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x0c, "150k 650k 500k+" )
+	PORT_DIPSETTING(    0x08, "200k 800k 600k+" )
+	PORT_DIPSETTING(    0x04, "300k 1000k 700k+" )
+	PORT_DIPSETTING(    0x00, "300k Only" )
+	PORT_DIPNAME( 0x30, 0x20, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -212,8 +254,6 @@ void cabal_ms_state::cabalm(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &cabal_ms_state::main_map);
-
-	Z80(config, "audiocpu", 20_MHz_XTAL / 5).set_disable(); // divisor unknown
 
 	// video hardware
 	SCREEN(config, m_screen);
@@ -248,11 +288,15 @@ void cabal_ms_state::cabalm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	YM2203(config, "ym1", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	YM2203(config, "ym2", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
-
-	MSM5205(config, "msm", 20_MHz_XTAL / 5).add_route(ALL_OUTPUTS, "mono", 0.15); // divisor unknown
+	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
+	m_mod1->set_ym_clock(1'119'838); // unknown, gives the pitch of the original game
+	m_mod1->set_rom_a15_output(true);
+	m_mod1->set_latch_int_ack(true);
+	m_mod1->in_callback<0>().set_ioport("IN0");
+	m_mod1->in_callback<1>().set_ioport("IN1");
+	m_mod1->in_callback<2>().set_ioport("SW2");
+	m_mod1->in_callback<3>().set_ioport("SW1");
+	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
 ROM_START( cabalm )
@@ -264,7 +308,7 @@ ROM_START( cabalm )
 	ROM_LOAD16_BYTE( "mod_6-1_ca_301.ic26",   0x20000, 0x08000, CRC(6c5bd9dd) SHA1(fa69a567990d9dfb6a79e2b16fde1ce1626250ea) )
 	ROM_LOAD16_BYTE( "mod_6-1_ca_304.ic25",   0x20001, 0x08000, CRC(f9d7a8a2) SHA1(c425fa5e69fef4eefeaf597f95acc3a249705863) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on MOD 1/4 board
+	ROM_REGION( 0x10000, "mod1", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod_1-4_ca_101.ic12",          0x00000, 0x10000, CRC(1189d0ce) SHA1(a992006377c3b0c952337a2331d437458027bba4) )
 
 	ROM_REGION( 0x80000, "mod4_bg", ROMREGION_INVERT ) // on MOD 4/2a board
@@ -290,7 +334,7 @@ ROM_START( cabalm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x20, "proms", 0 ) // MOD 1/4 decoder, the board isn't hooked up
+	ROM_REGION( 0x20, "mod1:prom", 0 ) // on MOD 1/4 board
 	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(267d835b) SHA1(056a86dafa13d476118ce019622d7af9461e2850) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
@@ -304,4 +348,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 1988, cabalm, cabal, cabalm, cabalm, cabal_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Cabal (Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 1988, cabalm, cabal, cabalm, cabalm, cabal_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Cabal (Modular System)", MACHINE_NOT_WORKING )

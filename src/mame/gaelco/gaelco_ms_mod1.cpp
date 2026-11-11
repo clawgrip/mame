@@ -7,7 +7,8 @@
     Z80, 2 x YM2203C + 2 x Y3014B, one EPROM (IC12), 8 KB RAM, 82S123
     decoder PROM (IC20) and two banks of 8 DIP switches. Some games add a
     small sub board with an OKI M5205 and its latch; its VCK is then the
-    interrupt source.
+    interrupt source. Cabal acknowledges it with writes to the latch area
+    with A1 high.
 
     Gryzor and Double Dragon use a 6809 version (Motorola SC84014P). Its
     interrupt goes to FIRQ, and its PROMs have outputs 6 and 7 the other way
@@ -17,7 +18,8 @@
     The memory map comes from the decoder PROM. Deduced from the PROM
     contents and the sound programs: the PROM is addressed by A15, A14, A13,
     latch bit 7 and A11. A12 isn't decoded, so every 2 KB area is mirrored
-    4 KB above. EPROM A15 is CPU A15. Outputs, all but bit 0 active low:
+    4 KB above. EPROM A15 is CPU A15, or output 7 on Cabal's board.
+    Outputs, all but bit 0 and the EPROM A15 output active low:
       bit 0  EPROM A14
       bit 1  EPROM select
       bit 2  RAM select
@@ -28,7 +30,7 @@
              bit 7 bank
       bit 6  strobe, acknowledges the interrupt (with the latch, it's where
              the YM2203s are when the bank bit is set)
-      bit 7  strobe, acknowledges the NMI (used with P0101)
+      bit 7  strobe, acknowledges the NMI (used with P0101), or EPROM A15
 
     The top 16 bytes of the RAM are shared with the CPU board. The sound
     programs copy the connector inputs (YM2203 #1 ports) and the DIP
@@ -44,6 +46,8 @@
     110    0000-bfff banked  c000-dfff  e000    8000   Automat, Blood Bros., Dragon Ninja, Fighting Fantasy,
                                                        Raiden, Secret Agent, Toki
     112    0000-7fff         8000-9fff  c000    -      Twin Cobra
+    ?      0000-1fff, 8000-ffff banked
+                             2000-3fff  4000    6000   Cabal (EPROM A15 on output 7)
     116    0000-bfff         e000-ffff  c000    8000   Last Duel
     P0115  0000-7fff, c000-ffff banked
                              8000-9fff  a000    c000   Gals Panic
@@ -54,13 +58,15 @@
 
     The banked area shows one of two 16 KB EPROM areas (EPROM A14 follows
     the latch bank bit): 8000-bfff or c000-ffff, 0000-3fff or 4000-7fff with
-    P0111.
+    P0111. On Cabal's board the bank bit drives EPROM A15 instead: the
+    0x8000-0xffff window shows EPROM 0x4000-0xbfff, or 0xc000-0xffff and
+    0x0000-0x3fff with the bank bit set.
 
     TODO:
     - clocks (there's no crystal on the board)
     - interrupt source without the M5205 sub board
-    - Cabal's program wants RAM at 2000, the YM2203s at 4000 and EPROM A15
-      from the bank bit, which no known PROM or board wiring gives
+    - Cabal's board: the PROM label, and whether jumpers or another board
+      revision give EPROM A15 and the latch interrupt acknowledge
     - 6809 version: the NMI acknowledge is a guess, no known program uses
       the NMI
 
@@ -118,7 +124,9 @@ gaelco_ms_mod1_device_base::gaelco_ms_mod1_device_base(const machine_config &mco
 	m_int_ack(int_ack),
 	m_nmi_ack(nmi_ack),
 	m_int_period(attotime::zero),
-	m_host_nmi(false)
+	m_host_nmi(false),
+	m_rom_a15_output(false),
+	m_latch_int_ack(false)
 {
 }
 
@@ -145,6 +153,9 @@ void gaelco_ms_mod1_device_base::add_adpcm(machine_config &config)
 
 void gaelco_ms_mod1_device_base::device_start()
 {
+	// with EPROM A15 on output 7, that output isn't a strobe
+	u8 const strobes = m_rom_a15_output ? 0x7f : 0xff;
+
 	// one view for each value of the bank bit, built from the PROM in 2 KB pages
 	for (unsigned bank = 0; bank < 2; bank++)
 	{
@@ -152,7 +163,7 @@ void gaelco_ms_mod1_device_base::device_start()
 		{
 			offs_t const end = start + 0x7ff;
 			u8 const data = m_prom[(BIT(start, 13, 3) << 2) | (bank << 1) | BIT(start, 11)];
-			u8 const sel = ~data;
+			u8 const sel = ~data & strobes;
 
 			if (BIT(sel, 2))
 			{
@@ -161,7 +172,10 @@ void gaelco_ms_mod1_device_base::device_start()
 			}
 
 			if (BIT(sel, 1))
-				m_view[bank].install_rom(start, end, &m_rom[((start & 0xbfff) | (BIT(data, 0) << 14)) & (m_rom.length() - 1)]);
+			{
+				offs_t const a15 = m_rom_a15_output ? BIT(data, 7) : BIT(start, 15);
+				m_view[bank].install_rom(start, end, &m_rom[((start & 0x3fff) | (BIT(data, 0) << 14) | (a15 << 15)) & (m_rom.length() - 1)]);
+			}
 
 			bool const ym = BIT(sel, 4);
 			bool const latch = BIT(sel, 5);
@@ -191,7 +205,12 @@ void gaelco_ms_mod1_device_base::device_start()
 					if (ym)
 						ym_w(offset, data);
 					if (latch)
-						latch_w(data);
+					{
+						if (m_latch_int_ack && BIT(offset, 1))
+							int_ack();
+						else
+							latch_w(data);
+					}
 					if (intack)
 						int_ack();
 					if (nmiack)

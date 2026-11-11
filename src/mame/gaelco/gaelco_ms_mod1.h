@@ -19,6 +19,10 @@ public:
 	}
 	void set_int_period(const attotime &period) { m_int_period = period; }
 	void set_host_nmi(bool enable) { m_host_nmi = enable; }
+	// EPROM A15 from PROM output 7 instead of CPU A15
+	void set_rom_a15_output(bool enable) { m_rom_a15_output = enable; }
+	// writes to the latch area with A1 high acknowledge the interrupt instead of writing the latch
+	void set_latch_int_ack(bool enable) { m_latch_int_ack = enable; }
 
 	// 0-1: YM2203 #1 ports A and B (connector inputs), 2-3: YM2203 #2 ports A and B (DIP switches SW2 and SW1)
 	template <unsigned N> auto in_callback() { return m_in_cb[N].bind(); }
@@ -72,6 +76,8 @@ private:
 
 	attotime m_int_period;
 	bool m_host_nmi;
+	bool m_rom_a15_output;
+	bool m_latch_int_ack;
 	u8 m_bank;
 };
 
