@@ -24,9 +24,10 @@
     also moves the grenade counters a column inwards and changes a few sprite colours.
 
     TODO:
-    - MOD 1/4: the decoder PROM in the set doesn't fit the sound program (it wants RAM at 0x2000, the
-      YM2203s at 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), so the sound
-      board and with it the inputs and DIP switches aren't hooked up
+    - MOD 1/4: not hooked up, nor with it the inputs and DIP switches. Its decoder PROM puts RAM at
+      0x2000, the YM2203s at 0x4000 and the latch at 0x6000, and drives EPROM A15 from output 7: the
+      0x8000-0xffff window shows EPROM 0x4000-0xbfff, or 0xc000-0xffff and 0x0000-0x3fff with the
+      bank bit set
 */
 
 
@@ -290,9 +291,7 @@ ROM_START( cabalm )
 	ROM_LOAD( "mod_51-3_502_82s129.ic10",     0x00000, 0x00100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
 	ROM_REGION( 0x20, "proms", 0 ) // MOD 1/4 decoder, the board isn't hooked up
-	// the 112 decoder PROM of Twin Cobra, which doesn't fit this sound program (it wants RAM at 0x2000, the YM2203s at
-	// 0x4000, the latch at 0x6000 and EPROM A15 from the latch bank bit), needs a redump to confirm
-	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(e37acb44) SHA1(c3bd11da0a13658edff6e795e112356307e16290) BAD_DUMP )
+	ROM_LOAD( "mod_1-4_112_82s123.ic20",      0x00000, 0x00020, CRC(267d835b) SHA1(056a86dafa13d476118ce019622d7af9461e2850) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_605_gal16v8.ic13",     0x00000, 0x00117, CRC(45b8e164) SHA1(2e227ac5171ebf14e1d1f7214626ef4df0d5ae99) )
