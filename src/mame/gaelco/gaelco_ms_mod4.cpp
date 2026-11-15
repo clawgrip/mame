@@ -32,10 +32,30 @@
     bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_SKIP(2) for three and
     ROM_LOAD16_BYTE for two.
 
+    Each board has an X and a Y scroll register, which the games reach at
+    different addresses through the edge sub board, some of them inside the
+    RAM area. The position follows the MOD 21/1 timing: the map pixel shown
+    at the first visible pixel is the X scroll plus the pixels from the end
+    of the horizontal sync pulse to there, minus 10, and the map line shown
+    at the first visible line the Y scroll plus the lines from the end of
+    the vertical sync pulse, plus 1. This is fitted to what the programs
+    write, not measured. With horizontal PROMs 201, 206, 210 and 211 it
+    matches the original games exactly on Black Tiger, Raiden (also its
+    text board, whose registers the program writes once with -64 and -1),
+    the Double Dragon background and the Gryzor layers horizontally, and
+    within a pixel or a line on Bad Lands, Blood Bros., Cabal, the Gryzor
+    layers vertically and the Double Dragon and Gryzor text boards. The programs write different
+    values for boards that the original games scroll together, which no
+    board type explains, so these may be the bootlegs' own misalignment.
+    The vertical formula also gives the values Blood Bros. and Power
+    Spikes write to make up for it (-1 and -9). It doesn't fit the games
+    with horizontal PROMs 204 and 207 (Last Duel, Power Spikes and Twin
+    Cobra), whose drivers set corrections.
+
     TODO:
-    - scroll registers (the drivers apply their own offsets)
     - how the RAM is organised: the games scan it in different orders, maybe
       set by the edge sub board
+    - where the scroll registers are on the board, and their width
 
 ***************************************************************************/
 
@@ -51,6 +71,7 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 	device_gfx_interface(mconfig, *this),
 	m_rom(*this, DEVICE_SELF),
 	m_prom(*this, "prom"),
+	m_timing(*this, finder_base::DUMMY_TAG),
 	m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
 	m_tile_cb(*this),
 	m_mapper_cb(*this),
@@ -63,12 +84,27 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 	m_rows(32),
 	m_step(1),
 	m_color_base(0),
-	m_transparent_pen(-1)
+	m_transparent_pen(-1),
+	m_scroll_correction_x(0),
+	m_scroll_correction_y(0),
+	m_scroll_base_x(0),
+	m_scroll_base_y(0)
 {
 }
 
 void gaelco_ms_mod4_device::device_start()
 {
+	if (m_timing)
+	{
+		if (!m_timing->started())
+			throw device_missing_dependencies();
+
+		// the counters start at the end of the sync pulses, the pixels come out 10 pixels after the counter
+		// addresses them and the lines one line ahead; the tile map starts at the bitmap origin
+		m_scroll_base_x = m_timing->hsync_to_visible() - 10 - m_timing->origin_x() + m_scroll_correction_x;
+		m_scroll_base_y = m_timing->vsync_to_visible() + 1 - m_timing->origin_y() + m_scroll_correction_y;
+	}
+
 	m_tile_cb.resolve();
 
 	offs_t const length = m_rom.bytes();

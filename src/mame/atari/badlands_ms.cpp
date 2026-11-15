@@ -87,7 +87,7 @@ private:
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void scroll_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
 
@@ -116,29 +116,21 @@ void badlands_ms_state::scroll_w(offs_t offset, u16 data, u16 mem_mask)
 		m_mod4->mark_all_dirty();
 }
 
-void badlands_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void badlands_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes) and the colour 0x200 bytes later
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = sprite_byte(offs + 3);
-		u8 const color = sprite_byte(offs + 0x200);
-		// attribute bit 4 selects the 16x16 sprites, bit 3 the second 16x8 bank; positions lined up with the original game
-		u32 const code = (BIT(attr, 3, 2) << 11) | ((attr & 0x07) << 8) | sprite_byte(offs);
-		int const sx = 96 + (sprite_byte(offs + 2) | (BIT(~color, 7) << 8));
-		int const sy = 241 - sprite_byte(offs + 1);
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color & 0x0f, 0, 0, sx, sy, m_mod51->transmask());
-	}
+	// code bits 8-10 in attribute bits 0-2, the second 16x8 bank in bit 3 and the 16x16 sprites in bit 4, X bit 8
+	// inverted in bit 7 of the colour byte; no flips
+	code |= (BIT(attr, 3, 2) << 11) | ((attr & 0x07) << 8);
+	x8 = BIT(~color, 7);
 }
 
 uint32_t badlands_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes 0x1d3 and 0xfff7, the offsets line the playfield up with the original game
-	m_mod4->set_scrollx((m_scroll[0] & 0x1ff) - 51);
-	m_mod4->set_scrolly(m_scroll[1] - 7);
+	// the program writes 0x1d3 and 0xfff7; X scroll bit 11 is a tile bank bit
+	m_mod4->set_scrollx(m_scroll[0] & 0x1ff);
+	m_mod4->set_scrolly(m_scroll[1]);
 	m_mod4->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	return 0;
 }
@@ -234,8 +226,12 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	mod21.set_origin(96, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(badlands_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
+	m_mod4->set_timing("mod21");
 	m_mod4->set_palette(m_palette);
 	m_mod4->set_tile_size(8);
 	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 64, 32);

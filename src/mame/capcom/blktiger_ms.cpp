@@ -112,7 +112,7 @@ private:
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
 	void install_palette(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -271,33 +271,27 @@ void blktiger_ms_state::machine_start()
 	save_item(NAME(m_tx_scroll));
 }
 
-void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void blktiger_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes): colour in attribute bits 0-2, flip X in bit 3, X bit 8
-	// in bit 4 and code bits 8-10 in bits 5-7
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = m_spriteram[offs + 3];
-		u32 const code = m_spriteram[offs] | (BIT(attr, 5, 3) << 8);
-		int const sx = (m_spriteram[offs + 2] | (BIT(attr, 4) << 8)) - 256;
-		int const sy = 0xf1 - m_spriteram[offs + 1];
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, attr & 0x07, BIT(attr, 3), 0, sx, sy, m_mod51->transmask());
-	}
+	// palette in attribute bits 0-2, flip X in bit 3, X bit 8 in bit 4 and code bits 8-10 in bits 5-7
+	code |= BIT(attr, 5, 3) << 8;
+	palette = attr & 0x07;
+	flipx = BIT(attr, 3);
+	x8 = BIT(attr, 4);
 }
 
 uint32_t blktiger_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes the scroll of the original game minus 26 and 1
-	m_mod4_bg->set_scrollx(26 + (m_bg_scroll[0] | (m_bg_scroll[1] << 8)));
-	m_mod4_bg->set_scrolly(1 + (m_bg_scroll[2] | (m_bg_scroll[3] << 8)));
-	m_mod4_tx->set_scrollx(26 + (m_tx_scroll[0] | (m_tx_scroll[1] << 8)));
-	m_mod4_tx->set_scrolly(1 + (m_tx_scroll[2] | (m_tx_scroll[3] << 8)));
+	// the program writes the scroll of the original game minus 26 and 1, which the boards add back
+	m_mod4_bg->set_scrollx(m_bg_scroll[0] | (m_bg_scroll[1] << 8));
+	m_mod4_bg->set_scrolly(m_bg_scroll[2] | (m_bg_scroll[3] << 8));
+	m_mod4_tx->set_scrollx(m_tx_scroll[0] | (m_tx_scroll[1] << 8));
+	m_mod4_tx->set_scrolly(m_tx_scroll[2] | (m_tx_scroll[3] << 8));
 
 	bitmap.fill(m_palette->black_pen(), cliprect);
 
 	m_mod4_bg->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_bg->draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0);
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
@@ -416,8 +410,13 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_list(128, 0, true); // no colour bytes
+	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
+	m_mod51->set_sprite_callback(FUNC(blktiger_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
+	m_mod4_bg->set_timing("mod21");
 	m_mod4_bg->set_palette(m_palette);
 	m_mod4_bg->set_color_base(0x100);
 	m_mod4_bg->set_half_lines(9);
@@ -426,6 +425,7 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	m_mod4_bg->set_tile_callback(FUNC(blktiger_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing("mod21");
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);

@@ -16,6 +16,11 @@
     in which the other boards fetch their pixels, two entries before the
     visible area. Bit 0 of the vertical PROM pulses several times per frame.
 
+    The other boards position their pictures from these signals: the MOD 4
+    boards count from the end of the sync pulses and the MOD 51 board from
+    the start of the horizontal blank. There are no schematics; this fits
+    what the games write (see those devices).
+
     Known PROMs (the labels sometimes have a P0 prefix), total and visible
     pixels or lines:
     201  horizontal  320  256  20 MHz  Black Tiger, Cabal, Double Dragon, Dragon Ninja,
@@ -51,7 +56,10 @@ gaelco_ms_mod21_device::gaelco_ms_mod21_device(const machine_config &mconfig, co
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_prom(*this, DEVICE_SELF),
 	m_origin_x(0),
-	m_origin_y(0)
+	m_origin_y(0),
+	m_hsync_to_visible(0),
+	m_hblank_to_visible(0),
+	m_vsync_to_visible(0)
 {
 }
 
@@ -65,9 +73,19 @@ void gaelco_ms_mod21_device::device_start()
 	u16 const ventries = entries(0x100);
 	u16 const htotal = hentries * 2;
 	u16 const vtotal = ventries * 2;
+
+	u16 hvisible, hblank, hsync, hsync_end, vvisible, vblank, vsync, vsync_end;
+	low_run(0x000, hentries, 0, hvisible, hblank);
+	low_run(0x000, hentries, 2, hsync, hsync_end);
+	low_run(0x100, ventries, 1, vvisible, vblank);
+	low_run(0x100, ventries, 2, vsync, vsync_end);
+	m_hsync_to_visible = (hvisible + hentries - hsync_end) % hentries * 2;
+	m_hblank_to_visible = (hvisible + hentries - hblank) % hentries * 2;
+	m_vsync_to_visible = (vvisible + ventries - vsync_end) % ventries * 2;
+
 	rectangle const visarea(
-			m_origin_x, m_origin_x + visible(0x000, hentries, 0) * 2 - 1,
-			m_origin_y, m_origin_y + visible(0x100, ventries, 1) * 2 - 1);
+			m_origin_x, m_origin_x + (hblank + hentries - hvisible) % hentries * 2 - 1,
+			m_origin_y, m_origin_y + (vblank + ventries - vvisible) % ventries * 2 - 1);
 	if ((visarea.right() >= htotal) || (visarea.bottom() >= vtotal))
 		fatalerror("%s: the visible area doesn't fit in the %d x %d frame from the origin\n", tag(), htotal, vtotal);
 
@@ -86,22 +104,25 @@ u16 gaelco_ms_mod21_device::entries(offs_t base) const
 	fatalerror("%s: no last entry in the timing PROM at %03x\n", tag(), base);
 }
 
-u16 gaelco_ms_mod21_device::visible(offs_t base, u16 entries, u8 blank_bit) const
+void gaelco_ms_mod21_device::low_run(offs_t base, u16 entries, u8 bit, u16 &start, u16 &end) const
 {
-	// a single run of entries, which can wrap around the end
-	u16 count = 0;
-	u16 runs = 0;
+	// a single run of entries with the bit low, which can wrap around the end
+	unsigned runs = 0;
+	start = end = 0;
 	for (u16 i = 0; i < entries; i++)
 	{
-		if (!BIT(m_prom[base + i], blank_bit))
+		bool const low = !BIT(m_prom[base + i], bit);
+		bool const previous_low = !BIT(m_prom[base + (i ? i : entries) - 1], bit);
+		if (low && !previous_low)
 		{
-			count++;
-			if (BIT(m_prom[base + (i ? i : entries) - 1], blank_bit))
-				runs++;
+			start = i;
+			runs++;
+		}
+		else if (!low && previous_low)
+		{
+			end = i;
 		}
 	}
 	if (runs != 1)
-		fatalerror("%s: the visible area isn't a single run in the timing PROM at %03x\n", tag(), base);
-
-	return count;
+		fatalerror("%s: bit %d isn't low in a single run in the timing PROM at %03x\n", tag(), bit, base);
 }

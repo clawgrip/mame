@@ -5,23 +5,61 @@
 
 #pragma once
 
+#include "gaelco_ms_mod21.h"
+
 
 class gaelco_ms_mod51_device : public device_t
 {
 public:
+	// receives the attribute and colour bytes of a list entry, with code preset to the code byte and palette
+	// to the low half of the colour byte
+	using sprite_delegate = device_delegate<void (u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)>;
+
 	gaelco_ms_mod51_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock = 0);
+
+	// the MOD 21/1 board whose timing the line buffer follows
+	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
+	// list length, where the colour bytes start (0 for none) and whether X has a bit 8
+	void set_list(u16 entries, offs_t color_offset, bool x_bit8)
+	{
+		m_entries = entries;
+		m_color_offset = color_offset;
+		m_x_bit8 = x_bit8;
+	}
+	// added to the sprite positions for the games whose pictures the fitted positions don't explain
+	void set_position_correction(int x, int y) { m_correction_x = x; m_correction_y = y; }
+	// the attribute and colour bits each game's EPROM sub board takes the other code bits, the flips, X bit 8
+	// and the palette from
+	template <typename... T> void set_sprite_callback(T &&... args) { m_sprite_cb.set(std::forward<T>(args)...); }
+	// the list RAM as the board sees it: code, Y, X and attributes for each entry, and the colour bytes
+	auto list_r() { return m_list_r.bind(); }
 
 	// pens kept out of the line buffer, for sprites decoded from inverted EPROM data
 	u32 transmask() const { return m_transmask; }
+
+	void draw(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx);
 
 protected:
 	// device_t implementation
 	virtual void device_start() override ATTR_COLD;
 
 private:
+	void entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y);
+
 	required_region_ptr<u8> m_prom;
+	optional_device<gaelco_ms_mod21_device> m_timing;
+	devcb_read8 m_list_r;
+	sprite_delegate m_sprite_cb;
 
 	u32 m_transmask;
+	u16 m_entries;
+	offs_t m_color_offset;
+	bool m_x_bit8;
+	int m_correction_x;
+	int m_correction_y;
+	int m_x_delta;
+	int m_origin_x;
+	int m_origin_y;
 };
 
 

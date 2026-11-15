@@ -251,6 +251,8 @@ private:
 	void pal_write16(offs_t offset, u16 data, u16 mem_mask = ~0) { m_palette->write16(offset, swapendian_int16(data), swapendian_int16(mem_mask)); };
 	void pal_write16_ext(offs_t offset, u16 data, u16 mem_mask = ~0) { m_palette->write16_ext(offset, swapendian_int16(data), swapendian_int16(mem_mask)); };
 
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void raidenm_map(address_map &map) ATTR_COLD;
@@ -307,52 +309,31 @@ void raiden_ms_state::text_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	color = BIT(data, 8, 4);
 }
 
+void raiden_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-13 in attribute bits 0-5, flip X in colour byte bit 5, flip Y in bit 6 and X bit 8 in bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(color, 5);
+	flipy = BIT(color, 6);
+	x8 = BIT(color, 7);
+}
+
 uint32_t raiden_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	bitmap.fill(0, cliprect);
 
-	m_mod4[1]->set_scrollx(64 + swapendian_int16(m_scrollram1[0]));
-	m_mod4[1]->set_scrolly(17 + swapendian_int16(m_scrollram1[1]));
+	m_mod4[1]->set_scrollx(swapendian_int16(m_scrollram1[0]));
+	m_mod4[1]->set_scrolly(swapendian_int16(m_scrollram1[1]));
+	m_mod4[0]->set_scrollx(swapendian_int16(m_scrollram2[0]));
+	m_mod4[0]->set_scrolly(swapendian_int16(m_scrollram2[1]));
 
-	m_mod4[0]->set_scrollx(64 + swapendian_int16(m_scrollram2[0]));
-	m_mod4[0]->set_scrolly(17 + swapendian_int16(m_scrollram2[1]));
+	// the text board's registers are in its RAM area, written once with 0xc000 and 0xff00; it takes the upper byte
+	m_mod4[2]->set_scrollx(m_mod4[2]->vram_r(0x480) >> 8);
+	m_mod4[2]->set_scrolly(m_mod4[2]->vram_r(0x481) >> 8);
 
 	m_mod4[0]->draw(screen, bitmap, cliprect);
 	m_mod4[1]->draw(screen, bitmap, cliprect);
-
-
-	// TODO, convert to device, share between Modualar System games
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = 256-16;
-	const int Y_EXTRA_OFFSET = 30;
-
-	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
-	{
-		gfx_element* gfx = m_gfxdecode->gfx(0);
-
-		uint16_t attr0 = m_spriteram[i + 0];
-		uint16_t attr1 = m_spriteram[i + 1];
-
-		uint16_t attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00) >> 8;
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipy = (attr2 & 0x4000);
-		int flipx = (attr2 & 0x2000);
-
-		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - Y_EXTRA_OFFSET, m_mod51->transmask());
-	}
-
-	m_mod4[2]->set_scrolly(16);
-
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4[2]->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -481,19 +462,26 @@ void raiden_ms_state::raidenm(machine_config &config)
 	mod21.set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(raiden_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_timing("mod21");
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x300);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_timing("mod21");
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x100);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 	m_mod4[1]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[2]);
+	m_mod4[2]->set_timing("mod21");
 	m_mod4[2]->set_palette(m_palette);
 	m_mod4[2]->set_tile_size(8);
 	m_mod4[2]->set_transparent_pen(15);

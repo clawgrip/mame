@@ -119,7 +119,7 @@ private:
 	TILEMAP_MAPPER_MEMBER(bg_scan);
 	void fg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	u32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -171,33 +171,29 @@ void ddragon_ms_state::bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	flags = TILE_FLIPYX(BIT(data, 6, 2));
 }
 
-void ddragon_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void ddragon_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes) and the colour 0x200 bytes later, built by the second
-	// CPU from the sprite list of the original game: tall sprites split, flip X in attribute bit 5
-	// and flip Y in bit 4, the colour in the upper half of the colour byte
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = m_spriteram[offs + 3];
-		u32 const code = m_spriteram[offs] | ((attr & 0x0f) << 8);
-		u32 const color = m_spriteram[offs + 0x200] >> 4;
-		int const sx = (m_spriteram[offs + 2] | (BIT(attr, 7) << 8)) - 63;
-		int const sy = 233 - m_spriteram[offs + 1];
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 4), sx, sy, m_mod51->transmask());
-	}
+	// built by the second CPU from the sprite list of the original game: tall sprites split, code bits 8-11 in
+	// attribute bits 0-3, flip Y in bit 4, flip X in bit 5, X bit 8 in bit 7 and the palette in the upper half
+	// of the colour byte (original byte 2, whose bit 0 the CPU toggles for some objects)
+	code |= (attr & 0x0f) << 8;
+	palette = color >> 4;
+	flipy = BIT(attr, 4);
+	flipx = BIT(attr, 5);
+	x8 = BIT(attr, 7);
 }
 
 u32 ddragon_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes the scroll of the original game minus 26 and 1 (27 for the text layer)
-	m_mod4_bg->set_scrollx(26 + (m_bg_scroll[0] | (m_bg_scroll[1] << 8)));
-	m_mod4_bg->set_scrolly(1 + (m_bg_scroll[2] | (m_bg_scroll[3] << 8)));
-	m_mod4_fg->set_scrollx(27 + (m_fg_scroll[0] | (m_fg_scroll[1] << 8)));
-	m_mod4_fg->set_scrolly(1 + (m_fg_scroll[2] | (m_fg_scroll[3] << 8)));
+	// the program writes the scroll of the original game minus 26 and 1, which the boards add back, and
+	// minus 27 for the text layer, one pixel off the original game
+	m_mod4_bg->set_scrollx(m_bg_scroll[0] | (m_bg_scroll[1] << 8));
+	m_mod4_bg->set_scrolly(m_bg_scroll[2] | (m_bg_scroll[3] << 8));
+	m_mod4_fg->set_scrollx(m_fg_scroll[0] | (m_fg_scroll[1] << 8));
+	m_mod4_fg->set_scrolly(m_fg_scroll[2] | (m_fg_scroll[3] << 8));
 
 	m_mod4_bg->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_fg->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -431,14 +427,19 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	mod21.set_origin(0, 8);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
+	m_mod51->set_sprite_callback(FUNC(ddragon_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
+	m_mod4_bg->set_timing("mod21");
 	m_mod4_bg->set_palette(m_palette);
 	m_mod4_bg->set_color_base(0x100);
 	m_mod4_bg->set_layout(FUNC(ddragon_ms_state::bg_scan), 32, 32);
 	m_mod4_bg->set_tile_callback(FUNC(ddragon_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_fg);
+	m_mod4_fg->set_timing("mod21");
 	m_mod4_fg->set_palette(m_palette);
 	m_mod4_fg->set_color_base(0x080);
 	m_mod4_fg->set_tile_size(8);

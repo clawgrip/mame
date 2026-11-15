@@ -141,7 +141,7 @@ private:
 
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	u32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -183,38 +183,30 @@ void gryzor_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	color = (color << 2) | 3;
 }
 
-void gryzor_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void gryzor_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes) and the colour 0x200 bytes later, built by the second
-	// CPU from the objects of the game: attribute bit 0 is X bit 8, bits 1-2, 6 and 7 are code bits
-	// 8-11, bit 4 flips X and bit 5 flips Y
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = m_spriteram[offs + 3];
-		u32 const code = m_spriteram[offs] | (BIT(attr, 1, 2) << 8) | (BIT(attr, 6, 2) << 10);
-		u32 const color = m_spriteram[offs + 0x200] & 0x0f;
-		int const sx = (m_spriteram[offs + 2] | (BIT(attr, 0) << 8)) - 216;
-		int const sy = 242 - m_spriteram[offs + 1];
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 4), BIT(attr, 5), sx, sy, m_mod51->transmask());
-	}
+	// built by the second CPU from the objects of the game: X bit 8 in attribute bit 0, code bits 8-9 in bits
+	// 1-2, 10 in bit 6 and 11 in bit 7, flip X in bit 4 and flip Y in bit 5
+	code |= (BIT(attr, 1, 2) << 8) | (BIT(attr, 6, 2) << 10);
+	flipx = BIT(attr, 4);
+	flipy = BIT(attr, 5);
+	x8 = BIT(attr, 0);
 }
 
 u32 gryzor_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the layers show their maps from 48 pixels after the X scroll, the text one from 49: the second CPU writes
-	// the X scroll of the original game plus 0xa8 and its Y scroll, and 0x00ff for the text, which puts the
-	// five columns at the left
-	m_mod4[MOD4_A]->set_scrollx(48 + mod4_r<MOD4_A>(0x808));
+	// the second CPU writes the X scroll of the original game plus 0xa8 and its Y scroll, and 0x00ff for the
+	// text, which puts the five columns at the left, one pixel off the original game
+	m_mod4[MOD4_A]->set_scrollx(mod4_r<MOD4_A>(0x808));
 	m_mod4[MOD4_A]->set_scrolly(mod4_r<MOD4_A>(0x80e));
-	m_mod4[MOD4_B]->set_scrollx(48 + mod4_r<MOD4_B>(0xffc));
+	m_mod4[MOD4_B]->set_scrollx(mod4_r<MOD4_B>(0xffc));
 	m_mod4[MOD4_B]->set_scrolly(mod4_r<MOD4_B>(0xffe));
-	m_mod4[MOD4_TX]->set_scrollx(49 + (m_ram2[0] | (m_ram2[1] << 8)));
+	m_mod4[MOD4_TX]->set_scrollx(m_ram2[0] | (m_ram2[1] << 8));
 	m_mod4[MOD4_TX]->set_scrolly(m_ram2[2] | (m_ram2[3] << 8));
 
 	m_mod4[MOD4_B]->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
 	m_mod4[MOD4_A]->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4[MOD4_TX]->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -477,8 +469,12 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
+	m_mod51->set_sprite_callback(FUNC(gryzor_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_B]);
+	m_mod4[MOD4_B]->set_timing("mod21");
 	m_mod4[MOD4_B]->set_palette(m_palette);
 	m_mod4[MOD4_B]->set_color_base(0x300);
 	m_mod4[MOD4_B]->set_tile_size(8);
@@ -486,6 +482,7 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod4[MOD4_B]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_A]);
+	m_mod4[MOD4_A]->set_timing("mod21");
 	m_mod4[MOD4_A]->set_palette(m_palette);
 	m_mod4[MOD4_A]->set_color_base(0x200);
 	m_mod4[MOD4_A]->set_tile_size(8);
@@ -494,6 +491,7 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod4[MOD4_A]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_TX]);
+	m_mod4[MOD4_TX]->set_timing("mod21");
 	m_mod4[MOD4_TX]->set_palette(m_palette);
 	m_mod4[MOD4_TX]->set_tile_size(8);
 	m_mod4[MOD4_TX]->set_planes(2);

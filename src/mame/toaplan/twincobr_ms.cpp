@@ -30,6 +30,10 @@
     b30_27_ii.8h), not used.
 
     TODO:
+    - positions: the fitted ones of the MOD 4 and MOD 51 boards (see those devices) put the layers 2
+      pixels left and the sprites 5 pixels left and 6 lines up, the player's helicopter off the centre of
+      its helipad; the corrections keep the alignment of the original game. Twin Cobra is the only game
+      with horizontal PROM 207, the reason is unknown
     - sprite priority: the program takes the sprite palettes from the bottom for the sprites the
       original game draws in front of the foreground and from the top for the others
     - the program still writes a few colour changes to the palette addresses of the original game
@@ -98,7 +102,7 @@ private:
 	template <unsigned Which> void scroll_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	u8 irq_ack_r();
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
 
@@ -141,20 +145,13 @@ u8 twincobr_ms_state::irq_ack_r()
 	return 0xff;
 }
 
-void twincobr_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void twincobr_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes) and the colour 0x200 bytes later,
-	// positions lined up with the original game
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = sprite_byte(offs + 3);
-		u32 const code = sprite_byte(offs) | ((attr & 0x0f) << 8);
-		u32 const color = sprite_byte(offs + 0x200) & 0x0f;
-		int const sx = (((sprite_byte(offs + 2) | (BIT(~attr, 7) << 8)) + 199 + 16) & 0x1ff) - 16;
-		int const sy = 0xff - 8 - sprite_byte(offs + 1);
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, m_mod51->transmask());
-	}
+	// code bits 8-11 in attribute bits 0-3, flip X in bit 5, flip Y in bit 6 and X bit 8 inverted in bit 7
+	code |= (attr & 0x0f) << 8;
+	flipx = BIT(attr, 5);
+	flipy = BIT(attr, 6);
+	x8 = BIT(~attr, 7);
 }
 
 uint32_t twincobr_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -163,13 +160,13 @@ uint32_t twincobr_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 	for (int i = 0; i < 3; i++)
 	{
 		gaelco_ms_mod4_device &board = (i < 2) ? *m_mod4[i] : *m_mod4_tx;
-		board.set_scrollx(m_scroll[i][0] + 22);
-		board.set_scrolly(m_scroll[i][1] - 7);
+		board.set_scrollx(m_scroll[i][0]);
+		board.set_scrolly(m_scroll[i][1]);
 	}
 
 	m_mod4[1]->draw(screen, bitmap, cliprect);
 	m_mod4[0]->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -281,8 +278,14 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_position_correction(5, 6); // see the TODO
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(twincobr_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_scroll_correction(-2, 0); // see the TODO
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x100);
 	m_mod4[0]->set_tile_size(8);
@@ -291,12 +294,16 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	m_mod4[0]->set_tile_callback(FUNC(twincobr_ms_state::fg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_scroll_correction(-2, 0);
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_tile_size(8);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 64, 64);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_scroll_correction(-2, 0);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(3);

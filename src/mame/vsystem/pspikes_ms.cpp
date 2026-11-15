@@ -19,6 +19,11 @@
 
     TODO:
     - sound
+    - positions: the fitted ones of the MOD 4 and MOD 51 boards (see those devices) put the layer 2
+      pixels right and the sprites 4 pixels right and 14 lines up, the players above the court; the
+      corrections keep the alignment of the original game. Last Duel, the other game with horizontal
+      PROM 204, needs other corrections, the reason is unknown. The sprite list decoding is unsure too:
+      some sprite texts come out garbled, also on pspikesb
 */
 
 
@@ -68,10 +73,12 @@ private:
 	required_shared_ptr<uint16_t> m_spriteram;
 
 	uint8_t m_gfxbank = 0;
+	u8 m_scrolly = 0;
 
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void gfxbank_w(uint8_t data);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void gfxbank_scrolly_w(offs_t offset, u16 data, u16 mem_mask = ~0);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -85,55 +92,39 @@ void pspikes_ms_state::tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	color = data >> 13;
 }
 
-void pspikes_ms_state::gfxbank_w(uint8_t data)
+void pspikes_ms_state::gfxbank_scrolly_w(offs_t offset, u16 data, u16 mem_mask)
 {
-	if (data != m_gfxbank)
+	// the tile bank in the upper byte, the Y scroll in the lower one
+	if (ACCESSING_BITS_8_15 && ((data >> 8) != m_gfxbank))
 	{
-		m_gfxbank = data;
+		m_gfxbank = data >> 8;
 		m_mod4->mark_all_dirty();
 	}
+	if (ACCESSING_BITS_0_7)
+		m_scrolly = data & 0xff;
 }
 
-void pspikes_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void pspikes_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	int const NUM_SPRITES = 0x200;
-
-	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(0);
-
-		uint16_t const attr0 = m_spriteram[i + 0];
-		uint16_t const attr1 = m_spriteram[i + 1];
-
-		uint16_t const attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t const attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00) >> 8;
-		xpos |= (attr2 & 0x8000) ? 0x000 : 0x100;
-
-		ypos = (0xff - ypos);
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int const flipx = (attr1 & 0x0040);
-		int const flipy = (attr2 & 0x4000);
-
-		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16, ypos - 16, m_mod51->transmask());
-	}
+	// code bits 8-13 in attribute bits 0-5, flip X in bit 6, flip Y in colour byte bit 6 and X bit 8 inverted
+	// in bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(color, 6);
+	x8 = BIT(~color, 7);
 }
 
 uint32_t pspikes_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
+	// an X scroll value for each line, and a Y scroll, to which the program writes -9
 	m_mod4->set_scroll_rows(256);
-
 	for (int i = 0; i < 256; i++)
-		m_mod4->set_scrollx(i, m_scrollram[i] + 42);
+		m_mod4->set_scrollx(i, m_scrollram[i]);
+	m_mod4->set_scrolly(m_scrolly);
 
 	m_mod4->draw(screen, bitmap, cliprect);
 
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	return 0;
 }
@@ -142,6 +133,7 @@ uint32_t pspikes_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bi
 void pspikes_ms_state::machine_start()
 {
 	save_item(NAME(m_gfxbank));
+	save_item(NAME(m_scrolly));
 }
 
 
@@ -154,7 +146,7 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0xff8000, 0xff8fff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xffc000, 0xffc7ff).ram().share(m_spriteram);
 	map(0xffd000, 0xffdfff).ram().share(m_scrollram);
-	map(0xffd200, 0xffd200).w(FUNC(pspikes_ms_state::gfxbank_w));
+	map(0xffd200, 0xffd201).w(FUNC(pspikes_ms_state::gfxbank_scrolly_w));
 	map(0xffe000, 0xffe3ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0xffe400, 0xffe7ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0xffe800, 0xffefff).ram(); // only initialized at start?
@@ -246,8 +238,15 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	mod21.set_origin(4, 0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_position_correction(-4, 14); // see the TODO
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(pspikes_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
+	m_mod4->set_timing("mod21");
+	m_mod4->set_scroll_correction(2, 0); // see the TODO
 	m_mod4->set_palette("palette");
 	m_mod4->set_color_base(0x200);
 	m_mod4->set_tile_size(8);

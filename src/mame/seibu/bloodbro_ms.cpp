@@ -71,9 +71,10 @@ private:
 
 	required_shared_ptr<uint16_t> m_spriteram;
 
-	uint16_t m_scrollreg[2] {};
+	u16 m_scroll[3][2]{}; // fg, bg and text boards: x, y
 
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_program_map(address_map &map) ATTR_COLD;
@@ -82,53 +83,36 @@ private:
 
 void bloodbro_ms_state::machine_start()
 {
-	save_item(NAME(m_scrollreg));
+	save_item(NAME(m_scroll));
 }
 
 
-void bloodbro_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void bloodbro_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = 240;
-
-	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(0);
-
-		uint16_t const attr0 = m_spriteram[i + 0];
-		uint16_t const attr1 = m_spriteram[i + 1];
-
-		uint16_t const attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t const attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00) >> 8;
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x001f) << 8;
-
-		int const flipx = (attr1 & 0x0020);
-		int const flipy = (attr2 & 0x4000);
-
-		// TODO: switch to prio_transmask
-		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, m_mod51->transmask());
-	}
+	// code bits 8-12 in attribute bits 0-4, flip X in bit 5, flip Y in colour byte bit 6 and X bit 8 in bit 7
+	code |= (attr & 0x1f) << 8;
+	flipx = BIT(attr, 5);
+	flipy = BIT(color, 6);
+	x8 = BIT(color, 7);
 }
 
 uint32_t bloodbro_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// TODO: is scrollx used?
-	m_mod4[0]->set_scrolly((int8_t)m_scrollreg[1] + 1);
+	// the program writes the scroll of the original game plus 0x1bf and -1 for the foreground and the
+	// background, and 0xc000 and 0xff00 for the text, whose board takes the upper byte
+	m_mod4[0]->set_scrollx(m_scroll[0][0]);
+	m_mod4[0]->set_scrolly(m_scroll[0][1]);
+	m_mod4[1]->set_scrollx(m_scroll[1][0]);
+	m_mod4[1]->set_scrolly(m_scroll[1][1]);
+	m_mod4_tx->set_scrollx(m_scroll[2][0] >> 8);
+	m_mod4_tx->set_scrolly(m_scroll[2][1] >> 8);
 
 	bitmap.fill(0, cliprect);
 
 	m_mod4[1]->draw(screen, bitmap, cliprect);
 	m_mod4[0]->draw(screen, bitmap, cliprect);
 
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
@@ -142,6 +126,8 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x080000, 0x08bfff).ram(); // original vram is in here, but bootleg copies some of it elsewhere for use
 	map(0x08c000, 0x08c7ff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08c800, 0x08d7ff).ram();
+	map(0x08c800, 0x08c803).lrw16(NAME([this] (offs_t offset) { return m_scroll[1][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[1][offset]); }));
+	map(0x08d000, 0x08d003).lrw16(NAME([this] (offs_t offset) { return m_scroll[2][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[2][offset]); }));
 	map(0x08d800, 0x08dfff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08e000, 0x08ffff).ram();
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
@@ -154,7 +140,7 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x101800, 0x101fff).ram();
 	map(0x102000, 0x102001).nopw(); // ??? written often
 	map(0x18d000, 0x18d7ff).w(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_w));
-	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, uint16_t data) { m_scrollreg[offset] = data; }));
+	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[0][offset]); }));
 }
 
 static INPUT_PORTS_START( bloodbrom )
@@ -263,19 +249,26 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(bloodbro_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_timing("mod21");
 	m_mod4[0]->set_palette("palette");
 	m_mod4[0]->set_color_base(0x200);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 	m_mod4[0]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_timing("mod21");
 	m_mod4[1]->set_palette("palette");
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing("mod21");
 	m_mod4_tx->set_palette("palette");
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_transparent_pen(15);

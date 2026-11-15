@@ -90,7 +90,7 @@ private:
 
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
 
@@ -111,35 +111,27 @@ void cabal_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	color = data >> 10;
 }
 
-void cabal_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void cabal_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite: code, y, x and attributes (flip X, palette, code)
-	for (int offs = 0x400 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = sprite_byte(offs + 3);
-		u32 const code = sprite_byte(offs) | ((attr & 0x0f) << 8);
-		u32 const color = BIT(attr, 4, 3);
-		int const sx = sprite_byte(offs + 2);
-		int const sy = 0xff - 7 - sprite_byte(offs + 1);
-
-		// 8-bit x position, sprites wrap around
-		for (int wrap = 0; wrap < 2; wrap++)
-			m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 7), 0, sx - (wrap << 8), sy, m_mod51->transmask());
-	}
+	// code bits 8-11 in attribute bits 0-3, palette in bits 4-6 and flip X in bit 7; no colour bytes and no
+	// X bit 8, a list of 256 entries
+	code |= (attr & 0x0f) << 8;
+	palette = BIT(attr, 4, 3);
+	flipx = BIT(attr, 7);
 }
 
 uint32_t cabal_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes 0xe6 and 0 to both boards, the offsets line the layers up with the original game
+	// the program writes 0xe6 and 0 to both boards
 	for (int i = 0; i < 2; i++)
 	{
 		gaelco_ms_mod4_device &board = i ? *m_mod4_tx : *m_mod4_bg;
-		board.set_scrollx(m_scroll[i][0] + 26);
-		board.set_scrolly(m_scroll[i][1] - 8);
+		board.set_scrollx(m_scroll[i][0]);
+		board.set_scrolly(m_scroll[i][1]);
 	}
 
 	m_mod4_bg->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -270,14 +262,20 @@ void cabal_ms_state::cabalm(machine_config &config)
 	mod21.set_origin(0, 24);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_list(256, 0, false);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(cabal_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
+	m_mod4_bg->set_timing("mod21");
 	m_mod4_bg->set_palette(m_palette);
 	m_mod4_bg->set_color_base(0x300);
 	m_mod4_bg->set_half_lines(9);
 	m_mod4_bg->set_layout(TILEMAP_SCAN_ROWS, 16, 16);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing("mod21");
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);

@@ -28,6 +28,10 @@
 
     TODO:
     - MOD 1 interrupt source
+    - positions: the fitted ones of the MOD 4 and MOD 51 boards (see those devices) move the whole
+      picture 16 pixels (the text board 12) and one line, which cuts the score line the program moved
+      inwards to fit the visible area; the corrections keep the framing of the original game. Power
+      Spikes, the other game with horizontal PROM 204, needs other corrections, the reason is unknown
 */
 
 
@@ -90,7 +94,7 @@ private:
 	void bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
 
@@ -125,35 +129,28 @@ void lastduel_ms_state::tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	flags = BIT(data, 11) ? TILE_FLIPY : 0;
 }
 
-void lastduel_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
+void lastduel_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// 4 bytes per sprite (code, y, x, attributes) and the colour 0x200 bytes later
-	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
-	{
-		u8 const attr = sprite_byte(offs + 3);
-		u32 const code = sprite_byte(offs) | ((attr & 0x0f) << 8);
-		u32 const color = sprite_byte(offs + 0x200) & 0x0f;
-		int const sx = (sprite_byte(offs + 2) | (BIT(~attr, 7) << 8)) - 4;
-		int const sy = 0xff - 13 - sprite_byte(offs + 1);
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, BIT(attr, 5), BIT(attr, 6), sx, sy, m_mod51->transmask());
-	}
+	// code bits 8-11 in attribute bits 0-3, flip X in bit 5, flip Y in bit 6 and X bit 8 inverted in bit 7
+	code |= (attr & 0x0f) << 8;
+	flipx = BIT(attr, 5);
+	flipy = BIT(attr, 6);
+	x8 = BIT(~attr, 7);
 }
 
 uint32_t lastduel_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// the program writes the x scroll of the original game plus 36, or 40 for the text board, and the
-	// screen bitmap is 4 pixels to the left of the original game's
+	// the program writes the X scroll of the original game plus 36, or 40 for the text board
 	for (int i = 0; i < 3; i++)
 	{
 		gaelco_ms_mod4_device &board = (i < 2) ? *m_mod4[i] : *m_mod4_tx;
-		board.set_scrollx((m_scroll[i][0] | (m_scroll[i][1] << 8)) - ((i < 2) ? 36 : 40) + 4);
+		board.set_scrollx(m_scroll[i][0] | (m_scroll[i][1] << 8));
 		board.set_scrolly(m_scroll[i][2] | (m_scroll[i][3] << 8));
 	}
 
 	m_mod4[1]->draw(screen, bitmap, cliprect);
 	m_mod4[0]->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -277,8 +274,14 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	mod21.set_origin(92, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing("mod21");
+	m_mod51->set_position_correction(-16, 1); // see the TODO
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(lastduel_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
+	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_scroll_correction(16, 1); // see the TODO
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x200);
 	m_mod4[0]->set_half_lines(9);
@@ -287,6 +290,8 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	m_mod4[0]->set_tile_callback(FUNC(lastduel_ms_state::fg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
+	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_scroll_correction(16, 1);
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_half_lines(9);
@@ -294,6 +299,8 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	m_mod4[1]->set_tile_callback(FUNC(lastduel_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_scroll_correction(12, 1);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);

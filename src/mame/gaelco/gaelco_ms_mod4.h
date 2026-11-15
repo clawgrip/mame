@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "gaelco_ms_mod21.h"
+
 #include "tilemap.h"
 
 
@@ -36,6 +38,10 @@ public:
 		m_rows = rows;
 		m_step = 1;
 	}
+	// the MOD 21/1 board whose timing the scroll counters follow
+	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
+	// added to the scroll for the games whose pictures the fitted positions don't explain
+	void set_scroll_correction(int x, int y) { m_scroll_correction_x = x; m_scroll_correction_y = y; }
 	void set_color_base(u16 base) { m_color_base = base; }
 	void set_transparent_pen(int pen) { m_transparent_pen = pen; }
 	// for games that split the tile map entry differently
@@ -52,10 +58,11 @@ public:
 	void vram8_w(offs_t offset, u8 data);
 
 	void mark_all_dirty() { m_tilemap->mark_all_dirty(); }
+	// the values the game writes to the scroll registers
 	void set_scroll_rows(u32 rows) { m_tilemap->set_scroll_rows(rows); }
-	void set_scrollx(int which, int value) { m_tilemap->set_scrollx(which, value); }
-	void set_scrollx(int value) { m_tilemap->set_scrollx(value); }
-	void set_scrolly(int value) { m_tilemap->set_scrolly(value); }
+	void set_scrollx(int which, int value) { m_tilemap->set_scrollx(which, value + m_scroll_base_x); }
+	void set_scrollx(int value) { m_tilemap->set_scrollx(value + m_scroll_base_x); }
+	void set_scrolly(int value) { m_tilemap->set_scrolly(value + m_scroll_base_y); }
 	void draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, u32 flags = 0, u8 priority = 0);
 
 protected:
@@ -67,6 +74,7 @@ private:
 
 	required_region_ptr<u8> m_rom;
 	optional_region_ptr<u8> m_prom;
+	optional_device<gaelco_ms_mod21_device> m_timing;
 	memory_share_creator<u16> m_ram;
 	tile_delegate m_tile_cb;
 	tilemap_mapper_delegate m_mapper_cb;
@@ -83,6 +91,10 @@ private:
 	u8 m_step;
 	u16 m_color_base;
 	int m_transparent_pen;
+	int m_scroll_correction_x;
+	int m_scroll_correction_y;
+	int m_scroll_base_x;
+	int m_scroll_base_y;
 };
 
 
