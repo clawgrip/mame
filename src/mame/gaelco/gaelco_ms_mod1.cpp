@@ -374,7 +374,9 @@ gaelco_ms_mod1_6809_device::gaelco_ms_mod1_6809_device(const machine_config &mco
 
 void gaelco_ms_mod1_6809_device::device_add_mconfig(machine_config &config)
 {
-	MC6809(config, m_cpu, DERIVED_CLOCK(1, 1)); // Motorola SC84014P
+	// Motorola SC84014P, the 6809E that Double Dragon's CPU sub board has as MC68B09EP; E and Q come from the
+	// board's clock input, divided by 4
+	MC6809E(config, m_cpu, DERIVED_CLOCK(1, 4));
 	m_cpu->set_addrmap(AS_PROGRAM, &gaelco_ms_mod1_6809_device::program_map);
 
 	gaelco_ms_mod1_device_base::device_add_mconfig(config);

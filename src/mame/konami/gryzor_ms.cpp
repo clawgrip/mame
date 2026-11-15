@@ -434,13 +434,14 @@ GFXDECODE_END
 void gryzor_ms_state::gryzorm(machine_config &config)
 {
 	// basic machine hardware
-	MC6809(config, m_maincpu, 22.1184_MHz_XTAL / 3); // Motorola SC84014P, divisor unknown
+	// Motorola SC84014P, the part Double Dragon's sub board has as MC68B09EP
+	MC6809E(config, m_maincpu, 22.1184_MHz_XTAL / 12); // E clock, divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &gryzor_ms_state::main_map);
 
-	MC6809(config, m_subcpu, 22.1184_MHz_XTAL / 3); // Motorola SC84014P, divisor unknown
+	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 12); // E clock, divisor unknown
 	m_subcpu->set_addrmap(AS_PROGRAM, &gryzor_ms_state::sub_map);
 
-	// the second CPU polls flags the first one sets only briefly
+	// the two CPUs of the sub board share its RAM, and the second one polls flags the first one sets only briefly
 	config.set_perfect_quantum(m_maincpu);
 
 	// one PROM for both CPUs, bank bits 0-2 come from PAL pins 18-20 and the input that takes A11 on

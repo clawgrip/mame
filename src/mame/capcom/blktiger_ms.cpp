@@ -24,18 +24,19 @@
     and 1 its quarter (bit 1 drives EPROM A15 directly); the program writes the bank of the original game
     plus 8. The latch also selects what appears at 0xc000-0xcfff:
     0x00       background MOD 4 board: tile map at 0xc000-0xc3ff, scroll registers at 0xc400-0xc403
-    0x04       sprite board
+    0x04       sprite board: sprite list at 0xc000-0xc1ff
     0x06       palette, 0xc000 is read once per frame
     0x07       MOD 1 board and palette
     0x10-0x13  background map RAM
     0x17       text MOD 4 board scroll registers at 0xc800-0xc803
     others     palette
 
-    TODO: practically everything:
-    - derive from blktiger_state? (eventually, if differences aren't too much)
-    - sprite related functions are copied from blktiger.cpp. Verify differences
-    - the sprite board (latch 0x04) and the read at 0xc000 with latch 0x06
-    - lots of other stuff
+    Every frame the program copies the sprite list of the original game to the sprite board, with the Y
+    position counted from the bottom and attribute bit 4 inverted.
+
+    TODO:
+    - the read at 0xc000 with latch 0x06
+    - flip screen
 */
 
 
@@ -73,6 +74,7 @@ public:
 		m_rom(*this, "maincpu"),
 		m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
 		m_mapram(*this, "mapram", 0x4000, ENDIANNESS_LITTLE),
+		m_spriteram(*this, "spriteram", 0x400, ENDIANNESS_LITTLE),
 		m_paletteram(*this, "palette", 0x400, ENDIANNESS_LITTLE),
 		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_LITTLE)
 	{ }
@@ -98,6 +100,7 @@ private:
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
 	memory_share_creator<u8> m_mapram;
+	memory_share_creator<u8> m_spriteram;
 	memory_share_creator<u8> m_paletteram;
 	memory_share_creator<u8> m_paletteram_ext;
 
@@ -144,6 +147,7 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 	// the boards at 0xc000-0xcfff tell from the latch whether they are selected
 	bool const map_ram = BIT(latch, 4) && !BIT(latch, 2);
 	bool const bg_board = !BIT(latch, 4) && ((latch & 0x0f) == 0x00);
+	bool const sprite_board = !BIT(latch, 4) && ((latch & 0x0f) == 0x04);
 	bool const mod1 = !BIT(latch, 4) && ((latch & 0x0f) == 0x07);
 	u8 *const map_bank = &m_mapram[(latch & 0x03) << 12];
 
@@ -185,6 +189,8 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 				case 0:
 					if (bg_board)
 						view.install_write_handler(area, area + 0x3ff, write8sm_delegate(*m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_w)));
+					else if (sprite_board)
+						view.install_writeonly(area, area + 0x3ff, &m_spriteram[0]);
 					else if (mod1)
 						view.install_write_handler(area, area + 0x00f, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
 					break;
@@ -267,28 +273,16 @@ void blktiger_ms_state::machine_start()
 
 void blktiger_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	u8 const *const spriteram = &m_ram[0x1e00];
+	// 4 bytes per sprite (code, y, x, attributes): colour in attribute bits 0-2, flip X in bit 3, X bit 8
+	// in bit 4 and code bits 8-10 in bits 5-7
 	for (int offs = 0x200 - 4; offs >= 0; offs -= 4)
 	{
-		int attr = spriteram[offs + 1];
-		int sx = spriteram[offs + 3] - ((attr & 0x10) << 4);
-		int sy = spriteram[offs + 2];
-		int code = spriteram[offs] | ((attr & 0xe0) << 3);
-		int color = attr & 0x07;
-		int flipx = attr & 0x08;
+		u8 const attr = m_spriteram[offs + 3];
+		u32 const code = m_spriteram[offs] | (BIT(attr, 5, 3) << 8);
+		int const sx = (m_spriteram[offs + 2] | (BIT(attr, 4) << 8)) - 256;
+		int const sy = 0xf1 - m_spriteram[offs + 1];
 
-		if (flip_screen())
-		{
-			sx = 240 - sx;
-			sy = 240 - sy;
-			flipx = !flipx;
-		}
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect,
-				code,
-				color,
-				flipx, flip_screen(),
-				sx, sy, m_mod51->transmask());
+		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, attr & 0x07, BIT(attr, 3), 0, sx, sy, m_mod51->transmask());
 	}
 }
 

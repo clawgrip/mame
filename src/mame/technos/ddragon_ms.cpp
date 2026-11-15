@@ -390,11 +390,14 @@ GFXDECODE_END
 void ddragon_ms_state::ddragonm(machine_config &config)
 {
 	// basic machine hardware
-	MC6809E(config, m_maincpu, 22.1184_MHz_XTAL / 12); // MC68B09EP, divisor unknown, the E clock of the Gryzor sub board
+	MC6809E(config, m_maincpu, 22.1184_MHz_XTAL / 12); // MC68B09EP, E clock, divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &ddragon_ms_state::main_map);
 
-	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 12); // MC68B09EP, divisor unknown, the E clock of the Gryzor sub board
+	MC6809E(config, m_subcpu, 22.1184_MHz_XTAL / 12); // MC68B09EP, E clock, divisor unknown
 	m_subcpu->set_addrmap(AS_PROGRAM, &ddragon_ms_state::sub_map);
+
+	// the two CPUs of the sub board share its RAM
+	config.set_perfect_quantum(m_maincpu);
 
 	// one PROM for both CPUs, the bank bits come from PAL pins 18-20
 	using decoder = gaelco_ms_mod3_decoder_device;
