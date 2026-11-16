@@ -289,8 +289,8 @@ public:
 		, m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
-	void tokim(machine_config &config);
-	void init_tokim();
+	void tokim(machine_config &config) ATTR_COLD;
+	void init_tokim() ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
@@ -470,13 +470,13 @@ void toki_ms_state::tokim_map(address_map &map)
 	map(0x06e800, 0x06efff).ram().w(FUNC(toki_ms_state::bk1vram_w)).share("bk1vram");
 	map(0x06f000, 0x06f7ff).ram().w(FUNC(toki_ms_state::bk2vram_w)).share("bk2vram");
 	map(0x06f800, 0x06ffff).ram().w(FUNC(toki_ms_state::vram_w)).share("vram");
-	map(0x070000, 0x0703ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0x070400, 0x0707ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0x070000, 0x0703ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0x070400, 0x0707ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 	map(0x071000, 0x0713ff).ram().share("spriteram");
 	map(0x072000, 0x072001).nopr(); // irq ack?
 	map(0x073000, 0x07300f).ram().share("scrollram");
 	map(0x0a0000, 0x0a005f).nopw(); // scrollram left-over?
-	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 }
 
 static INPUT_PORTS_START( tokim )
@@ -575,6 +575,7 @@ void toki_ms_state::tokim(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(toki_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 	m_screen->screen_vblank().set("spriteram", FUNC(buffered_spriteram16_device::vblank_copy_rising));
@@ -583,9 +584,8 @@ void toki_ms_state::tokim(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_toki_ms);
 
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL)); // crystal not seen, the other boards with 201 have 20 MHz
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 

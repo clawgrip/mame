@@ -159,7 +159,7 @@ uint32_t lastduel_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 void lastduel_ms_state::vblank_irq(int state)
 {
 	if (state)
-		m_maincpu->set_input_line(4, HOLD_LINE);
+		m_maincpu->set_input_line(4, ASSERT_LINE);
 }
 
 
@@ -171,14 +171,15 @@ void lastduel_ms_state::main_map(address_map &map)
 	map(0x801800, 0x801803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[0][offset] = data; }));
 	map(0x802000, 0x8023ff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram8_r), FUNC(gaelco_ms_mod4_device::vram8_w));
 	map(0x802800, 0x802803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[1][offset] = data; }));
-	map(0x803000, 0x80300f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x803000, 0x80300f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0xfc0000, 0xfc0fff).ram(); // sprite RAM of the original game, copied to the sprite board
 	map(0xfc8000, 0xfc800f).nopw(); // video control of the original game
+	map(0xfc8000, 0xfc8001).lw16(NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); })); // interrupt acknowledge, the first write of the interrupt routine
 	map(0xfcc000, 0xfccfff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xfcd000, 0xfcd003).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[2][offset] = data; }));
 	map(0xfd0000, 0xfd7fff).ram(); // tile maps of the original game, copied to the MOD 4 boards
-	map(0xfd8000, 0xfd83ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0xfd8400, 0xfd87ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0xfd8000, 0xfd83ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0xfd8400, 0xfd87ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 	map(0xfe0000, 0xffffff).ram();
 }
 
@@ -260,6 +261,8 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	// MOD 21/1 PROMs 204 and 203; the first visible pixel is column 96 of the original game, the vertical position is a guess
+	m_screen->set_raw(28_MHz_XTAL / 4, 450, 92, 448, 266, 16, 240);
 	m_screen->set_screen_update(FUNC(lastduel_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(lastduel_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -268,19 +271,17 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, m_palette, gfx_lastduel_ms);
 
-	// the first visible pixel is column 96 of the original game, the vertical position is a guess
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(92, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_position_correction(-16, 1); // see the TODO
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(lastduel_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_timing(mod21);
 	m_mod4[0]->set_scroll_correction(16, 1); // see the TODO
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x200);
@@ -290,7 +291,7 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	m_mod4[0]->set_tile_callback(FUNC(lastduel_ms_state::fg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_timing(mod21);
 	m_mod4[1]->set_scroll_correction(16, 1);
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x300);
@@ -299,7 +300,7 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 	m_mod4[1]->set_tile_callback(FUNC(lastduel_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_timing(mod21);
 	m_mod4_tx->set_scroll_correction(12, 1);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);

@@ -271,7 +271,7 @@ void raiden_ms_state::raidenm_map(address_map &map)
 	map(0x07000, 0x07fff).ram();
 	map(0x0a000, 0x0afff).ram().share("shared_ram");
 
-	map(0x0b000, 0x0b00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x0b000, 0x0b00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 
 	map(0x0c000, 0x0cfff).rw(m_mod4[2], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x0d800, 0x0dfff).ram().share("spriteram");
@@ -450,6 +450,7 @@ void raiden_ms_state::raidenm(machine_config &config)
 
 	// Video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 256, 266, 0, 224); // MOD 21/1 PROMs 211 and 202
 	m_screen->set_screen_update(FUNC(raiden_ms_state::screen_update));
 	m_screen->set_palette("palette");
 	m_screen->screen_vblank().set(FUNC(raiden_ms_state::vblank_irq));
@@ -462,26 +463,26 @@ void raiden_ms_state::raidenm(machine_config &config)
 	mod21.set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(raiden_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_timing(mod21);
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x300);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_timing(mod21);
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x100);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 	m_mod4[1]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[2]);
-	m_mod4[2]->set_timing("mod21");
+	m_mod4[2]->set_timing(mod21);
 	m_mod4[2]->set_palette(m_palette);
 	m_mod4[2]->set_tile_size(8);
 	m_mod4[2]->set_transparent_pen(15);

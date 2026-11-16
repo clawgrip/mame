@@ -38,6 +38,7 @@
 #include "emu.h"
 #include "gaelco_ms_mod3.h"
 
+#include <algorithm>
 #include <vector>
 
 
@@ -51,6 +52,7 @@ gaelco_ms_mod3_decoder_device::gaelco_ms_mod3_decoder_device(const machine_confi
 	m_install_cb(*this),
 	m_lines{ },
 	m_latch_mask(0),
+	m_latch_reset(true),
 	m_select(0),
 	m_latch(0)
 {
@@ -98,12 +100,16 @@ void gaelco_ms_mod3_decoder_device::device_start()
 		}
 	}
 
+	// the power-on state of the bank latch
+	m_view.select(view_index(m_latch));
+
 	save_item(NAME(m_latch));
 }
 
 void gaelco_ms_mod3_decoder_device::device_reset()
 {
-	latch_w(0);
+	if (m_latch_reset)
+		latch_w(0);
 }
 
 void gaelco_ms_mod3_decoder_device::device_post_load()

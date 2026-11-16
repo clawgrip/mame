@@ -85,7 +85,7 @@ private:
 
 	void main_program_map(address_map &map) ATTR_COLD;
 
-	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
 	uint8_t irq_ack_r();
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -150,7 +150,7 @@ void mastboyo_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 			if (write)
 			{
 				if (a10)
-					view.install_write_handler(block, block + 0x00f, 0, 0x3f0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+					view.install_write_handler(block, block + 0x00f, 0, 0x3f0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_w)));
 				else
 					view.install_write_handler(block, last, write8smo_delegate(*m_mod3, FUNC(gaelco_ms_mod3_decoder_device::latch_w)));
 			}
@@ -166,7 +166,7 @@ void mastboyo_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 			if (BIT(block, 11))
 				view.install_rom(block, block + 0x0ff, 0x300, a10 ? &m_paletteram_ext[0] : &m_paletteram[0]);
 			else if (a10)
-				view.install_read_handler(block, block + 0x00f, 0, 0x3f0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+				view.install_read_handler(block, block + 0x00f, 0, 0x3f0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
 			break;
 
 		case 0x65: // MOD 4 board scroll registers, written once with fixed values
@@ -249,7 +249,7 @@ void mastboyo_ms_state::mastboyo_ms(machine_config &config)
 
 	using decoder = gaelco_ms_mod3_decoder_device;
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
-	m_mod3->set_lines({ decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::NOT_A(15), decoder::HIGH, decoder::WRITE, decoder::LATCH(0), decoder::LATCH(1) });
+	m_mod3->set_lines({ decoder::addr(11), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::not_addr(15), decoder::HIGH, decoder::WRITE, decoder::latch_bit(0), decoder::latch_bit(1) });
 	m_mod3->set_latch_mask(0x03);
 	m_mod3->set_install_callback(FUNC(mastboyo_ms_state::mod3_install));
 

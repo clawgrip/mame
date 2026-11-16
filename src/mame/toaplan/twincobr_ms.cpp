@@ -184,8 +184,8 @@ void twincobr_ms_state::main_map(address_map &map)
 	map(0x000000, 0x02ffff).mirror(0x080000).rom();
 	map(0x030000, 0x033fff).ram();
 	map(0x040000, 0x041fff).ram(); // the first 4 KB is the sprite RAM of the original game, copied to the sprite board
-	map(0x050000, 0x0503ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0x050400, 0x0507ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0x050000, 0x0503ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0x050400, 0x0507ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 	map(0x054000, 0x055fff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x056000, 0x056003).w(FUNC(twincobr_ms_state::scroll_w<2>));
 	map(0x058000, 0x059fff).rw(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
@@ -193,7 +193,7 @@ void twincobr_ms_state::main_map(address_map &map)
 	map(0x05c000, 0x05dfff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x05dffc, 0x05dfff).w(FUNC(twincobr_ms_state::scroll_w<1>));
 	map(0x060000, 0x0603ff).ram().share(m_spriteram);
-	map(0x078000, 0x07800f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x078000, 0x07800f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x07c000, 0x07c000).r(FUNC(twincobr_ms_state::irq_ack_r));
 }
 
@@ -265,6 +265,7 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 320, 266, 16, 256); // MOD 21/1 PROMs 207 and 205
 	m_screen->set_screen_update(FUNC(twincobr_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(twincobr_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -275,16 +276,15 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_position_correction(5, 6); // see the TODO
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(twincobr_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_timing(mod21);
 	m_mod4[0]->set_scroll_correction(-2, 0); // see the TODO
 	m_mod4[0]->set_palette(m_palette);
 	m_mod4[0]->set_color_base(0x100);
@@ -294,7 +294,7 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	m_mod4[0]->set_tile_callback(FUNC(twincobr_ms_state::fg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_timing(mod21);
 	m_mod4[1]->set_scroll_correction(-2, 0);
 	m_mod4[1]->set_palette(m_palette);
 	m_mod4[1]->set_color_base(0x300);
@@ -302,7 +302,7 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 64, 64);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_timing(mod21);
 	m_mod4_tx->set_scroll_correction(-2, 0);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);

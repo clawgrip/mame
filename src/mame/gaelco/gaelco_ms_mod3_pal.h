@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <array>
+
 
 class gaelco_ms_mod3_pal_device : public device_t
 {
@@ -13,6 +15,7 @@ public:
 
 	// levels of the registered outputs, pins 17-20 in bits 0-3
 	auto outputs_callback() { return m_outputs_cb.bind(); }
+	u8 outputs() const { return ~m_regs & 0x0f; }
 
 	// a CPU write to the bank latch area
 	void latch_w(u8 data);
@@ -24,7 +27,7 @@ protected:
 private:
 	bool term(unsigned row, u32 levels) const { return ((levels & m_high[row]) == m_high[row]) && ((~levels & m_low[row]) == m_low[row]); }
 	u32 levels(u32 inputs) const;
-	void clock(u32 inputs);
+	void clock_registers(u32 inputs);
 
 	required_region_ptr<u8> m_fuses;
 	devcb_write8 m_outputs_cb;

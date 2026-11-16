@@ -110,7 +110,7 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 
 	map(0x780000, 0x78001f).ram();
 
-	map(0x800000, 0x80000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x800000, 0x80000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 
 	map(0x840000, 0x840001).ram();
 
@@ -311,7 +311,7 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
-	m_mod1->set_ym_clock(20_MHz_XTAL / 16);
+	m_mod1->set_ym_clock(1'250'000); // unknown
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

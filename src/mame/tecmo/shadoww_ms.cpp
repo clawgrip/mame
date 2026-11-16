@@ -205,7 +205,7 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x078000, 0x0783ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0x078400, 0x0787ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0x078800, 0x079fff).ram();
-	map(0x07a000, 0x07a00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x07a000, 0x07a00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x07e000, 0x07e000).lw8(NAME([this] (uint8_t data) { m_maincpu->set_input_line(5, CLEAR_LINE); }));
 	map(0x07f000, 0x07f001).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrollx(0, (0x33 - data) & 0x3ff); }));
 	map(0x07f002, 0x07f003).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrolly(0, -data & 0x1ff); })); // not 100% correct
@@ -307,6 +307,7 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(shadoww_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
@@ -314,7 +315,6 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 
@@ -324,7 +324,7 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
-	m_mod1->set_ym_clock(20_MHz_XTAL / 16); // divisor unknown, gives the pitch and tempo of the original game
+	m_mod1->set_ym_clock(1'250'000); // unknown, gives the pitch and tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

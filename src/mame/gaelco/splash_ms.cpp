@@ -45,8 +45,8 @@ public:
 		m_subrom(*this, "subrombank")
 	{ }
 
-	void splashm(machine_config &config);
-	void init_splashms();
+	void splashm(machine_config &config) ATTR_COLD;
+	void init_splashms() ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;

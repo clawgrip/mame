@@ -5,14 +5,16 @@
 
 #pragma once
 
+#include <array>
+
 
 class gaelco_ms_mod3_decoder_device : public device_t
 {
 public:
 	// what drives each PROM address line
-	static constexpr u8 A(unsigned line) { return line; }
-	static constexpr u8 NOT_A(unsigned line) { return 0x10 | line; }
-	static constexpr u8 LATCH(unsigned bit) { return 0x20 | bit; }
+	static constexpr u8 addr(u8 line) { return line; }
+	static constexpr u8 not_addr(u8 line) { return 0x10 | line; }
+	static constexpr u8 latch_bit(u8 bit) { return 0x20 | bit; }
 	static constexpr u8 WRITE = 0x30;
 	static constexpr u8 SELECT = 0x31; // which of the two CPUs of the 6809 sub board
 	static constexpr u8 HIGH = 0x32;
@@ -26,6 +28,8 @@ public:
 	void set_lines(const std::array<u8, 9> &lines) { m_lines = lines; }
 	// bank latch bits that change the map, including any wired around the PROM
 	void set_latch_mask(u8 mask) { m_latch_mask = mask; }
+	// whether the bank latch clears on reset; the PAL of the 6809 sub board keeps its bank bits
+	void set_latch_reset(bool reset) { m_latch_reset = reset; }
 	void set_select(u8 select) { m_select = select; }
 	template <typename T> void set_prom(T &&tag) { m_prom.set_tag(std::forward<T>(tag)); }
 	template <typename... T> void set_install_callback(T &&... args) { m_install_cb.set(std::forward<T>(args)...); }
@@ -38,13 +42,13 @@ protected:
 	// device_t implementation
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
-	virtual void device_post_load() override;
+	virtual void device_post_load() override ATTR_COLD;
 
 private:
-	u8 decode(offs_t address, bool write, u8 latch) const;
-	unsigned views() const;
+	u8 decode(offs_t address, bool write, u8 latch) const ATTR_COLD;
+	unsigned views() const ATTR_COLD;
 	unsigned view_index(u8 latch) const;
-	u8 view_latch(unsigned index) const;
+	u8 view_latch(unsigned index) const ATTR_COLD;
 
 	required_region_ptr<u8> m_prom;
 	memory_view m_view;
@@ -52,6 +56,7 @@ private:
 
 	std::array<u8, 9> m_lines;
 	u8 m_latch_mask;
+	bool m_latch_reset;
 	u8 m_select;
 	u8 m_latch;
 };

@@ -13,10 +13,10 @@ class gaelco_ms_mod21_device : public device_t
 public:
 	gaelco_ms_mod21_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);
 
+	// the screen, configured with the timing of the PROMs
 	template <typename T> void set_screen(T &&tag) { m_screen.set_tag(std::forward<T>(tag)); }
-	// where the first visible pixel and line go in the screen bitmap
-	void set_origin(u16 x, u16 y) { m_origin_x = x; m_origin_y = y; }
 
+	// where the first visible pixel and line are in the screen bitmap
 	u16 origin_x() const { return m_origin_x; }
 	u16 origin_y() const { return m_origin_y; }
 	// pixels or lines from the end of the sync pulses or the start of the horizontal blank to the first
@@ -30,8 +30,8 @@ protected:
 	virtual void device_start() override ATTR_COLD;
 
 private:
-	u16 entries(offs_t base) const;
-	void low_run(offs_t base, u16 entries, u8 bit, u16 &start, u16 &end) const;
+	u16 entries(offs_t base) const ATTR_COLD;
+	void low_run(offs_t base, u16 entries, u8 bit, u16 &start, u16 &end) const ATTR_COLD;
 
 	required_device<screen_device> m_screen;
 	required_region_ptr<u8> m_prom;

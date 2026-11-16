@@ -230,7 +230,7 @@ void loht_ms_state::program_map(address_map &map)
 
 void loht_ms_state::io_map(address_map &map)
 {
-	map(0x0000, 0x000f).mirror(0x0020).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x0000, 0x000f).mirror(0x0020).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 }
 
 
@@ -342,6 +342,7 @@ void loht_ms_state::lohtm(machine_config &config)
 	BUFFERED_SPRITERAM16(config, m_spriteram);
 
 	screen_device &screen(SCREEN(config, "screen"));
+	screen.set_raw(28_MHz_XTAL / 4, 450, 92, 448, 278, 0, 256); // MOD 21/1 PROMs 204 and 209, the horizontal position is a guess
 	screen.set_screen_update(FUNC(loht_ms_state::screen_update));
 	screen.set_palette(m_palette);
 	screen.screen_vblank().set_inputline(m_maincpu, 0);
@@ -352,10 +353,8 @@ void loht_ms_state::lohtm(machine_config &config)
 	GAELCO_MS_MOD51(config, m_mod51);
 	PALETTE(config, m_palette).set_entries(512);
 
-	// the horizontal position is a guess
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL)); // crystal not seen, Last Duel and Power Spikes have 28 MHz with 204
+	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
 	mod21.set_screen(screen);
-	mod21.set_origin(92, 0);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();

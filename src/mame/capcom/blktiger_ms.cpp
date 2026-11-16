@@ -110,8 +110,8 @@ private:
 	TILEMAP_MAPPER_MEMBER(bg_scan);
 	void bg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
-	void install_palette(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
+	void install_palette(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write) ATTR_COLD;
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
@@ -162,8 +162,8 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 		case 3:
 			if (!write)
 			{
-				static constexpr offs_t base[4] = { 0x30000, 0x40000, 0x10000, 0x20000 };
-				view.install_rom(start, end, &m_rom[base[BIT(code, 4, 2)] | (BIT(latch, 1) << 15) | low]);
+				constexpr offs_t BASE[4] = { 0x30000, 0x40000, 0x10000, 0x20000 };
+				view.install_rom(start, end, &m_rom[BASE[BIT(code, 4, 2)] | (BIT(latch, 1) << 15) | low]);
 			}
 			break;
 
@@ -192,7 +192,7 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 					else if (sprite_board)
 						view.install_writeonly(area, area + 0x3ff, &m_spriteram[0]);
 					else if (mod1)
-						view.install_write_handler(area, area + 0x00f, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+						view.install_write_handler(area, area + 0x00f, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_w)));
 					break;
 				case 1:
 					if (bg_board)
@@ -216,7 +216,7 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 		if (bg_board)
 			view.install_read_handler(start, start + 0x3ff, read8sm_delegate(*m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_r)));
 		else if (mod1)
-			view.install_read_handler(start, start + 0x00f, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+			view.install_read_handler(start, start + 0x00f, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
 		break;
 
 	case 0x61: // palette, or the upper half of a background map RAM bank
@@ -390,13 +390,14 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 
 	using decoder = gaelco_ms_mod3_decoder_device;
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
-	m_mod3->set_lines({ decoder::WRITE, decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0), decoder::LATCH(2), decoder::LATCH(4) });
+	m_mod3->set_lines({ decoder::WRITE, decoder::addr(11), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::addr(15), decoder::latch_bit(0), decoder::latch_bit(2), decoder::latch_bit(4) });
 	m_mod3->set_latch_mask(0x1f);
 	m_mod3->set_install_callback(FUNC(blktiger_ms_state::mod3_install));
 	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_hold));
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(blktiger_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
@@ -407,16 +408,15 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_list(128, 0, true); // no colour bytes
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(blktiger_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
-	m_mod4_bg->set_timing("mod21");
+	m_mod4_bg->set_timing(mod21);
 	m_mod4_bg->set_palette(m_palette);
 	m_mod4_bg->set_color_base(0x100);
 	m_mod4_bg->set_half_lines(9);
@@ -425,7 +425,7 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	m_mod4_bg->set_tile_callback(FUNC(blktiger_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_timing(mod21);
 	m_mod4_tx->set_palette(m_palette);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);

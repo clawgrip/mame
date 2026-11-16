@@ -150,7 +150,7 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0xffe000, 0xffe3ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0xffe400, 0xffe7ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0xffe800, 0xffefff).ram(); // only initialized at start?
-	map(0xfff000, 0xfff00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0xfff000, 0xfff00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	//map(0xfff400, 0xfff403).nopw(); // leftover of the original chips
 }
 
@@ -226,6 +226,7 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
+	screen.set_raw(28_MHz_XTAL / 4, 450, 4, 360, 266, 0, 240); // MOD 21/1 PROMs 204 and 209
 	screen.set_screen_update(FUNC(pspikes_ms_state::screen_update));
 	screen.set_palette("palette");
 
@@ -235,17 +236,16 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
 	mod21.set_screen(screen);
-	mod21.set_origin(4, 0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_position_correction(-4, 14); // see the TODO
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(pspikes_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
-	m_mod4->set_timing("mod21");
+	m_mod4->set_timing(mod21);
 	m_mod4->set_scroll_correction(2, 0); // see the TODO
 	m_mod4->set_palette("palette");
 	m_mod4->set_color_base(0x200);

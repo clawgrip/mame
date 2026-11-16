@@ -99,14 +99,17 @@ public:
 		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
-	void gryzorm(machine_config &config);
+	void gryzorm(machine_config &config) ATTR_COLD;
 
-	void init_gryzorm();
+	void init_gryzorm() ATTR_COLD;
 
 protected:
-	virtual void machine_start() override;
+	virtual void machine_start() override ATTR_COLD;
 
 private:
+	// the MOD 4/3, MOD 4/3-A and MOD 4/3-B boards
+	enum : u8 { MOD4_TX, MOD4_A, MOD4_B };
+
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_6809_device> m_mod1;
@@ -125,17 +128,13 @@ private:
 	memory_share_creator<u8> m_paletteram;
 	memory_share_creator<u8> m_paletteram_ext;
 
-	// the MOD 4/3, MOD 4/3-A and MOD 4/3-B boards
-	enum : unsigned { MOD4_TX, MOD4_A, MOD4_B };
-
 	u8 m_bank3 = 0;
 
-	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
-	template <unsigned Which> void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
+	template <unsigned Which> void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write) ATTR_COLD;
 	void bank_w(u8 data);
 	void vblank_w(int state);
 	u8 irq_ack_r();
-	void pal_outputs_w(u8 data);
 	template <unsigned Which> u8 mod4_r(offs_t offset);
 	template <unsigned Which> void mod4_w(offs_t offset, u8 data);
 
@@ -224,11 +223,7 @@ void gryzor_ms_state::bank_w(u8 data)
 	// the PAL doesn't hold the fourth bank bit, the program has it in bit 4 of its second write
 	m_bank3 = BIT(data, 4);
 	m_pal->latch_w(data);
-}
-
-void gryzor_ms_state::pal_outputs_w(u8 data)
-{
-	m_mod3->latch_w(data | (m_bank3 << 4));
+	m_mod3->latch_w(m_pal->outputs() | (m_bank3 << 4));
 }
 
 
@@ -322,9 +317,9 @@ void gryzor_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t 
 
 		case 0x7d: // MOD 1 board
 			if (write)
-				view.install_write_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_device::host_w)));
+				view.install_write_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_w)));
 			else
-				view.install_read_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_device::host_r)));
+				view.install_read_handler(start, start + 0x00f, 0, (end - start) & ~0xf, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
 			break;
 		}
 		return;
@@ -439,10 +434,11 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	// one PROM for both CPUs, bank bits 0-2 come from PAL pins 18-20 and the input that takes A11 on
 	// ddragonm is the fourth bank bit here
 	using decoder = gaelco_ms_mod3_decoder_device;
-	constexpr std::array<u8, 9> lines{ decoder::LATCH(3), decoder::LATCH(4), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(1), decoder::LATCH(2), decoder::SELECT };
+	constexpr std::array<u8, 9> lines{ decoder::latch_bit(3), decoder::latch_bit(4), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::addr(15), decoder::latch_bit(1), decoder::latch_bit(2), decoder::SELECT };
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
 	m_mod3->set_lines(lines);
 	m_mod3->set_latch_mask(0x1e);
+	m_mod3->set_latch_reset(false);
 	m_mod3->set_install_callback(FUNC(gryzor_ms_state::mod3_install));
 
 	GAELCO_MS_MOD3_DECODER(config, m_mod3_sub);
@@ -452,10 +448,10 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod3_sub->set_install_callback(FUNC(gryzor_ms_state::mod3_install));
 
 	GAELCO_MS_MOD3_PAL(config, m_pal);
-	m_pal->outputs_callback().set(FUNC(gryzor_ms_state::pal_outputs_w));
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 280, 266, 16, 240); // MOD 21/1 PROMs 206 and 202
 	m_screen->set_screen_update(FUNC(gryzor_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(gryzor_ms_state::vblank_w));
 	m_screen->set_palette(m_palette);
@@ -466,15 +462,14 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(gryzor_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_B]);
-	m_mod4[MOD4_B]->set_timing("mod21");
+	m_mod4[MOD4_B]->set_timing(mod21);
 	m_mod4[MOD4_B]->set_palette(m_palette);
 	m_mod4[MOD4_B]->set_color_base(0x300);
 	m_mod4[MOD4_B]->set_tile_size(8);
@@ -482,7 +477,7 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod4[MOD4_B]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_A]);
-	m_mod4[MOD4_A]->set_timing("mod21");
+	m_mod4[MOD4_A]->set_timing(mod21);
 	m_mod4[MOD4_A]->set_palette(m_palette);
 	m_mod4[MOD4_A]->set_color_base(0x200);
 	m_mod4[MOD4_A]->set_tile_size(8);
@@ -491,7 +486,7 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod4[MOD4_A]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_TX]);
-	m_mod4[MOD4_TX]->set_timing("mod21");
+	m_mod4[MOD4_TX]->set_timing(mod21);
 	m_mod4[MOD4_TX]->set_palette(m_palette);
 	m_mod4[MOD4_TX]->set_tile_size(8);
 	m_mod4[MOD4_TX]->set_planes(2);
@@ -502,7 +497,7 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_6809(config, m_mod1, 22.1184_MHz_XTAL / 5); // divisor unknown, no crystal on the board
+	GAELCO_MS_MOD1_6809(config, m_mod1, 4'423'680); // unknown, no crystal on the board
 	m_mod1->set_ym_clock(1'322'000); // unknown, gives the pitch of the original game
 	m_mod1->set_int_period(attotime::from_hz(1000)); // unknown source, about 1 kHz gives the tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");

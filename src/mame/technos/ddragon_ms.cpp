@@ -111,8 +111,8 @@ private:
 	u8 m_fg_scroll[4]{};
 	u8 m_bg_scroll[4]{};
 
-	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
-	void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, gaelco_ms_mod4_device &board, u8 *scroll);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
+	void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, gaelco_ms_mod4_device &board, u8 *scroll) ATTR_COLD;
 	void vblank_w(int state);
 	void irq_ack_w(u8 data);
 
@@ -266,9 +266,9 @@ void ddragon_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t
 			for (offs_t area = start; area < end; area += 0x800)
 			{
 				if (write)
-					view.install_write_handler(area, area + 0x00f, 0, 0x7f0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_adpcm_device::host_w)));
+					view.install_write_handler(area, area + 0x00f, 0, 0x7f0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_w)));
 				else
-					view.install_read_handler(area, area + 0x00f, 0, 0x7f0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_6809_adpcm_device::host_r)));
+					view.install_read_handler(area, area + 0x00f, 0, 0x7f0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
 			}
 			break;
 		}
@@ -397,10 +397,11 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 
 	// one PROM for both CPUs, the bank bits come from PAL pins 18-20
 	using decoder = gaelco_ms_mod3_decoder_device;
-	constexpr std::array<u8, 9> lines{ decoder::LATCH(3), decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(1), decoder::LATCH(2), decoder::SELECT };
+	constexpr std::array<u8, 9> lines{ decoder::latch_bit(3), decoder::addr(11), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::addr(15), decoder::latch_bit(1), decoder::latch_bit(2), decoder::SELECT };
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
 	m_mod3->set_lines(lines);
 	m_mod3->set_latch_mask(0x0e);
+	m_mod3->set_latch_reset(false);
 	m_mod3->set_install_callback(FUNC(ddragon_ms_state::mod3_install));
 
 	GAELCO_MS_MOD3_DECODER(config, m_mod3_sub);
@@ -414,6 +415,7 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 8, 248); // MOD 21/1 PROMs 201 and 205
 	m_screen->set_screen_update(FUNC(ddragon_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 	m_screen->screen_vblank().set(FUNC(ddragon_ms_state::vblank_w));
@@ -424,22 +426,21 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 8);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(ddragon_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
-	m_mod4_bg->set_timing("mod21");
+	m_mod4_bg->set_timing(mod21);
 	m_mod4_bg->set_palette(m_palette);
 	m_mod4_bg->set_color_base(0x100);
 	m_mod4_bg->set_layout(FUNC(ddragon_ms_state::bg_scan), 32, 32);
 	m_mod4_bg->set_tile_callback(FUNC(ddragon_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_fg);
-	m_mod4_fg->set_timing("mod21");
+	m_mod4_fg->set_timing(mod21);
 	m_mod4_fg->set_palette(m_palette);
 	m_mod4_fg->set_color_base(0x080);
 	m_mod4_fg->set_tile_size(8);
@@ -450,8 +451,8 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD1_6809_ADPCM(config, m_mod1, 22.1184_MHz_XTAL / 5); // divisor unknown, no crystal on the board
-	m_mod1->set_ym_clock(20_MHz_XTAL / 16); // divisor unknown, gives the pitch and about the tempo of the original game
+	GAELCO_MS_MOD1_6809_ADPCM(config, m_mod1, 4'423'680); // unknown, no crystal on the board
+	m_mod1->set_ym_clock(1'250'000); // unknown, gives the pitch and about the tempo of the original game
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");

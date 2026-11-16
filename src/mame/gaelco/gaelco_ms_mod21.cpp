@@ -15,6 +15,8 @@
     bit 1 of the vertical one. Bit 1 of the horizontal PROM opens the window
     in which the other boards fetch their pixels, two entries before the
     visible area. Bit 0 of the vertical PROM pulses several times per frame.
+    The drivers configure the screen with this timing, and the device checks
+    it against the PROMs.
 
     The other boards position their pictures from these signals: the MOD 4
     boards count from the end of the sync pulses and the MOD 51 board from
@@ -65,9 +67,6 @@ gaelco_ms_mod21_device::gaelco_ms_mod21_device(const machine_config &mconfig, co
 
 void gaelco_ms_mod21_device::device_start()
 {
-	if (!m_screen->started())
-		throw device_missing_dependencies();
-
 	// the horizontal PROM is at 0x000 and the vertical one at 0x100, two pixels or lines per entry
 	u16 const hentries = entries(0x000);
 	u16 const ventries = entries(0x100);
@@ -83,14 +82,18 @@ void gaelco_ms_mod21_device::device_start()
 	m_hblank_to_visible = (hvisible + hentries - hblank) % hentries * 2;
 	m_vsync_to_visible = (vvisible + ventries - vsync_end) % ventries * 2;
 
-	rectangle const visarea(
-			m_origin_x, m_origin_x + (hblank + hentries - hvisible) % hentries * 2 - 1,
-			m_origin_y, m_origin_y + (vblank + ventries - vvisible) % ventries * 2 - 1);
-	if ((visarea.right() >= htotal) || (visarea.bottom() >= vtotal))
-		fatalerror("%s: the visible area doesn't fit in the %d x %d frame from the origin\n", tag(), htotal, vtotal);
-
-	// counted from the first visible pixel and line, which go to the origin
-	m_screen->configure(htotal, vtotal, visarea, attotime::from_ticks(u64(htotal) * vtotal, clock() / 4));
+	// the visible area of the screen starts at the first visible pixel and line
+	u16 const width = (hblank + hentries - hvisible) % hentries * 2;
+	u16 const height = (vblank + ventries - vvisible) % ventries * 2;
+	rectangle const &visarea = m_screen->visible_area();
+	m_origin_x = visarea.left();
+	m_origin_y = visarea.top();
+	if ((m_screen->clock() != clock() / 4) || (m_screen->width() != htotal) || (m_screen->height() != vtotal) ||
+			(visarea.width() != width) || (visarea.height() != height))
+	{
+		fatalerror("%s: the screen doesn't match the timing PROMs, set_raw(%u, %u, hbend, hbend + %u, %u, vbend, vbend + %u)\n",
+				tag(), clock() / 4, htotal, width, vtotal, height);
+	}
 }
 
 

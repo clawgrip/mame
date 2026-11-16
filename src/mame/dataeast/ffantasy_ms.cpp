@@ -159,6 +159,7 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 8, 248); // MOD 21/1 PROMs 201 and 205
 	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update));
 	m_screen->set_palette("palette");
 
@@ -168,7 +169,6 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 8);
 
 	GAELCO_MS_MOD51(config, "mod51");
 

@@ -46,8 +46,8 @@
     110    0000-bfff banked  c000-dfff  e000    8000   Automat, Blood Bros., Dragon Ninja, Fighting Fantasy,
                                                        Raiden, Secret Agent, Toki
     112    0000-7fff         8000-9fff  c000    -      Twin Cobra
-    ?      0000-1fff, 8000-ffff banked
-                             2000-3fff  4000    6000   Cabal (EPROM A15 on output 7)
+    112    0000-1fff, 8000-ffff banked
+                             2000-3fff  4000    6000   Cabal (other contents, EPROM A15 on output 7)
     116    0000-bfff         e000-ffff  c000    8000   Last Duel
     P0115  0000-7fff, c000-ffff banked
                              8000-9fff  a000    c000   Gals Panic
@@ -65,8 +65,9 @@
     TODO:
     - clocks (there's no crystal on the board)
     - interrupt source without the M5205 sub board
-    - Cabal's board: the PROM label, and whether jumpers or another board
-      revision give EPROM A15 and the latch interrupt acknowledge
+    - Cabal's board: why its 112 PROM differs from Twin Cobra's, and whether
+      jumpers or another board revision give EPROM A15 and the latch
+      interrupt acknowledge
     - 6809 version: the NMI acknowledge is a guess, no known program uses
       the NMI
 

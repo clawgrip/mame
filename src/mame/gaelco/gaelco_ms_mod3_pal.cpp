@@ -123,7 +123,7 @@ u32 gaelco_ms_mod3_pal_device::levels(u32 inputs) const
 	return levels;
 }
 
-void gaelco_ms_mod3_pal_device::clock(u32 inputs)
+void gaelco_ms_mod3_pal_device::clock_registers(u32 inputs)
 {
 	u32 const pins = levels(inputs);
 	u8 regs = 0;
@@ -142,7 +142,9 @@ void gaelco_ms_mod3_pal_device::latch_w(u8 data)
 {
 	u32 inputs = INPUT_PINS & ~((1U << 2) | (1U << 4) | (1U << 6) | (1U << 9) | (1U << 10));
 	inputs |= (u32(BIT(data, 1)) << 2) | (u32(BIT(data, 2)) << 10);
-	clock(inputs);
 
-	m_outputs_cb(~m_regs & 0x0f);
+	u8 const previous = outputs();
+	clock_registers(inputs);
+	if (outputs() != previous)
+		m_outputs_cb(outputs());
 }

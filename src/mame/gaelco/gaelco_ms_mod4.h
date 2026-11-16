@@ -9,6 +9,8 @@
 
 #include "tilemap.h"
 
+#include <memory>
+
 
 class gaelco_ms_mod4_device : public device_t, public device_gfx_interface
 {

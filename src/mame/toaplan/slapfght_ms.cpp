@@ -44,6 +44,8 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include <algorithm>
+
 
 namespace {
 
@@ -99,7 +101,7 @@ private:
 	void irq_enable_w(int state);
 	void sound_reset_w(int state);
 
-	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch);
+	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
 	void fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -228,9 +230,9 @@ void slapfght_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 		for (offs_t page = start; page < end; page += 0x100)
 		{
 			if (write)
-				view.install_write_handler(page, page + 0x0f, 0, 0xf0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_w)));
+				view.install_write_handler(page, page + 0x0f, 0, 0xf0, 0, write8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_w)));
 			else
-				view.install_read_handler(page, page + 0x0f, 0, 0xf0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device::host_r)));
+				view.install_read_handler(page, page + 0x0f, 0, 0xf0, 0, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
 		}
 		break;
 
@@ -348,7 +350,7 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 
 	using decoder = gaelco_ms_mod3_decoder_device;
 	GAELCO_MS_MOD3_DECODER(config, m_mod3);
-	m_mod3->set_lines({ decoder::A(8), decoder::A(9), decoder::A(10), decoder::A(11), decoder::A(12), decoder::A(13), decoder::A(14), decoder::A(15), decoder::LATCH(0) });
+	m_mod3->set_lines({ decoder::addr(8), decoder::addr(9), decoder::addr(10), decoder::addr(11), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::addr(15), decoder::latch_bit(0) });
 	m_mod3->set_latch_mask(0x01);
 	m_mod3->set_install_callback(FUNC(slapfght_ms_state::mod3_install));
 
@@ -359,6 +361,7 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 203, the vertical position is a guess
 	m_screen->set_screen_update(FUNC(slapfght_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(slapfght_ms_state::vblank_irq));
 	m_screen->set_palette("palette");
@@ -367,20 +370,18 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_slapfighm);
 
-	// the vertical position is a guess
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4_pf);
-	m_mod4_pf->set_palette("palette");
+	m_mod4_pf->set_palette(m_palette);
 	m_mod4_pf->set_tile_size(8);
 	m_mod4_pf->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4_fix);
-	m_mod4_fix->set_palette("palette");
+	m_mod4_fix->set_palette(m_palette);
 	m_mod4_fix->set_tile_size(8);
 	m_mod4_fix->set_planes(2);
 	m_mod4_fix->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
@@ -391,7 +392,7 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1(config, m_mod1, 4'000'000); // unknown, no crystal on the board
-	m_mod1->set_ym_clock(24_MHz_XTAL / 16); // divisor unknown, gives the pitch of the original game
+	m_mod1->set_ym_clock(1'500'000); // unknown, gives the pitch of the original game
 	m_mod1->set_int_period(attotime::from_hz(360)); // unknown source, gives the tempo of the original game (music every other interrupt)
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");

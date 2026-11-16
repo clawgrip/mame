@@ -53,6 +53,7 @@ public:
 	badlands_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
+		m_eeprom(*this, "eeprom"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
 		m_mod51(*this, "mod51"),
@@ -71,6 +72,7 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
+	required_device<eeprom_parallel_28xx_device> m_eeprom;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<gaelco_ms_mod51_device> m_mod51;
@@ -150,13 +152,13 @@ void badlands_ms_state::main_map(address_map &map)
 	map(0x000000, 0x03ffff).rom();
 	map(0x400000, 0x4003ff).ram().share(m_spriteram);
 	map(0x440000, 0x440003).w(FUNC(badlands_ms_state::scroll_w));
-	map(0xfd0000, 0xfd1fff).rw("eeprom", FUNC(eeprom_parallel_28xx_device::read), FUNC(eeprom_parallel_28xx_device::write)).umask16(0x00ff);
+	map(0xfd0000, 0xfd1fff).umask16(0x00ff).rw(m_eeprom, FUNC(eeprom_parallel_28xx_device::read), FUNC(eeprom_parallel_28xx_device::write));
 	map(0xfe0000, 0xfe0001).nopw(); // watchdog in the original game
 	map(0xfe2000, 0xfe2001).lw16(NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
-	map(0xfe4000, 0xfe400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
-	map(0xfee000, 0xfee001).w("eeprom", FUNC(eeprom_parallel_28xx_device::unlock_write16));
-	map(0xffc000, 0xffc3ff).lr8(NAME([this] (offs_t offset) { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0xffc400, 0xffc7ff).lr8(NAME([this] (offs_t offset) { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0xfe4000, 0xfe400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
+	map(0xfee000, 0xfee001).w(m_eeprom, FUNC(eeprom_parallel_28xx_device::unlock_write16));
+	map(0xffc000, 0xffc3ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
+	map(0xffc400, 0xffc7ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
 	map(0xffe000, 0xffefff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xfff000, 0xffffff).ram();
 }
@@ -209,10 +211,11 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &badlands_ms_state::main_map);
 
-	EEPROM_2816(config, "eeprom").lock_after_write(true);
+	EEPROM_2816(config, m_eeprom).lock_after_write(true);
 
 	// video hardware
 	SCREEN(config, m_screen);
+	m_screen->set_raw(28_MHz_XTAL / 4, 450, 96, 434, 266, 16, 256); // MOD 21/1 PROMs 210 and 205
 	m_screen->set_screen_update(FUNC(badlands_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(badlands_ms_state::vblank_irq));
 	m_screen->set_palette(m_palette);
@@ -223,15 +226,14 @@ void badlands_ms_state::badlandsm(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
 	mod21.set_screen(m_screen);
-	mod21.set_origin(96, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(badlands_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
-	m_mod4->set_timing("mod21");
+	m_mod4->set_timing(mod21);
 	m_mod4->set_palette(m_palette);
 	m_mod4->set_tile_size(8);
 	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 64, 32);

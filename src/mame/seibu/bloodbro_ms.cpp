@@ -126,13 +126,13 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x080000, 0x08bfff).ram(); // original vram is in here, but bootleg copies some of it elsewhere for use
 	map(0x08c000, 0x08c7ff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08c800, 0x08d7ff).ram();
-	map(0x08c800, 0x08c803).lrw16(NAME([this] (offs_t offset) { return m_scroll[1][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[1][offset]); }));
-	map(0x08d000, 0x08d003).lrw16(NAME([this] (offs_t offset) { return m_scroll[2][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[2][offset]); }));
+	map(0x08c800, 0x08c803).lrw16(NAME([this] (offs_t offset) -> u16 { return m_scroll[1][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[1][offset]); }));
+	map(0x08d000, 0x08d003).lrw16(NAME([this] (offs_t offset) -> u16 { return m_scroll[2][offset]; }), NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[2][offset]); }));
 	map(0x08d800, 0x08dfff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x08e000, 0x08ffff).ram();
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
 	map(0x0c0100, 0x0c0101).nopw(); // ??? written once
-	map(0x0e0000, 0x0e000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device::host16_r), FUNC(gaelco_ms_mod1_device::host16_w));
+	map(0x0e0000, 0x0e000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x100000, 0x1003ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
 	map(0x100400, 0x1007ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
 	map(0x100800, 0x100fff).ram();
@@ -237,6 +237,7 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));
+	screen.set_raw(24_MHz_XTAL / 4, 384, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 211 and 202
 	screen.set_screen_update(FUNC(bloodbro_ms_state::screen_update));
 	screen.set_palette("palette");
 
@@ -246,29 +247,28 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 
 	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
 	mod21.set_screen(screen);
-	mod21.set_origin(0, 16);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing("mod21");
+	m_mod51->set_timing(mod21);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(bloodbro_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing("mod21");
+	m_mod4[0]->set_timing(mod21);
 	m_mod4[0]->set_palette("palette");
 	m_mod4[0]->set_color_base(0x200);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 	m_mod4[0]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing("mod21");
+	m_mod4[1]->set_timing(mod21);
 	m_mod4[1]->set_palette("palette");
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing("mod21");
+	m_mod4_tx->set_timing(mod21);
 	m_mod4_tx->set_palette("palette");
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_transparent_pen(15);
