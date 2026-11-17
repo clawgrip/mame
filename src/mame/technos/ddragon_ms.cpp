@@ -50,7 +50,6 @@
 
 #include "cpu/m6809/m6809.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -71,15 +70,13 @@ public:
 		m_pal(*this, "mod3_pal"),
 		m_mod4_fg(*this, "mod4_fg"),
 		m_mod4_bg(*this, "mod4_bg"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
-		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_rom(*this, "maincpu"),
 		m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
-		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_BIG),
-		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
-		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
+		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_BIG)
 	{ }
 
 	void ddragonm(machine_config &config) ATTR_COLD;
@@ -98,15 +95,13 @@ private:
 	required_device<gaelco_ms_mod3_pal_device> m_pal;
 	required_device<gaelco_ms_mod4_device> m_mod4_fg;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
-	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
 	memory_share_creator<u8> m_spriteram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	u8 m_fg_scroll[4]{};
 	u8 m_bg_scroll[4]{};
@@ -237,12 +232,14 @@ void ddragon_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t
 				if (write)
 				{
 					view.install_write_handler(area, area + 0x3ff, BIT(area, 10) ?
-							write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
-							write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+							write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_w)) :
+							write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_w)));
 				}
 				else
 				{
-					view.install_rom(area, area + 0x3ff, BIT(area, 10) ? &m_paletteram_ext[0] : &m_paletteram[0]);
+					view.install_read_handler(area, area + 0x3ff, BIT(area, 10) ?
+							read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_r)) :
+							read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r)));
 				}
 			}
 			break;
@@ -417,31 +414,29 @@ void ddragon_ms_state::ddragonm(machine_config &config)
 	SCREEN(config, m_screen);
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 8, 248); // MOD 21/1 PROMs 201 and 205
 	m_screen->set_screen_update(FUNC(ddragon_ms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod21);
 	m_screen->screen_vblank().set(FUNC(ddragon_ms_state::vblank_w));
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_ddragon_ms);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_ddragon_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(ddragon_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
-	m_mod4_bg->set_timing(mod21);
-	m_mod4_bg->set_palette(m_palette);
+	m_mod4_bg->set_timing(m_mod21);
+	m_mod4_bg->set_palette(m_mod21);
 	m_mod4_bg->set_color_base(0x100);
 	m_mod4_bg->set_layout(FUNC(ddragon_ms_state::bg_scan), 32, 32);
 	m_mod4_bg->set_tile_callback(FUNC(ddragon_ms_state::bg_tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_fg);
-	m_mod4_fg->set_timing(mod21);
-	m_mod4_fg->set_palette(m_palette);
+	m_mod4_fg->set_timing(m_mod21);
+	m_mod4_fg->set_palette(m_mod21);
 	m_mod4_fg->set_color_base(0x080);
 	m_mod4_fg->set_tile_size(8);
 	m_mod4_fg->set_layout(TILEMAP_SCAN_ROWS, 32, 32);

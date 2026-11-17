@@ -33,7 +33,6 @@
 
 #include "cpu/m68000/m68000.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -48,6 +47,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_screen(*this, "screen"),
@@ -65,6 +65,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<screen_device> m_screen;
@@ -202,8 +203,8 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x072000, 0x073fff).ram().ram().w(FUNC(shadoww_ms_state::fg_videoram_w)).share(m_videoram[1]);
 	map(0x074000, 0x075fff).ram().ram().w(FUNC(shadoww_ms_state::bg_videoram_w)).share(m_videoram[2]);
 	map(0x076000, 0x076fff).ram().share(m_spriteram);
-	map(0x078000, 0x0783ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
-	map(0x078400, 0x0787ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
+	map(0x078000, 0x0783ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x078400, 0x0787ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x078800, 0x079fff).ram();
 	map(0x07a000, 0x07a00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x07e000, 0x07e000).lw8(NAME([this] (uint8_t data) { m_maincpu->set_input_line(5, CLEAR_LINE); }));
@@ -309,16 +310,14 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	SCREEN(config, m_screen);
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(shadoww_ms_state::screen_update));
-	m_screen->set_palette("palette");
+	m_screen->set_palette(m_mod21);
 
-	GFXDECODE(config, "gfxdecode", "palette", gfx_shadowmm);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_shadowmm);
 
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();

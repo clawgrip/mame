@@ -7,7 +7,7 @@
     Video timing and palette: a crystal, two 82S129 timing PROMs (IC4
     horizontal, IC12 vertical) and the palette RAM, three UM2148 for 1024
     entries of 12 bits that the CPU sees as a green and red byte and a blue
-    byte.
+    byte, selected by A10.
 
     The pixel clock is the crystal divided by 4 and each PROM entry lasts two
     pixels or two lines. The entry with bit 3 set is the last one, bit 2 is
@@ -41,7 +41,6 @@
     209  vertical    278  256          Legend of Hero Tonma
 
     TODO:
-    - the palette RAM is still mapped by the drivers
     - what uses bit 0 of the vertical PROM, maybe the MOD 1 interrupt
 
 ***************************************************************************/
@@ -55,8 +54,11 @@ DEFINE_DEVICE_TYPE(GAELCO_MS_MOD21, gaelco_ms_mod21_device, "gaelco_ms_mod21", "
 
 gaelco_ms_mod21_device::gaelco_ms_mod21_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD21, tag, owner, clock),
+	device_palette_interface(mconfig, *this),
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_prom(*this, DEVICE_SELF),
+	m_green_red{ },
+	m_blue{ },
 	m_origin_x(0),
 	m_origin_y(0),
 	m_hsync_to_visible(0),
@@ -94,6 +96,14 @@ void gaelco_ms_mod21_device::device_start()
 		fatalerror("%s: the screen doesn't match the timing PROMs, set_raw(%u, %u, hbend, hbend + %u, %u, vbend, vbend + %u)\n",
 				tag(), clock() / 4, htotal, width, vtotal, height);
 	}
+
+	save_item(NAME(m_green_red));
+	save_item(NAME(m_blue));
+}
+
+u32 gaelco_ms_mod21_device::palette_entries() const noexcept
+{
+	return 0x400;
 }
 
 
@@ -128,4 +138,33 @@ void gaelco_ms_mod21_device::low_run(offs_t base, u16 entries, u8 bit, u16 &star
 	}
 	if (runs != 1)
 		fatalerror("%s: bit %d isn't low in a single run in the timing PROM at %03x\n", tag(), bit, base);
+}
+
+
+u8 gaelco_ms_mod21_device::green_red_r(offs_t offset)
+{
+	return m_green_red[offset & 0x3ff];
+}
+
+void gaelco_ms_mod21_device::green_red_w(offs_t offset, u8 data)
+{
+	m_green_red[offset & 0x3ff] = data;
+	update_pen(offset & 0x3ff);
+}
+
+u8 gaelco_ms_mod21_device::blue_r(offs_t offset)
+{
+	return m_blue[offset & 0x3ff];
+}
+
+void gaelco_ms_mod21_device::blue_w(offs_t offset, u8 data)
+{
+	m_blue[offset & 0x3ff] = data;
+	update_pen(offset & 0x3ff);
+}
+
+void gaelco_ms_mod21_device::update_pen(offs_t entry)
+{
+	// red in the low half of the green and red byte, green in the high half, blue in the low half of the blue byte
+	set_pen_color(entry, pal4bit(m_green_red[entry]), pal4bit(m_green_red[entry] >> 4), pal4bit(m_blue[entry]));
 }

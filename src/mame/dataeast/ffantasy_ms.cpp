@@ -73,7 +73,6 @@
 
 #include "cpu/m68000/m68000.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -87,6 +86,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
+		m_mod21(*this, "mod21"),
 		m_screen(*this, "screen")
 	{ }
 
@@ -99,6 +99,7 @@ protected:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<screen_device> m_screen;
 
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -161,14 +162,12 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	SCREEN(config, m_screen);
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 8, 248); // MOD 21/1 PROMs 201 and 205
 	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update));
-	m_screen->set_palette("palette");
+	m_screen->set_palette(m_mod21);
 
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	GFXDECODE(config, "gfxdecode", m_mod21, gfx_ffantasy_ms);
 
-	GFXDECODE(config, "gfxdecode", "palette", gfx_ffantasy_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, "mod51");
 

@@ -40,7 +40,6 @@
 #include "cpu/z80/z80.h"
 #include "machine/74259.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -59,15 +58,13 @@ public:
 		m_mod3(*this, "mod3"),
 		m_mod4_pf(*this, "mod4_pf"),
 		m_mod4_fix(*this, "mod4_fix"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_palette(*this, "palette"),
 		m_rom(*this, "maincpu"),
 		m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
-		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_LITTLE),
-		m_paletteram(*this, "palette", 0x400, ENDIANNESS_LITTLE),
-		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_LITTLE)
+		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_LITTLE)
 	{ }
 
 	void slapfighm(machine_config &config);
@@ -83,16 +80,14 @@ private:
 	required_device<gaelco_ms_mod3_decoder_device> m_mod3;
 	required_device<gaelco_ms_mod4_device> m_mod4_pf;
 	required_device<gaelco_ms_mod4_device> m_mod4_fix;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_device<palette_device> m_palette;
 
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
 	memory_share_creator<u8> m_spriteram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	bool m_main_irq_enabled = false;
 	bool m_sound_nmi_enabled = false;
@@ -272,16 +267,17 @@ void slapfght_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 		for (offs_t area = start; area < end; area = (area | 0x3ff) + 1)
 		{
 			offs_t const last = std::min<offs_t>(end, area | 0x3ff);
-			u8 *const ram = BIT(area, 10) ? &m_paletteram_ext[0] : &m_paletteram[0];
 			if (write)
 			{
 				view.install_write_handler(area, last, BIT(area, 10) ?
-						write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
-						write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+						write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_w)) :
+						write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_w)));
 			}
 			else
 			{
-				view.install_rom(area, last, &ram[area & 0x3ff]);
+				view.install_read_handler(area, last, BIT(area, 10) ?
+						read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_r)) :
+						read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r)));
 			}
 		}
 		break;
@@ -364,24 +360,22 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 203, the vertical position is a guess
 	m_screen->set_screen_update(FUNC(slapfght_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(slapfght_ms_state::vblank_irq));
-	m_screen->set_palette("palette");
+	m_screen->set_palette(m_mod21);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_slapfighm);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_slapfighm);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 
 	GAELCO_MS_MOD4(config, m_mod4_pf);
-	m_mod4_pf->set_palette(m_palette);
+	m_mod4_pf->set_palette(m_mod21);
 	m_mod4_pf->set_tile_size(8);
 	m_mod4_pf->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4_fix);
-	m_mod4_fix->set_palette(m_palette);
+	m_mod4_fix->set_palette(m_mod21);
 	m_mod4_fix->set_tile_size(8);
 	m_mod4_fix->set_planes(2);
 	m_mod4_fix->set_layout(TILEMAP_SCAN_ROWS, 64, 32);

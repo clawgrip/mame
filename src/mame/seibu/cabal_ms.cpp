@@ -42,7 +42,6 @@
 
 #include "cpu/m68000/m68000.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -58,13 +57,11 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4_bg(*this, "mod4_bg"),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_palette(*this, "palette"),
-		m_spriteram(*this, "spriteram"),
-		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
-		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
+		m_spriteram(*this, "spriteram")
 	{ }
 
 	void cabalm(machine_config &config) ATTR_COLD;
@@ -77,14 +74,12 @@ private:
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4_bg;
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_device<palette_device> m_palette;
 
 	required_shared_ptr<u16> m_spriteram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	u8 m_scroll[2][2]{}; // background and text boards
 
@@ -159,8 +154,8 @@ void cabal_ms_state::main_map(address_map &map)
 	map(0x080800, 0x080803).umask16(0xff00).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[0][offset] = data; }));
 	map(0x0a0000, 0x0a000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x0c0000, 0x0c0000).lw8(NAME([this] (u8 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
-	map(0x0e0000, 0x0e03ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0x0e0400, 0x0e07ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0x0e0000, 0x0e03ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x0e0400, 0x0e07ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 }
 
 
@@ -252,31 +247,29 @@ void cabal_ms_state::cabalm(machine_config &config)
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 24, 248); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(cabal_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(cabal_ms_state::vblank_irq));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod21);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_cabal_ms);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_cabal_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->set_list(256, 0, false);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(cabal_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_bg);
-	m_mod4_bg->set_timing(mod21);
-	m_mod4_bg->set_palette(m_palette);
+	m_mod4_bg->set_timing(m_mod21);
+	m_mod4_bg->set_palette(m_mod21);
 	m_mod4_bg->set_color_base(0x300);
 	m_mod4_bg->set_half_lines(9);
 	m_mod4_bg->set_layout(TILEMAP_SCAN_ROWS, 16, 16);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing(mod21);
-	m_mod4_tx->set_palette(m_palette);
+	m_mod4_tx->set_timing(m_mod21);
+	m_mod4_tx->set_palette(m_mod21);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_planes(2);
 	m_mod4_tx->set_layout(TILEMAP_SCAN_ROWS, 32, 32);

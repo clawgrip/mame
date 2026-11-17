@@ -261,7 +261,6 @@ IC46->PAL16V8H 74LS393N 74LS368AP 74LS377B1|U||    |   |                        
 #include "cpu/m68000/m68000.h"
 #include "video/bufsprite.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -276,8 +275,8 @@ public:
 		driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
 		, m_mod1(*this, "mod1")
+		, m_mod21(*this, "mod21")
 		, m_mod51(*this, "mod51")
-		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_bk1vram(*this, "bk1vram")
@@ -285,8 +284,6 @@ public:
 		, m_vram(*this, "vram")
 		, m_spriteram(*this, "spriteram")
 		, m_scrollram(*this, "scrollram")
-		, m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG)
-		, m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
 	{ }
 
 	void tokim(machine_config &config) ATTR_COLD;
@@ -295,8 +292,8 @@ public:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
-	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
 	required_device<gfxdecode_device> m_gfxdecode;
@@ -305,8 +302,6 @@ private:
 	required_shared_ptr<u16> m_vram;
 	required_device<buffered_spriteram16_device> m_spriteram;
 	required_shared_ptr<u16> m_scrollram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	virtual void video_start() override ATTR_COLD;
 
@@ -423,7 +418,7 @@ void toki_ms_state::video_start()
 
 uint32_t toki_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bitmap.fill(m_palette->black_pen());
+	bitmap.fill(m_mod21->black_pen());
 	m_bk1_tilemap->set_scrollx(0, (0x33-m_scrollram[0]) & 0x1ff );
 	m_bk1_tilemap->set_scrolly(0, (511-m_scrollram[1]) & 0x1ff );
 	m_bk2_tilemap->set_scrollx(0, (0x31-m_scrollram[2]) & 0x1ff );
@@ -470,8 +465,8 @@ void toki_ms_state::tokim_map(address_map &map)
 	map(0x06e800, 0x06efff).ram().w(FUNC(toki_ms_state::bk1vram_w)).share("bk1vram");
 	map(0x06f000, 0x06f7ff).ram().w(FUNC(toki_ms_state::bk2vram_w)).share("bk2vram");
 	map(0x06f800, 0x06ffff).ram().w(FUNC(toki_ms_state::vram_w)).share("vram");
-	map(0x070000, 0x0703ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0x070400, 0x0707ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0x070000, 0x0703ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x070400, 0x0707ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x071000, 0x0713ff).ram().share("spriteram");
 	map(0x072000, 0x072001).nopr(); // irq ack?
 	map(0x073000, 0x07300f).ram().share("scrollram");
@@ -577,15 +572,13 @@ void toki_ms_state::tokim(machine_config &config)
 	SCREEN(config, m_screen);
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(toki_ms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod21);
 	m_screen->screen_vblank().set("spriteram", FUNC(buffered_spriteram16_device::vblank_copy_rising));
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_toki_ms);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_toki_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 20_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 

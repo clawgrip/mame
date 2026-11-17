@@ -67,7 +67,6 @@
 
 #include "cpu/m6809/m6809.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -87,16 +86,14 @@ public:
 		m_mod3_sub(*this, "mod3_sub"),
 		m_pal(*this, "mod3_pal"),
 		m_mod4(*this, { "mod4_tx", "mod4_a", "mod4_b" }),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
-		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_rom(*this, "maincpu"),
 		m_ram(*this, "ram", 0x2000, ENDIANNESS_BIG),
 		m_ram2(*this, "ram2", 0x1000, ENDIANNESS_BIG),
-		m_spriteram(*this, "spriteram", 0x1000, ENDIANNESS_BIG),
-		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
-		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
+		m_spriteram(*this, "spriteram", 0x1000, ENDIANNESS_BIG)
 	{ }
 
 	void gryzorm(machine_config &config) ATTR_COLD;
@@ -117,16 +114,14 @@ private:
 	required_device<gaelco_ms_mod3_decoder_device> m_mod3_sub;
 	required_device<gaelco_ms_mod3_pal_device> m_pal;
 	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
-	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
 	memory_share_creator<u8> m_ram2;
 	memory_share_creator<u8> m_spriteram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	u8 m_bank3 = 0;
 
@@ -278,12 +273,14 @@ void gryzor_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t 
 					if (write)
 					{
 						view.install_write_handler(first, first + 0x3ff, half ?
-								write8sm_delegate(*m_palette, FUNC(palette_device::write8_ext)) :
-								write8sm_delegate(*m_palette, FUNC(palette_device::write8)));
+								write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_w)) :
+								write8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_w)));
 					}
 					else
 					{
-						view.install_rom(first, first + 0x3ff, half ? &m_paletteram_ext[0] : &m_paletteram[0]);
+						view.install_read_handler(first, first + 0x3ff, half ?
+								read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::blue_r)) :
+								read8sm_delegate(*m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r)));
 					}
 				}
 			}
@@ -454,31 +451,29 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 280, 266, 16, 240); // MOD 21/1 PROMs 206 and 202
 	m_screen->set_screen_update(FUNC(gryzor_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(gryzor_ms_state::vblank_w));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod21);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400); // on the MOD 21/1 board
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_gryzor_ms);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_gryzor_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 24_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(gryzor_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_B]);
-	m_mod4[MOD4_B]->set_timing(mod21);
-	m_mod4[MOD4_B]->set_palette(m_palette);
+	m_mod4[MOD4_B]->set_timing(m_mod21);
+	m_mod4[MOD4_B]->set_palette(m_mod21);
 	m_mod4[MOD4_B]->set_color_base(0x300);
 	m_mod4[MOD4_B]->set_tile_size(8);
 	m_mod4[MOD4_B]->set_layout(TILEMAP_SCAN_ROWS, 32, 32);
 	m_mod4[MOD4_B]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_A]);
-	m_mod4[MOD4_A]->set_timing(mod21);
-	m_mod4[MOD4_A]->set_palette(m_palette);
+	m_mod4[MOD4_A]->set_timing(m_mod21);
+	m_mod4[MOD4_A]->set_palette(m_mod21);
 	m_mod4[MOD4_A]->set_color_base(0x200);
 	m_mod4[MOD4_A]->set_tile_size(8);
 	m_mod4[MOD4_A]->set_layout(TILEMAP_SCAN_ROWS, 32, 32);
@@ -486,8 +481,8 @@ void gryzor_ms_state::gryzorm(machine_config &config)
 	m_mod4[MOD4_A]->set_tile_callback(FUNC(gryzor_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_TX]);
-	m_mod4[MOD4_TX]->set_timing(mod21);
-	m_mod4[MOD4_TX]->set_palette(m_palette);
+	m_mod4[MOD4_TX]->set_timing(m_mod21);
+	m_mod4[MOD4_TX]->set_palette(m_mod21);
 	m_mod4[MOD4_TX]->set_tile_size(8);
 	m_mod4[MOD4_TX]->set_planes(2);
 	m_mod4[MOD4_TX]->set_layout(TILEMAP_SCAN_COLS, 64, 32);

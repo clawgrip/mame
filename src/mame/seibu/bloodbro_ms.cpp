@@ -35,7 +35,6 @@ TODO:
 
 #include "cpu/m68000/m68000.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -51,6 +50,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%c", 'a'),
 		m_mod4_tx(*this, "mod4_tx"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_spriteram(*this, "spriteram")
@@ -66,6 +66,7 @@ private:
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 2> m_mod4; // a fg, b bg
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 
@@ -133,8 +134,8 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x0a0000, 0x0a000d).nopw(); // remnants of original code (Seibu sound system)?
 	map(0x0c0100, 0x0c0101).nopw(); // ??? written once
 	map(0x0e0000, 0x0e000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
-	map(0x100000, 0x1003ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
-	map(0x100400, 0x1007ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
+	map(0x100000, 0x1003ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x100400, 0x1007ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x100800, 0x100fff).ram();
 	map(0x101000, 0x1017ff).ram().share(m_spriteram);
 	map(0x101800, 0x101fff).ram();
@@ -239,37 +240,35 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_raw(24_MHz_XTAL / 4, 384, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 211 and 202
 	screen.set_screen_update(FUNC(bloodbro_ms_state::screen_update));
-	screen.set_palette("palette");
+	screen.set_palette(m_mod21);
 
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_bloodbro_ms);
 
-	GFXDECODE(config, "gfxdecode", "palette", gfx_bloodbro_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
-	mod21.set_screen(screen);
+	GAELCO_MS_MOD21(config, m_mod21, 24_MHz_XTAL);
+	m_mod21->set_screen(screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(bloodbro_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing(mod21);
-	m_mod4[0]->set_palette("palette");
+	m_mod4[0]->set_timing(m_mod21);
+	m_mod4[0]->set_palette(m_mod21);
 	m_mod4[0]->set_color_base(0x200);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 	m_mod4[0]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing(mod21);
-	m_mod4[1]->set_palette("palette");
+	m_mod4[1]->set_timing(m_mod21);
+	m_mod4[1]->set_palette(m_mod21);
 	m_mod4[1]->set_color_base(0x300);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_ROWS, 32, 16);
 
 	GAELCO_MS_MOD4(config, m_mod4_tx);
-	m_mod4_tx->set_timing(mod21);
-	m_mod4_tx->set_palette("palette");
+	m_mod4_tx->set_timing(m_mod21);
+	m_mod4_tx->set_palette(m_mod21);
 	m_mod4_tx->set_tile_size(8);
 	m_mod4_tx->set_transparent_pen(15);
 

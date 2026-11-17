@@ -8,7 +8,7 @@
 #include "screen.h"
 
 
-class gaelco_ms_mod21_device : public device_t
+class gaelco_ms_mod21_device : public device_t, public device_palette_interface
 {
 public:
 	gaelco_ms_mod21_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);
@@ -25,17 +25,29 @@ public:
 	u16 hblank_to_visible() const { return m_hblank_to_visible; }
 	u16 vsync_to_visible() const { return m_vsync_to_visible; }
 
+	// the palette RAM as the CPU boards see it: a green and red byte and a blue byte for each entry
+	u8 green_red_r(offs_t offset);
+	void green_red_w(offs_t offset, u8 data);
+	u8 blue_r(offs_t offset);
+	void blue_w(offs_t offset, u8 data);
+
 protected:
 	// device_t implementation
 	virtual void device_start() override ATTR_COLD;
 
+	// device_palette_interface implementation
+	virtual u32 palette_entries() const noexcept override;
+
 private:
 	u16 entries(offs_t base) const ATTR_COLD;
 	void low_run(offs_t base, u16 entries, u8 bit, u16 &start, u16 &end) const ATTR_COLD;
+	void update_pen(offs_t entry);
 
 	required_device<screen_device> m_screen;
 	required_region_ptr<u8> m_prom;
 
+	u8 m_green_red[0x400];
+	u8 m_blue[0x400];
 	u16 m_origin_x;
 	u16 m_origin_y;
 	u16 m_hsync_to_visible;

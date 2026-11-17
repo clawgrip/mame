@@ -206,7 +206,6 @@ _|_  74LS86PC  74LS299N |RD4B3  | 74LS153PC|V||  _|_  74LS86PC  74LS299N |RD4A3 
 
 #include "cpu/nec/nec.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -222,9 +221,9 @@ public:
 		m_subcpu(*this, "subcpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4_%u", 1U),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
-		m_palette(*this, "palette"),
 		m_spriteram(*this, "spriteram"),
 		m_scrollram1(*this, "scrollram1"),
 		m_scrollram2(*this, "scrollram2"),
@@ -238,18 +237,13 @@ private:
 	required_device<cpu_device> m_subcpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
-	required_device<palette_device> m_palette;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_scrollram1;
 	required_shared_ptr<uint16_t> m_scrollram2;
 	required_device<gfxdecode_device> m_gfxdecode;
-
-	uint16_t pal_read16(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16(offset); return swapendian_int16(data); };
-	uint16_t pal_read16_ext(offs_t offset, u16 mem_mask = ~0) { uint16_t data = m_palette->read16_ext(offset); return swapendian_int16(data);  };
-	void pal_write16(offs_t offset, u16 data, u16 mem_mask = ~0) { m_palette->write16(offset, swapendian_int16(data), swapendian_int16(mem_mask)); };
-	void pal_write16_ext(offs_t offset, u16 data, u16 mem_mask = ~0) { m_palette->write16_ext(offset, swapendian_int16(data), swapendian_int16(mem_mask)); };
 
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
@@ -287,8 +281,9 @@ void raiden_ms_state::raidenm_sub_map(address_map &map)
 	map(0x00000, 0x01fff).ram();
 	map(0x02000, 0x027ff).rw(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x02800, 0x02fff).rw(m_mod4[1], FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
-	map(0x03000, 0x033ff).ram().rw(FUNC(raiden_ms_state::pal_read16), FUNC(raiden_ms_state::pal_write16)).share("palette");
-	map(0x03400, 0x037ff).ram().rw(FUNC(raiden_ms_state::pal_read16_ext), FUNC(raiden_ms_state::pal_write16_ext)).share("palette_ext");
+	// the V30 sees each entry at the other byte of its word
+	map(0x03000, 0x033ff).lrw8(NAME([this] (offs_t offset) -> u8 { return m_mod21->green_red_r(offset ^ 1); }), NAME([this] (offs_t offset, u8 data) { m_mod21->green_red_w(offset ^ 1, data); }));
+	map(0x03400, 0x037ff).lrw8(NAME([this] (offs_t offset) -> u8 { return m_mod21->blue_r(offset ^ 1); }), NAME([this] (offs_t offset, u8 data) { m_mod21->blue_w(offset ^ 1, data); }));
 	map(0x03800, 0x03fff).ram();
 
 	map(0x04000, 0x04fff).ram().share("shared_ram");
@@ -452,38 +447,36 @@ void raiden_ms_state::raidenm(machine_config &config)
 	SCREEN(config, m_screen);
 	m_screen->set_raw(24_MHz_XTAL / 4, 384, 0, 256, 266, 0, 224); // MOD 21/1 PROMs 211 and 202
 	m_screen->set_screen_update(FUNC(raiden_ms_state::screen_update));
-	m_screen->set_palette("palette");
+	m_screen->set_palette(m_mod21);
 	m_screen->screen_vblank().set(FUNC(raiden_ms_state::vblank_irq));
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_raiden_ms);
 
-	GFXDECODE(config, "gfxdecode", "palette", gfx_raiden_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 24_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 24_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(raiden_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
-	m_mod4[0]->set_timing(mod21);
-	m_mod4[0]->set_palette(m_palette);
+	m_mod4[0]->set_timing(m_mod21);
+	m_mod4[0]->set_palette(m_mod21);
 	m_mod4[0]->set_color_base(0x300);
 	m_mod4[0]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4[1]);
-	m_mod4[1]->set_timing(mod21);
-	m_mod4[1]->set_palette(m_palette);
+	m_mod4[1]->set_timing(m_mod21);
+	m_mod4[1]->set_palette(m_mod21);
 	m_mod4[1]->set_color_base(0x100);
 	m_mod4[1]->set_layout(TILEMAP_SCAN_COLS, 32, 32);
 	m_mod4[1]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[2]);
-	m_mod4[2]->set_timing(mod21);
-	m_mod4[2]->set_palette(m_palette);
+	m_mod4[2]->set_timing(m_mod21);
+	m_mod4[2]->set_palette(m_mod21);
 	m_mod4[2]->set_tile_size(8);
 	m_mod4[2]->set_transparent_pen(15);
 	m_mod4[2]->set_tile_callback(FUNC(raiden_ms_state::text_tile_cb));

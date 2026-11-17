@@ -40,7 +40,6 @@
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprompar.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -56,13 +55,11 @@ public:
 		m_eeprom(*this, "eeprom"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen"),
 		m_gfxdecode(*this, "gfxdecode"),
-		m_palette(*this, "palette"),
-		m_spriteram(*this, "spriteram"),
-		m_paletteram(*this, "palette", 0x400, ENDIANNESS_BIG),
-		m_paletteram_ext(*this, "palette_ext", 0x400, ENDIANNESS_BIG)
+		m_spriteram(*this, "spriteram")
 	{ }
 
 	void badlandsm(machine_config &config) ATTR_COLD;
@@ -75,14 +72,12 @@ private:
 	required_device<eeprom_parallel_28xx_device> m_eeprom;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
-	required_device<palette_device> m_palette;
 
 	required_shared_ptr<u16> m_spriteram;
-	memory_share_creator<u8> m_paletteram;
-	memory_share_creator<u8> m_paletteram_ext;
 
 	u16 m_scroll[2]{};
 
@@ -157,8 +152,8 @@ void badlands_ms_state::main_map(address_map &map)
 	map(0xfe2000, 0xfe2001).lw16(NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
 	map(0xfe4000, 0xfe400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0xfee000, 0xfee001).w(m_eeprom, FUNC(eeprom_parallel_28xx_device::unlock_write16));
-	map(0xffc000, 0xffc3ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram[offset]; })).w(m_palette, FUNC(palette_device::write8));
-	map(0xffc400, 0xffc7ff).lr8(NAME([this] (offs_t offset) -> u8 { return m_paletteram_ext[offset]; })).w(m_palette, FUNC(palette_device::write8_ext));
+	map(0xffc000, 0xffc3ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0xffc400, 0xffc7ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0xffe000, 0xffefff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xfff000, 0xffffff).ram();
 }
@@ -218,23 +213,21 @@ void badlands_ms_state::badlandsm(machine_config &config)
 	m_screen->set_raw(28_MHz_XTAL / 4, 450, 96, 434, 266, 16, 256); // MOD 21/1 PROMs 210 and 205
 	m_screen->set_screen_update(FUNC(badlands_ms_state::screen_update));
 	m_screen->screen_vblank().set(FUNC(badlands_ms_state::vblank_irq));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod21);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_badlands_ms);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_badlands_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
-	mod21.set_screen(m_screen);
+	GAELCO_MS_MOD21(config, m_mod21, 28_MHz_XTAL);
+	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(badlands_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
-	m_mod4->set_timing(mod21);
-	m_mod4->set_palette(m_palette);
+	m_mod4->set_timing(m_mod21);
+	m_mod4->set_palette(m_mod21);
 	m_mod4->set_tile_size(8);
 	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 	m_mod4->set_tile_callback(FUNC(badlands_ms_state::tile_cb));

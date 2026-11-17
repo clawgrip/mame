@@ -36,7 +36,6 @@
 
 #include "cpu/m68000/m68000.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -51,6 +50,7 @@ public:
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
+		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_scrollram(*this, "scrollram"),
@@ -66,6 +66,7 @@ private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
+	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gfxdecode_device> m_gfxdecode;
 
@@ -147,8 +148,8 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0xffc000, 0xffc7ff).ram().share(m_spriteram);
 	map(0xffd000, 0xffdfff).ram().share(m_scrollram);
 	map(0xffd200, 0xffd201).w(FUNC(pspikes_ms_state::gfxbank_scrolly_w));
-	map(0xffe000, 0xffe3ff).ram().w("palette", FUNC(palette_device::write16)).share("palette");
-	map(0xffe400, 0xffe7ff).ram().w("palette", FUNC(palette_device::write16_ext)).share("palette_ext");
+	map(0xffe000, 0xffe3ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0xffe400, 0xffe7ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0xffe800, 0xffefff).ram(); // only initialized at start?
 	map(0xfff000, 0xfff00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	//map(0xfff400, 0xfff403).nopw(); // leftover of the original chips
@@ -228,26 +229,24 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_raw(28_MHz_XTAL / 4, 450, 4, 360, 266, 0, 240); // MOD 21/1 PROMs 204 and 209
 	screen.set_screen_update(FUNC(pspikes_ms_state::screen_update));
-	screen.set_palette("palette");
+	screen.set_palette(m_mod21);
 
-	PALETTE(config, "palette").set_format(palette_device::xBGR_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_pspikes_ms);
 
-	GFXDECODE(config, "gfxdecode", "palette", gfx_pspikes_ms);
-
-	gaelco_ms_mod21_device &mod21(GAELCO_MS_MOD21(config, "mod21", 28_MHz_XTAL));
-	mod21.set_screen(screen);
+	GAELCO_MS_MOD21(config, m_mod21, 28_MHz_XTAL);
+	m_mod21->set_screen(screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-	m_mod51->set_timing(mod21);
+	m_mod51->set_timing(m_mod21);
 	m_mod51->set_position_correction(-4, 14); // see the TODO
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(pspikes_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
-	m_mod4->set_timing(mod21);
+	m_mod4->set_timing(m_mod21);
 	m_mod4->set_scroll_correction(2, 0); // see the TODO
-	m_mod4->set_palette("palette");
+	m_mod4->set_palette(m_mod21);
 	m_mod4->set_color_base(0x200);
 	m_mod4->set_tile_size(8);
 	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
