@@ -269,7 +269,7 @@ void lastduel_ms_state::lastduelm(machine_config &config)
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod21);
-	m_mod51->set_position_correction(-16, 1); // see the TODO
+	m_mod51->set_position_correction(-16, -1); // see the TODO
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(lastduel_ms_state::sprite_cb));
 

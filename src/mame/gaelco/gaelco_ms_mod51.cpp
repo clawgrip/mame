@@ -26,13 +26,16 @@
     every frame), and the line buffer starts from it. Fitted to the games,
     with no schematics: a sprite appears X - X0 - (pixels from the start of
     the horizontal blank to the first visible pixel) + 2 pixels right of the
-    first visible pixel, and 225 - Y lines below the first visible line.
-    With horizontal PROMs 201, 206, 210 and 211 this matches the original
-    games within a pixel horizontally and 2 lines vertically on Bad Lands,
-    Black Tiger, Blood Bros., Cabal, Double Dragon, Gryzor and Raiden. It
-    doesn't fit the games with horizontal PROMs 204 and 207 (Last Duel,
-    Power Spikes and Twin Cobra), whose drivers set corrections. The lower
-    entries are drawn over the higher ones.
+    first visible pixel, and its top line is 241 - Y lines after the end of
+    the vertical sync pulse, the lines the MOD 4 boards count from: 225 - Y
+    lines below the first visible line with vertical PROM 202, 233 - Y with
+    205. With horizontal PROMs 201, 206, 210 and 211 this matches the
+    original games within a pixel horizontally and 2 lines vertically on
+    Bad Lands, Black Tiger, Blood Bros., Cabal, Gryzor, Raiden and Secret
+    Agent, and puts the sprites on the ground of Dragon Ninja and Fighting
+    Fantasy. It doesn't fit the games with horizontal PROMs 204 and 207
+    (Last Duel, Power Spikes and Twin Cobra), whose drivers set
+    corrections. The lower entries are drawn over the higher ones.
 
     TODO:
     - what drives PROM address bits 4-7
@@ -62,6 +65,7 @@ gaelco_ms_mod51_device::gaelco_ms_mod51_device(const machine_config &mconfig, co
 	m_correction_x(0),
 	m_correction_y(0),
 	m_x_delta(0),
+	m_y_base(0),
 	m_origin_x(0),
 	m_origin_y(0)
 {
@@ -87,6 +91,7 @@ void gaelco_ms_mod51_device::device_start()
 			fatalerror("%s: drawing the sprite list needs the MOD 21/1 timing\n", tag());
 
 		m_x_delta = m_timing->hblank_to_visible() - 2;
+		m_y_base = 241 - m_timing->vsync_to_visible();
 		m_origin_x = m_timing->origin_x();
 		m_origin_y = m_timing->origin_y();
 	}
@@ -124,7 +129,7 @@ void gaelco_ms_mod51_device::draw(bitmap_ind16 &bitmap, const rectangle &cliprec
 	{
 		entry(index, code, palette, flipx, flipy, x, y);
 		int sx = (x - origin + m_correction_x) & xmask;
-		int const sy = m_origin_y + 225 - y + m_correction_y;
+		int const sy = m_origin_y + m_y_base - y + m_correction_y;
 
 		if (m_x_bit8)
 		{

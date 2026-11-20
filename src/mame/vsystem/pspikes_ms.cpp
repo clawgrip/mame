@@ -20,7 +20,7 @@
     TODO:
     - sound
     - positions: the fitted ones of the MOD 4 and MOD 51 boards (see those devices) put the layer 2
-      pixels right and the sprites 4 pixels right and 14 lines up, the players above the court; the
+      pixels right and the sprites 4 pixels right and 6 lines up, the players above the court; the
       corrections keep the alignment of the original game. Last Duel, the other game with horizontal
       PROM 204, needs other corrections, the reason is unknown. The sprite list decoding is unsure too:
       some sprite texts come out garbled, also on pspikesb
@@ -238,7 +238,7 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod21);
-	m_mod51->set_position_correction(-4, 14); // see the TODO
+	m_mod51->set_position_correction(-4, 6); // see the TODO
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(pspikes_ms_state::sprite_cb));

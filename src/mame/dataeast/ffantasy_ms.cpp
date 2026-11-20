@@ -62,6 +62,30 @@
     MOD 51/3 - Sprite board, has logic + 4 EPROMs.
 
     PCBs pictures and dip listing are available at: https://www.recreativas.org/modular-system-automat-robocop-14508-gaelco-sa
+
+
+    The Dragon Ninja, Fighting Fantasy and Secret Agent programs are the ones of the original games with
+    the hardware accesses moved. The tile maps stay in the RAM layout of the BAC06 chips of the original
+    games, pages of 16 x 16 tiles, two by two on Dragon Ninja and Secret Agent and side by side on
+    Fighting Fantasy, as the original games set them; the MOD 4 boards show them through their edge sub
+    boards. Every frame the programs convert the sprites of the original games into the sprite board
+    list, and write the scroll values into the RAM areas of the MOD 4 boards, low byte at the even
+    address. Dragon Ninja writes sixteen X values for each board, one for each band of 16 lines, and the
+    Y value after them; Secret Agent does the same on its front 16x16 board. The palettes are converted
+    with the pens reversed, as the boards invert the EPROM pixels.
+
+    With the fitted positions of the MOD 4 and MOD 51 boards (see those devices), Secret Agent matches the
+    original game horizontally; the other two programs write other scroll offsets for each board, which
+    put their layers up to 4 pixels away from the original games.
+
+    TODO:
+    - Automat: MOD 7/8 and MOD 8 video
+    - where the MOD 4 boards take the scroll values from: the programs write them at different places in
+      each board's RAM area; whether the bands of the X values follow the screen lines or the tile map
+    - Dragon Ninja also sets Y bits 10-11 of its back board for some stages, where the original game
+      changes the shape of that tile map
+    - sound: the MOD 1 interrupt and the clocks
+    - DIP switches
 */
 
 
@@ -69,6 +93,7 @@
 
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod21.h"
+#include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
@@ -79,51 +104,262 @@
 
 namespace {
 
-class ffantasy_ms_state : public driver_device
+class dec0_ms_state : public driver_device
 {
 public:
-	ffantasy_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
+	dec0_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod21(*this, "mod21"),
+		m_mod51(*this, "mod51"),
 		m_screen(*this, "screen")
 	{ }
 
-	void ffantasym(machine_config &config);
-	void secretagm(machine_config &config);
+	void automatm(machine_config &config) ATTR_COLD;
 
 protected:
-	virtual void machine_start() override ATTR_COLD;
-
-private:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod21_device> m_mod21;
+	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
 
-	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void base(machine_config &config) ATTR_COLD;
 
-	void ffantasym_map(address_map &map) ATTR_COLD;
+private:
+	uint32_t screen_update_automatm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+
+	void automatm_map(address_map &map) ATTR_COLD;
 };
 
 
-void ffantasy_ms_state::ffantasym_map(address_map &map)
+class ffantasy_ms_state : public dec0_ms_state
+{
+public:
+	ffantasy_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
+		dec0_ms_state(mconfig, type, tag),
+		m_mod4_tx(*this, "mod4_tx"),
+		m_mod4_a(*this, "mod4_a"),
+		m_mod4_b(*this, "mod4_b"),
+		m_gfxdecode(*this, "gfxdecode"),
+		m_spritelist(*this, "spritelist")
+	{ }
+
+	void drgninjam(machine_config &config) ATTR_COLD;
+	void ffantasym(machine_config &config) ATTR_COLD;
+	void secretagm(machine_config &config) ATTR_COLD;
+
+private:
+	required_device<gaelco_ms_mod4_device> m_mod4_tx;
+	required_device<gaelco_ms_mod4_device> m_mod4_a; // front 16x16 board
+	required_device<gaelco_ms_mod4_device> m_mod4_b; // back 16x16 board
+	required_device<gfxdecode_device> m_gfxdecode;
+
+	required_shared_ptr<u16> m_spritelist;
+
+	TILEMAP_MAPPER_MEMBER(pages_4x1_scan);
+	TILEMAP_MAPPER_MEMBER(pages_2x2_scan);
+	void secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
+	u8 sprite_byte(offs_t offset) const { return m_spritelist[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void drgninjam_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	static u16 scroll_value(gaelco_ms_mod4_device &board, offs_t offset);
+	static void set_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y);
+	static void set_band_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y, u32 rows);
+	void draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	uint32_t screen_update_drgninjam(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	uint32_t screen_update_ffantasym(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	uint32_t screen_update_secretagm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void vblank_irq(int state);
+	void irq_ack_w(u16 data);
+	u16 irq_ack_r();
+
+	void video(machine_config &config) ATTR_COLD;
+
+	void drgninjam_map(address_map &map) ATTR_COLD;
+	void ffantasym_map(address_map &map) ATTR_COLD;
+	void secretagm_map(address_map &map) ATTR_COLD;
+};
+
+
+void dec0_ms_state::automatm_map(address_map &map)
 {
 	map(0x000000, 0x03ffff).rom();
 	map(0xff8000, 0xffbfff).ram();
 }
 
 
-void ffantasy_ms_state::machine_start()
-{
-}
-
-
-uint32_t ffantasy_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+uint32_t dec0_ms_state::screen_update_automatm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
+
+
+TILEMAP_MAPPER_MEMBER(ffantasy_ms_state::pages_4x1_scan)
+{
+	// four pages of 16 x 16 tiles side by side
+	return (col & 0x0f) | ((row & 0x0f) << 4) | ((col & 0x30) << 4);
+}
+
+TILEMAP_MAPPER_MEMBER(ffantasy_ms_state::pages_2x2_scan)
+{
+	// four pages of 16 x 16 tiles, two by two, the left ones first
+	return (col & 0x0f) | ((row & 0x1f) << 4) | ((col & 0x10) << 5);
+}
+
+void ffantasy_ms_state::secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
+{
+	// EPROM A14 is held high, the characters are in the upper halves
+	code |= 0x800;
+}
+
+void ffantasy_ms_state::drgninjam_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-11 in attribute bits 0-3, flip X in bit 5 and flip Y in bit 6, palette in colour bits 4-7
+	// and X bit 8 in colour bit 0
+	code |= (attr & 0x0f) << 8;
+	palette = color >> 4;
+	flipx = BIT(attr, 5);
+	flipy = BIT(attr, 6);
+	x8 = BIT(color, 0);
+}
+
+void ffantasy_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// MOD 5/1 boards: palette in colour bits 0-3, the programs copy X bit 8 to colour bits 4-7
+	code |= (attr & 0x0f) << 8;
+	flipx = BIT(attr, 5);
+	flipy = BIT(attr, 6);
+	x8 = BIT(color, 4);
+}
+
+u16 ffantasy_ms_state::scroll_value(gaelco_ms_mod4_device &board, offs_t offset)
+{
+	return swapendian_int16(board.vram_r(offset));
+}
+
+void ffantasy_ms_state::set_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y)
+{
+	board.set_scrollx(scroll_value(board, x));
+	board.set_scrolly(scroll_value(board, y));
+}
+
+void ffantasy_ms_state::set_band_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y, u32 rows)
+{
+	// one X value for each band of 16 lines, taken as tile map lines like the row scroll of the BAC06
+	board.set_scroll_rows(rows);
+	for (u32 row = 0; row < rows; row++)
+		board.set_scrollx(row, scroll_value(board, x + (row & 0x0f)));
+	board.set_scrolly(scroll_value(board, y));
+}
+
+void ffantasy_ms_state::draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	m_mod4_b->draw(screen, bitmap, cliprect);
+	m_mod4_a->draw(screen, bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
+	m_mod4_tx->draw(screen, bitmap, cliprect);
+}
+
+uint32_t ffantasy_ms_state::screen_update_drgninjam(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	set_band_scroll(*m_mod4_tx, 0x000, 0x010, 16);
+	set_band_scroll(*m_mod4_a, 0x400, 0x410, 32);
+	set_band_scroll(*m_mod4_b, 0x400, 0x410, 32);
+	draw(screen, bitmap, cliprect);
+	return 0;
+}
+
+uint32_t ffantasy_ms_state::screen_update_ffantasym(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	set_scroll(*m_mod4_tx, 0x600, 0x601);
+	set_scroll(*m_mod4_a, 0x600, 0x601);
+	set_scroll(*m_mod4_b, 0x600, 0x601);
+	draw(screen, bitmap, cliprect);
+	return 0;
+}
+
+uint32_t ffantasy_ms_state::screen_update_secretagm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	set_scroll(*m_mod4_tx, 0x600, 0x601);
+	set_band_scroll(*m_mod4_a, 0x610, 0x601, 32);
+	set_scroll(*m_mod4_b, 0x600, 0x601);
+	draw(screen, bitmap, cliprect);
+	return 0;
+}
+
+void ffantasy_ms_state::vblank_irq(int state)
+{
+	if (state)
+		m_maincpu->set_input_line(4, ASSERT_LINE);
+}
+
+void ffantasy_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
+u16 ffantasy_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+	return 0;
+}
+
+
+void ffantasy_ms_state::drgninjam_map(address_map &map)
+{
+	// each EPROM half holds one of the two program areas of the original game
+	map(0x000000, 0x01ffff).rom();
+	map(0x040000, 0x05ffff).rom().region("maincpu", 0x20000);
+	map(0x244000, 0x245fff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x24a000, 0x24afff).rw(m_mod4_b, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x24d000, 0x24dfff).rw(m_mod4_a, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x280000, 0x2803ff).ram().share(m_spritelist);
+	map(0x290000, 0x290001).w(FUNC(ffantasy_ms_state::irq_ack_w));
+	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
+	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
+	map(0xff8000, 0xffffff).ram();
+}
+
+void ffantasy_ms_state::ffantasym_map(address_map &map)
+{
+	map(0x000000, 0x03ffff).rom();
+	map(0x242000, 0x243fff).ram();
+	map(0x244000, 0x244fff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x24a000, 0x24afff).rw(m_mod4_a, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x24d000, 0x24dfff).rw(m_mod4_b, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x290000, 0x290001).w(FUNC(ffantasy_ms_state::irq_ack_w));
+	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
+	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
+	map(0xfc0000, 0xfc03ff).ram().share(m_spritelist);
+	map(0xff8000, 0xffffff).ram();
+}
+
+void ffantasy_ms_state::secretagm_map(address_map &map)
+{
+	map(0x000000, 0x03ffff).rom();
+	// the code of the original game still writes the registers and scroll RAM of its BAC06 chips
+	map(0x240000, 0x24001f).nopw();
+	map(0x242000, 0x2427ff).nopw();
+	map(0x248000, 0x24801f).nopw();
+	map(0x24c000, 0x24c7ff).nopw();
+	map(0x300000, 0x30001f).nopw();
+	map(0x300800, 0x30087f).nopw();
+	map(0x246000, 0x246fff).rw(m_mod4_a, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x24e000, 0x24efff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x301000, 0x301fff).rw(m_mod4_b, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
+	map(0x304000, 0x307fff).ram();
+	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
+	map(0x314000, 0x31400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
+	map(0x380000, 0x3803ff).ram().share(m_spritelist);
+	map(0x500000, 0x500001).r(FUNC(ffantasy_ms_state::irq_ack_r));
+}
+
 
 static INPUT_PORTS_START( ffantasym )
 	PORT_INCLUDE( gaelco_ms_mod1 )
@@ -149,27 +385,42 @@ static INPUT_PORTS_START( ffantasym )
 	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
 INPUT_PORTS_END
 
-static GFXDECODE_START( gfx_ffantasy_ms )
+
+static const gfx_layout sprite_layout =
+{
+	16, 16,
+	RGN_FRAC(1, 1),
+	4,
+	{ 0, 8, 16, 24 },
+	{ STEP8(0, 1), STEP8(16 * 32, 1) },
+	{ STEP16(0, 32) },
+	16 * 16 * 4
+};
+
+static GFXDECODE_START( gfx_drgninjam )
+	GFXDECODE_ENTRY( "sprites", 0, sprite_layout, 0x300, 16 )
 GFXDECODE_END
 
-void ffantasy_ms_state::ffantasym(machine_config &config)
+static GFXDECODE_START( gfx_ffantasy_ms )
+	GFXDECODE_ENTRY( "sprites", 0, sprite_layout, 0x100, 16 )
+GFXDECODE_END
+
+
+void dec0_ms_state::base(machine_config &config)
 {
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
-	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::ffantasym_map);
 
 	// video hardware
 	SCREEN(config, m_screen);
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 8, 248); // MOD 21/1 PROMs 201 and 205
-	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update));
 	m_screen->set_palette(m_mod21);
-
-	GFXDECODE(config, "gfxdecode", m_mod21, gfx_ffantasy_ms);
 
 	GAELCO_MS_MOD21(config, m_mod21, 20_MHz_XTAL);
 	m_mod21->set_screen(m_screen);
 
-	GAELCO_MS_MOD51(config, "mod51");
+	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod21);
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
@@ -182,12 +433,92 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
+void dec0_ms_state::automatm(machine_config &config)
+{
+	base(config);
+
+	m_maincpu->set_addrmap(AS_PROGRAM, &dec0_ms_state::automatm_map);
+
+	m_screen->set_screen_update(FUNC(dec0_ms_state::screen_update_automatm));
+}
+
+void ffantasy_ms_state::video(machine_config &config)
+{
+	m_screen->screen_vblank().set(FUNC(ffantasy_ms_state::vblank_irq));
+
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+
+	GAELCO_MS_MOD4(config, m_mod4_tx);
+	m_mod4_tx->set_timing(m_mod21);
+	m_mod4_tx->set_palette(m_mod21);
+	m_mod4_tx->set_tile_size(8);
+	m_mod4_tx->set_layout(TILEMAP_SCAN_ROWS, 32, 32);
+	m_mod4_tx->set_transparent_pen(15);
+
+	// the 16x16 boards show the tile maps in the shape the original game sets in its BAC06 chips
+	GAELCO_MS_MOD4(config, m_mod4_a);
+	m_mod4_a->set_timing(m_mod21);
+	m_mod4_a->set_palette(m_mod21);
+	m_mod4_a->set_layout(FUNC(ffantasy_ms_state::pages_2x2_scan), 32, 32);
+	m_mod4_a->set_transparent_pen(15);
+
+	GAELCO_MS_MOD4(config, m_mod4_b);
+	m_mod4_b->set_timing(m_mod21);
+	m_mod4_b->set_palette(m_mod21);
+	m_mod4_b->set_layout(FUNC(ffantasy_ms_state::pages_2x2_scan), 32, 32);
+}
+
+void ffantasy_ms_state::drgninjam(machine_config &config)
+{
+	base(config);
+	video(config);
+
+	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::drgninjam_map);
+
+	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update_drgninjam));
+
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_drgninjam);
+
+	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::drgninjam_sprite_cb));
+
+	m_mod4_a->set_color_base(0x100);
+	m_mod4_a->set_half_lines(9);
+	m_mod4_b->set_color_base(0x200);
+	m_mod4_b->set_half_lines(9);
+}
+
+void ffantasy_ms_state::ffantasym(machine_config &config)
+{
+	base(config);
+	video(config);
+
+	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::ffantasym_map);
+
+	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update_ffantasym));
+
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_ffantasy_ms);
+
+	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::sprite_cb));
+
+	m_mod4_a->set_color_base(0x200);
+	m_mod4_a->set_layout(FUNC(ffantasy_ms_state::pages_4x1_scan), 64, 16);
+	m_mod4_b->set_color_base(0x300);
+	m_mod4_b->set_layout(FUNC(ffantasy_ms_state::pages_4x1_scan), 64, 16);
+}
+
 void ffantasy_ms_state::secretagm(machine_config &config)
 {
 	ffantasym(config);
 
 	// Exactly the same hardware configuration as 'ffantasym', but with a 22.1184 MHz xtal on the CPU PCB.
 	m_maincpu->set_clock(22.1184_MHz_XTAL);
+	m_maincpu->set_addrmap(AS_PROGRAM, &ffantasy_ms_state::secretagm_map);
+
+	m_screen->set_screen_update(FUNC(ffantasy_ms_state::screen_update_secretagm));
+
+	m_mod4_tx->set_tile_callback(FUNC(ffantasy_ms_state::secretagm_tx_tile_cb));
+	m_mod4_a->set_layout(FUNC(ffantasy_ms_state::pages_2x2_scan), 32, 32);
+	m_mod4_b->set_layout(FUNC(ffantasy_ms_state::pages_2x2_scan), 32, 32);
 }
 
 ROM_START( automatm )
@@ -268,7 +599,7 @@ ROM_START( automatm )
 ROM_END
 
 ROM_START( drgninjam )
-	ROM_REGION( 0x100000, "maincpu", 0 ) // on MOD 6/1 board, extremely similar to drgninjab in dec0.cpp. TODO: ROM loading may be wrong (check 0x20000 - 0x3ffff being empty in drgninjab)
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on MOD 6/1 board, extremely similar to drgninjab in dec0.cpp
 	ROM_LOAD16_BYTE( "6-1_cpu_dn_603.ic17", 0x00000, 0x20000, CRC(1c3670df) SHA1(0e287a0b4494e702080e80a911c4762bbc6a5815) )
 	ROM_LOAD16_BYTE( "6-1_cpu_dn_606.ic8",  0x00001, 0x20000, CRC(07669458) SHA1(c5dcf72eba5e345228ee3f9e0228cba526e1156a) )
 
@@ -278,31 +609,31 @@ ROM_START( drgninjam )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "1-4_snd_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
-	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
-	ROM_LOAD( "4-3_dn_401.ic17", 0x0000, 0x4000, CRC(45ab2822) SHA1(0cf0f74ad5325a66f74fc20cabd6a9d3d8c42f2a) )
-	ROM_LOAD( "4-3_dn_402.ic16", 0x4000, 0x4000, CRC(26f0095b) SHA1(9e568a23df2b0ca05d8b87fea445f5f98e55fac5) )
-	ROM_LOAD( "4-3_dn_403.ic15", 0x8000, 0x4000, CRC(c2061c37) SHA1(b06737ecece7da4785c2e98977f6dc35986a445e) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_IGNORE(                          0x4000 )
-	ROM_LOAD( "4-3_dn_404.ic14", 0xc000, 0x4000, CRC(1da44e82) SHA1(ccb9464b711025a5c2c18ecb765f7f0e15f7d4a5) ) // 1ST AND 2ND HALF IDENTICAL
-	ROM_IGNORE(                          0x4000 )
+	ROM_REGION( 0x10000, "mod4_tx", ROMREGION_INVERT ) // on MOD 4/3 board
+	ROM_LOAD32_BYTE( "4-3_dn_401.ic17", 0x00003, 0x4000, CRC(45ab2822) SHA1(0cf0f74ad5325a66f74fc20cabd6a9d3d8c42f2a) )
+	ROM_LOAD32_BYTE( "4-3_dn_402.ic16", 0x00002, 0x4000, CRC(26f0095b) SHA1(9e568a23df2b0ca05d8b87fea445f5f98e55fac5) )
+	ROM_LOAD32_BYTE( "4-3_dn_403.ic15", 0x00001, 0x4000, CRC(c2061c37) SHA1(b06737ecece7da4785c2e98977f6dc35986a445e) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_IGNORE(                                  0x4000 )
+	ROM_LOAD32_BYTE( "4-3_dn_404.ic14", 0x00000, 0x4000, CRC(1da44e82) SHA1(ccb9464b711025a5c2c18ecb765f7f0e15f7d4a5) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_IGNORE(                                  0x4000 )
 
-	ROM_REGION( 0x80000, "gfx2", 0 ) // on a second MOD 4/3 board
-	ROM_LOAD( "4-3-a_dn_4a01.ic17", 0x00000, 0x8000, CRC(c89982ac) SHA1(7509322bf4dcaceefdbaf6e9f4087a576133fe39) )
-	ROM_LOAD( "4-3-a_dn_4a02.ic16", 0x08000, 0x8000, CRC(144b0359) SHA1(46565c5694f0cfcf06c1ee7c131ab3c88c804d35) )
-	ROM_LOAD( "4-3-a_dn_4a03.ic15", 0x10000, 0x8000, CRC(ae98a684) SHA1(d6fe7237b82125a21b9804500ba2166906475a0e) )
-	ROM_LOAD( "4-3-a_dn_4a04.ic14", 0x18000, 0x8000, CRC(8292c4ad) SHA1(f83acf64b101022927b678749d754374a20f5444) )
+	ROM_REGION( 0x20000, "mod4_a", ROMREGION_INVERT ) // on MOD 4/3-A board
+	ROM_LOAD32_BYTE( "4-3-a_dn_4a01.ic17", 0x00003, 0x8000, CRC(c89982ac) SHA1(7509322bf4dcaceefdbaf6e9f4087a576133fe39) )
+	ROM_LOAD32_BYTE( "4-3-a_dn_4a02.ic16", 0x00002, 0x8000, CRC(144b0359) SHA1(46565c5694f0cfcf06c1ee7c131ab3c88c804d35) )
+	ROM_LOAD32_BYTE( "4-3-a_dn_4a03.ic15", 0x00001, 0x8000, CRC(ae98a684) SHA1(d6fe7237b82125a21b9804500ba2166906475a0e) )
+	ROM_LOAD32_BYTE( "4-3-a_dn_4a04.ic14", 0x00000, 0x8000, CRC(8292c4ad) SHA1(f83acf64b101022927b678749d754374a20f5444) )
 
-	ROM_REGION( 0x80000, "gfx3", 0 ) // on a MOD 4/2 board
-	ROM_LOAD( "4-2-b_dn_4b01.ic17",  0x00000, 0x10000, CRC(65002e5c) SHA1(e1fa0a0395d3fbcf31e15b63b7eaf478063aa971) )
-	ROM_LOAD( "4-2-b_dn_4b02.ic16",  0x10000, 0x10000, CRC(dd6acd2d) SHA1(e2a0ccf49dce421b10ad0ed54d02ba1ca6525404) )
-	ROM_LOAD( "4-2-b_dn_4b03.ic15",  0x20000, 0x10000, CRC(63e337c1) SHA1(ca347d6a46ee643edfdc8614760dc9b0994e1745) )
-	ROM_LOAD( "4-2-b_dn_4b04.ic14",  0x30000, 0x10000, CRC(5cc7ec8c) SHA1(3f17e13af7152c51ce025ca06ece70b4a6f65f94) )
+	ROM_REGION( 0x40000, "mod4_b", ROMREGION_INVERT ) // on MOD 4/2-B board
+	ROM_LOAD32_BYTE( "4-2-b_dn_4b01.ic17", 0x00003, 0x10000, CRC(65002e5c) SHA1(e1fa0a0395d3fbcf31e15b63b7eaf478063aa971) )
+	ROM_LOAD32_BYTE( "4-2-b_dn_4b02.ic16", 0x00002, 0x10000, CRC(dd6acd2d) SHA1(e2a0ccf49dce421b10ad0ed54d02ba1ca6525404) )
+	ROM_LOAD32_BYTE( "4-2-b_dn_4b03.ic15", 0x00001, 0x10000, CRC(63e337c1) SHA1(ca347d6a46ee643edfdc8614760dc9b0994e1745) )
+	ROM_LOAD32_BYTE( "4-2-b_dn_4b04.ic14", 0x00000, 0x10000, CRC(5cc7ec8c) SHA1(3f17e13af7152c51ce025ca06ece70b4a6f65f94) )
 
-	ROM_REGION( 0x100000, "gfx4", 0 ) // on MOD 51/1 board
-	ROM_LOAD( "51-3_dn_501.ic43", 0x00000, 0x20000, CRC(0fccce1f) SHA1(e2e5625b62ddd73a4363596a4b1b2d72c2fe1c38) )
-	ROM_LOAD( "51-3_dn_502.ic42", 0x20000, 0x20000, CRC(361f4616) SHA1(40279c76d027bcf698b8ff694afc2afb15279381) )
-	ROM_LOAD( "51-3_dn_503.ic41", 0x40000, 0x20000, CRC(b3c97ad1) SHA1(f77426e1ee347b8cae9c5aef1e31058344c019c2) )
-	ROM_LOAD( "51-3_dn_504.ic40", 0x60000, 0x20000, CRC(1445dccb) SHA1(fddbb9d136ea6dbb2704ac93e5536ed0e6bfb19c) )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_INVERT ) // on MOD 51/3 board
+	ROM_LOAD32_BYTE( "51-3_dn_501.ic43", 0x00003, 0x20000, CRC(0fccce1f) SHA1(e2e5625b62ddd73a4363596a4b1b2d72c2fe1c38) )
+	ROM_LOAD32_BYTE( "51-3_dn_502.ic42", 0x00002, 0x20000, CRC(361f4616) SHA1(40279c76d027bcf698b8ff694afc2afb15279381) )
+	ROM_LOAD32_BYTE( "51-3_dn_503.ic41", 0x00001, 0x20000, CRC(b3c97ad1) SHA1(f77426e1ee347b8cae9c5aef1e31058344c019c2) )
+	ROM_LOAD32_BYTE( "51-3_dn_504.ic40", 0x00000, 0x20000, CRC(1445dccb) SHA1(fddbb9d136ea6dbb2704ac93e5536ed0e6bfb19c) )
 
 	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "21-1_p0201_tbp24s10n.ic4", 0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
@@ -333,33 +664,33 @@ ROM_START( ffantasym )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "ff_1-5_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
-	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
-	ROM_LOAD( "ff_4-3_5fa_404.ic14", 0x00000, 0x8000, CRC(819d8197) SHA1(1303d94f6b3048e1108d25662de971a77f6e3ae6) )
-	ROM_LOAD( "ff_4-3_5fa_402.ic16", 0x08000, 0x8000, CRC(fd8030d7) SHA1(84a9d775c0be1d068795ae8889cb5cec2842d622) )
-	ROM_LOAD( "ff_4-3_5fa_403.ic15", 0x10000, 0x8000, CRC(0c572113) SHA1(3d035f1a985d1e04e64eb124c83c44e17bc07d53) )
-	ROM_LOAD( "ff_4-3_5fa_401.ic17", 0x18000, 0x8000, CRC(26f57324) SHA1(079745385f1240edf4ce712262352547b20282d2) )
+	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on MOD 4/3 board
+	ROM_LOAD32_BYTE( "ff_4-3_5fa_401.ic17", 0x00003, 0x8000, CRC(26f57324) SHA1(079745385f1240edf4ce712262352547b20282d2) )
+	ROM_LOAD32_BYTE( "ff_4-3_5fa_402.ic16", 0x00002, 0x8000, CRC(fd8030d7) SHA1(84a9d775c0be1d068795ae8889cb5cec2842d622) )
+	ROM_LOAD32_BYTE( "ff_4-3_5fa_403.ic15", 0x00001, 0x8000, CRC(0c572113) SHA1(3d035f1a985d1e04e64eb124c83c44e17bc07d53) )
+	ROM_LOAD32_BYTE( "ff_4-3_5fa_404.ic14", 0x00000, 0x8000, CRC(819d8197) SHA1(1303d94f6b3048e1108d25662de971a77f6e3ae6) )
 
-	ROM_REGION( 0x80000, "gfx2", 0 ) // on a second MOD 4/3 board
-	ROM_LOAD( "ff_4-3-a_5fa_4a1.ic17", 0x00000, 0x8000, CRC(4be99b3a) SHA1(d4c576dda0bd855c8f361c96cd4615815c8c36c8) )
-	ROM_LOAD( "ff_4-3-a_5fa_4a2.ic16", 0x08000, 0x8000, CRC(206239f1) SHA1(f5d2f7c888f01db57c9b78eff733b22301836025) )
-	ROM_LOAD( "ff_4-3-a_5fa_4a3.ic15", 0x10000, 0x8000, CRC(c3eeb8a4) SHA1(c097034e2d3c3f55c935aff1d2c14a1dacc1f5da) )
-	ROM_LOAD( "ff_4-3-a_5fa_4a4.ic14", 0x18000, 0x8000, CRC(a4a8ba47) SHA1(2bf3379a33850703db49cbcdd61d5e4777006726) )
+	ROM_REGION( 0x20000, "mod4_a", ROMREGION_INVERT ) // on MOD 4/3-A board
+	ROM_LOAD32_BYTE( "ff_4-3-a_5fa_4a1.ic17", 0x00003, 0x8000, CRC(4be99b3a) SHA1(d4c576dda0bd855c8f361c96cd4615815c8c36c8) )
+	ROM_LOAD32_BYTE( "ff_4-3-a_5fa_4a2.ic16", 0x00002, 0x8000, CRC(206239f1) SHA1(f5d2f7c888f01db57c9b78eff733b22301836025) )
+	ROM_LOAD32_BYTE( "ff_4-3-a_5fa_4a3.ic15", 0x00001, 0x8000, CRC(c3eeb8a4) SHA1(c097034e2d3c3f55c935aff1d2c14a1dacc1f5da) )
+	ROM_LOAD32_BYTE( "ff_4-3-a_5fa_4a4.ic14", 0x00000, 0x8000, CRC(a4a8ba47) SHA1(2bf3379a33850703db49cbcdd61d5e4777006726) )
 
-	ROM_REGION( 0x80000, "gfx3", 0 ) // on a third MOD 4/3 board
-	ROM_LOAD( "ff_4-3-b_4fa_4b1.ic17", 0x00000, 0x8000, CRC(51c274f0) SHA1(145a2da91db9d26a8ecaa6d4267c9aa0e4883fdc) )
-	ROM_LOAD( "ff_4-3-b_4fa_4b2.ic16", 0x08000, 0x8000, CRC(53fade55) SHA1(d7ae60c908338f746fb585bf81c89036a6a9c8e0) )
-	ROM_LOAD( "ff_4-3-b_4fa_4b3.ic15", 0x10000, 0x8000, CRC(49668a54) SHA1(f6129aa46f8e766a5012fe1b90c98a78581a773b) )
-	ROM_LOAD( "ff_4-3-b_4fa_4b4.ic14", 0x18000, 0x8000, BAD_DUMP CRC(bd0d2e07) SHA1(3165fb23ee9cd5912fd17e557dd0d1513bd189ef) )
+	ROM_REGION( 0x20000, "mod4_b", ROMREGION_INVERT ) // on MOD 4/3-B board
+	ROM_LOAD32_BYTE( "ff_4-3-b_4fa_4b1.ic17", 0x00003, 0x8000, CRC(51c274f0) SHA1(145a2da91db9d26a8ecaa6d4267c9aa0e4883fdc) )
+	ROM_LOAD32_BYTE( "ff_4-3-b_4fa_4b2.ic16", 0x00002, 0x8000, CRC(53fade55) SHA1(d7ae60c908338f746fb585bf81c89036a6a9c8e0) )
+	ROM_LOAD32_BYTE( "ff_4-3-b_4fa_4b3.ic15", 0x00001, 0x8000, CRC(49668a54) SHA1(f6129aa46f8e766a5012fe1b90c98a78581a773b) )
+	ROM_LOAD32_BYTE( "ff_4-3-b_4fa_4b4.ic14", 0x00000, 0x8000, BAD_DUMP CRC(bd0d2e07) SHA1(3165fb23ee9cd5912fd17e557dd0d1513bd189ef) )
 
-	ROM_REGION( 0x100000, "gfx4", 0 ) // on MOD 51/1 board
-	ROM_LOAD( "ff_5-1_5fa_505.ic5",  0x20000, 0x10000, CRC(24503b71) SHA1(4b303bbfa7f7ede1679cdf660e5cf53806ca3531) )
-	ROM_LOAD( "ff_5-1_5fa_506.ic6",  0x30000, 0x10000, CRC(b47d3b99) SHA1(ee6c79a93a0640692fcc49a0c247d15f35e3a7ca) )
-	ROM_LOAD( "ff_5-1_5fa_511.ic14", 0x60000, 0x10000, CRC(01b8cc18) SHA1(434989b5cf00845788d4a855fc027684e8c79ace) )
-	ROM_LOAD( "ff_5-1_5fa_512.ic15", 0x70000, 0x10000, CRC(36fa650e) SHA1(8226bba7d75a5112883e30c8012d18bc7c1acd11) )
-	ROM_LOAD( "ff_5-1_5fa_517.ic20", 0xa0000, 0x10000, CRC(ed7d42e5) SHA1(52a453da9bbf11846bbe8e1121b56a869b93ac65) )
-	ROM_LOAD( "ff_5-1_5fa_518.ic21", 0xb0000, 0x10000, CRC(1106d842) SHA1(002b785ed575c3ae6514d866c070dab83323a8b6) )
-	ROM_LOAD( "ff_5-1_5fa_523.ic26", 0xe0000, 0x10000, CRC(a541c879) SHA1(53133cb2ad5378f101025fc758d08a54e23f3c87) )
-	ROM_LOAD( "ff_5-1_5fa_524.ic27", 0xf0000, 0x10000, CRC(1e7351c5) SHA1(88d83b45f25fe58726e5158b97395443cf065564) )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_INVERT ) // on MODULAR SYSTEM 2 MOD 5/1 board, two EPROMs for each bitplane
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_505.ic5",  0x00003, 0x10000, CRC(24503b71) SHA1(4b303bbfa7f7ede1679cdf660e5cf53806ca3531) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_506.ic6",  0x40003, 0x10000, CRC(b47d3b99) SHA1(ee6c79a93a0640692fcc49a0c247d15f35e3a7ca) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_511.ic14", 0x00002, 0x10000, CRC(01b8cc18) SHA1(434989b5cf00845788d4a855fc027684e8c79ace) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_512.ic15", 0x40002, 0x10000, CRC(36fa650e) SHA1(8226bba7d75a5112883e30c8012d18bc7c1acd11) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_517.ic20", 0x00001, 0x10000, CRC(ed7d42e5) SHA1(52a453da9bbf11846bbe8e1121b56a869b93ac65) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_518.ic21", 0x40001, 0x10000, CRC(1106d842) SHA1(002b785ed575c3ae6514d866c070dab83323a8b6) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_523.ic26", 0x00000, 0x10000, CRC(a541c879) SHA1(53133cb2ad5378f101025fc758d08a54e23f3c87) )
+	ROM_LOAD32_BYTE( "ff_5-1_5fa_524.ic27", 0x40000, 0x10000, CRC(1e7351c5) SHA1(88d83b45f25fe58726e5158b97395443cf065564) )
 
 	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "ff_21-1_201_82s129.ic4",  0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
@@ -392,33 +723,33 @@ ROM_START( secretagm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "mod_1-2_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
-	ROM_REGION( 0x80000, "gfx1", 0 ) // on one of the MOD 4/3 boards
-	ROM_LOAD( "mod_4-3_0_ag_404.ic14", 0x00000, 0x8000, CRC(4b00d933) SHA1(dd8113f24f8a9f408fbf3e955c8bf61c89744e53) )
-	ROM_LOAD( "mod_4-3_0_ag_402.ic16", 0x08000, 0x8000, CRC(7a4bf6b0) SHA1(63a1d0e10903fc2548a24126961d057e8b5806bd) )
-	ROM_LOAD( "mod_4-3_0_ag_403.ic15", 0x10000, 0x8000, CRC(dec5f0dc) SHA1(6df6c0d1c3f83b0cc896083f0dce3ce93f67a49b) )
-	ROM_LOAD( "mod_4-3_0_ag_401.ic17", 0x18000, 0x8000, CRC(0a56829f) SHA1(444d3ef0c701810d8f2a53fc42565d5d04073b1c) )
+	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on MOD 4/3 board
+	ROM_LOAD32_BYTE( "mod_4-3_0_ag_401.ic17", 0x00003, 0x8000, CRC(0a56829f) SHA1(444d3ef0c701810d8f2a53fc42565d5d04073b1c) )
+	ROM_LOAD32_BYTE( "mod_4-3_0_ag_402.ic16", 0x00002, 0x8000, CRC(7a4bf6b0) SHA1(63a1d0e10903fc2548a24126961d057e8b5806bd) )
+	ROM_LOAD32_BYTE( "mod_4-3_0_ag_403.ic15", 0x00001, 0x8000, CRC(dec5f0dc) SHA1(6df6c0d1c3f83b0cc896083f0dce3ce93f67a49b) )
+	ROM_LOAD32_BYTE( "mod_4-3_0_ag_404.ic14", 0x00000, 0x8000, CRC(4b00d933) SHA1(dd8113f24f8a9f408fbf3e955c8bf61c89744e53) )
 
-	ROM_REGION( 0x80000, "gfx2", 0 ) // on a second MOD 4/3 board
-	ROM_LOAD( "mod_4-3_a_ag_4a1.ic17", 0x00000, 0x8000, CRC(58e496f2) SHA1(2cabd84bff6047be81f79c3cd55f480828aa3d3d) )
-	ROM_LOAD( "mod_4-3_a_ag_4a2.ic16", 0x08000, 0x8000, CRC(3bbd9e82) SHA1(79926cd1f227762174de50f9af62f54060021a63) )
-	ROM_LOAD( "mod_4-3_a_ag_4a3.ic15", 0x10000, 0x8000, CRC(3fd968a0) SHA1(ddecb3f01ce6227653607878c933bd17c96483e6) )
-	ROM_LOAD( "mod_4-3_a_ag_4a4.ic14", 0x18000, 0x8000, CRC(960007ad) SHA1(9e7058385110acc149ba42c8ec64bd871debd0b9) )
+	ROM_REGION( 0x20000, "mod4_a", ROMREGION_INVERT ) // on MOD 4/3-A board
+	ROM_LOAD32_BYTE( "mod_4-3_a_ag_4a1.ic17", 0x00003, 0x8000, CRC(58e496f2) SHA1(2cabd84bff6047be81f79c3cd55f480828aa3d3d) )
+	ROM_LOAD32_BYTE( "mod_4-3_a_ag_4a2.ic16", 0x00002, 0x8000, CRC(3bbd9e82) SHA1(79926cd1f227762174de50f9af62f54060021a63) )
+	ROM_LOAD32_BYTE( "mod_4-3_a_ag_4a3.ic15", 0x00001, 0x8000, CRC(3fd968a0) SHA1(ddecb3f01ce6227653607878c933bd17c96483e6) )
+	ROM_LOAD32_BYTE( "mod_4-3_a_ag_4a4.ic14", 0x00000, 0x8000, CRC(960007ad) SHA1(9e7058385110acc149ba42c8ec64bd871debd0b9) )
 
-	ROM_REGION( 0x80000, "gfx3", 0 ) // on a third MOD 4/3 board
-	ROM_LOAD( "mod_4-3_b_ag_4b1.ic17", 0x00000, 0x10000, CRC(e06bc56d) SHA1(5a189c7f6e131fc6d6eebd2bb1c9c8c3cff9d6f8) )
-	ROM_LOAD( "mod_4-3_b_ag_4b2.ic16", 0x10000, 0x10000, CRC(f46fd920) SHA1(925f0c9c5d2990dcff09a18363b88a69c19f0d01) )
-	ROM_LOAD( "mod_4-3_b_ag_4b3.ic15", 0x20000, 0x10000, CRC(51ef5441) SHA1(eb06022174e177f6785d1b621e6e3fdaca67c122) )
-	ROM_LOAD( "mod_4-3_b_ag_4b4.ic14", 0x30000, 0x10000, CRC(3beeddde) SHA1(1127d78a9b29787aaae47e0b4359be7b2528f6d9) )
+	ROM_REGION( 0x40000, "mod4_b", ROMREGION_INVERT ) // on MOD 4/3-B board
+	ROM_LOAD32_BYTE( "mod_4-3_b_ag_4b1.ic17", 0x00003, 0x10000, CRC(e06bc56d) SHA1(5a189c7f6e131fc6d6eebd2bb1c9c8c3cff9d6f8) )
+	ROM_LOAD32_BYTE( "mod_4-3_b_ag_4b2.ic16", 0x00002, 0x10000, CRC(f46fd920) SHA1(925f0c9c5d2990dcff09a18363b88a69c19f0d01) )
+	ROM_LOAD32_BYTE( "mod_4-3_b_ag_4b3.ic15", 0x00001, 0x10000, CRC(51ef5441) SHA1(eb06022174e177f6785d1b621e6e3fdaca67c122) )
+	ROM_LOAD32_BYTE( "mod_4-3_b_ag_4b4.ic14", 0x00000, 0x10000, CRC(3beeddde) SHA1(1127d78a9b29787aaae47e0b4359be7b2528f6d9) )
 
-	ROM_REGION( 0x100000, "gfx4", 0 ) // on MOD 51/1 board
-	ROM_LOAD( "mod_5-1_ag_501.ic5",  0x20000, 0x10000, CRC(d234cae5) SHA1(0cd07bf087a4da19a5da29785385de9eee52d0fb) )
-	ROM_LOAD( "mod_5-1_ag_502.ic6",  0x30000, 0x10000, CRC(dc6a38df) SHA1(9043df911389d3f085299f2f2202cab356473a32) )
-	ROM_LOAD( "mod_5-1_ag_503.ic14", 0x60000, 0x10000, CRC(447e4f0b) SHA1(97db103e505a6e11eb9bdb3622e4aa3b796a9714) )
-	ROM_LOAD( "mod_5-1_ag_504.ic15", 0x70000, 0x10000, CRC(d29bc22e) SHA1(ce0935d09f7e94fa32247c86e14a74b73514b29e) )
-	ROM_LOAD( "mod_5-1_ag_505.ic20", 0xa0000, 0x10000, CRC(bd17ddc5) SHA1(edb847378c4a95b18bd3b49b6cbf8c06598d9d3b) )
-	ROM_LOAD( "mod_5-1_ag_506.ic21", 0xb0000, 0x10000, CRC(f61972c8) SHA1(fa9ddca3473091b4879171d8f3b302e8f2b45149) )
-	ROM_LOAD( "mod_5-1_ag_507.ic26", 0xe0000, 0x10000, CRC(ff72b838) SHA1(fdc48ecdd2225fc69472313f34973f6add8fb558) )
-	ROM_LOAD( "mod_5-1_ag_508.ic27", 0xf0000, 0x10000, CRC(54fcbc39) SHA1(293a6799193b01424c3eac86cf90cc023aa771db) )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_INVERT ) // on MODULAR SYSTEM 2 MOD 5/1 board, two EPROMs for each bitplane
+	ROM_LOAD32_BYTE( "mod_5-1_ag_501.ic5",  0x00003, 0x10000, CRC(d234cae5) SHA1(0cd07bf087a4da19a5da29785385de9eee52d0fb) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_502.ic6",  0x40003, 0x10000, CRC(dc6a38df) SHA1(9043df911389d3f085299f2f2202cab356473a32) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_503.ic14", 0x00002, 0x10000, CRC(447e4f0b) SHA1(97db103e505a6e11eb9bdb3622e4aa3b796a9714) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_504.ic15", 0x40002, 0x10000, CRC(d29bc22e) SHA1(ce0935d09f7e94fa32247c86e14a74b73514b29e) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_505.ic20", 0x00001, 0x10000, CRC(bd17ddc5) SHA1(edb847378c4a95b18bd3b49b6cbf8c06598d9d3b) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_506.ic21", 0x40001, 0x10000, CRC(f61972c8) SHA1(fa9ddca3473091b4879171d8f3b302e8f2b45149) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_507.ic26", 0x00000, 0x10000, CRC(ff72b838) SHA1(fdc48ecdd2225fc69472313f34973f6add8fb558) )
+	ROM_LOAD32_BYTE( "mod_5-1_ag_508.ic27", 0x40000, 0x10000, CRC(54fcbc39) SHA1(293a6799193b01424c3eac86cf90cc023aa771db) )
 
 	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "mod_21-1_201_82s129.ic4",    0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
@@ -441,7 +772,7 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 199?, automatm,  robocop,  ffantasym, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Automat (bootleg of Robocop, Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-GAME( 199?, drgninjam, baddudes, ffantasym, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Dragon Ninja (Modular System)",                MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, automatm,  robocop,  automatm,  ffantasym, dec0_ms_state,     empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Automat (bootleg of Robocop, Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, drgninjam, baddudes, drgninjam, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Dragon Ninja (Modular System)",                MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
 GAME( 199?, ffantasym, hippodrm, ffantasym, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Fighting Fantasy (Modular System)",            MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
 GAME( 199?, secretagm, secretag, secretagm, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Secret Agent (Modular System)",                MACHINE_NO_SOUND | MACHINE_NOT_WORKING )

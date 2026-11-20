@@ -31,7 +31,7 @@
 
     TODO:
     - positions: the fitted ones of the MOD 4 and MOD 51 boards (see those devices) put the layers 2
-      pixels left and the sprites 5 pixels left and 6 lines up, the player's helicopter off the centre of
+      pixels left and the sprites 5 pixels left and 2 lines down, the player's helicopter off the centre of
       its helipad; the corrections keep the alignment of the original game. Twin Cobra is the only game
       with horizontal PROM 207, the reason is unknown
     - sprite priority: the program takes the sprite palettes from the bottom for the sprites the
@@ -272,7 +272,7 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod21);
-	m_mod51->set_position_correction(5, 6); // see the TODO
+	m_mod51->set_position_correction(5, -2); // see the TODO
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(twincobr_ms_state::sprite_cb));
 
