@@ -27,6 +27,7 @@
     each colour, the pens drawn in front of the sprites. Its address lines
     are colour bit 3, pen bits 2 and 3, and colour bits 2 and 1. Those pens
     are drawn with TILEMAP_DRAW_LAYER0 and all pens with TILEMAP_DRAW_LAYER1.
+    Drivers can give the same split for boards without that PROM.
 
     The EPROMs are interleaved in the region with the most significant
     bitplane first: ROM_LOAD32_BYTE for four EPROMs, ROM_SKIP(2) for three and
@@ -85,6 +86,8 @@ gaelco_ms_mod4_device::gaelco_ms_mod4_device(const machine_config &mconfig, cons
 	m_step(1),
 	m_color_base(0),
 	m_transparent_pen(-1),
+	m_front_colors(0),
+	m_front_pens(0),
 	m_scroll_correction_x(0),
 	m_scroll_correction_y(0),
 	m_scroll_base_x(0),
@@ -150,15 +153,18 @@ void gaelco_ms_mod4_device::device_start()
 		m_tilemap = &machine().tilemap().create(*this, get_info, m_mapper, m_tile_size, m_tile_size, m_columns, m_rows);
 	}
 
-	if (m_prom)
+	if (m_prom || m_front_colors)
 	{
 		// one transparency group per colour
 		u16 const transparent = (m_transparent_pen >= 0) ? (1 << m_transparent_pen) : 0;
 		for (unsigned color = 0; color < 16; color++)
 		{
-			u16 front = 0;
-			for (unsigned pen = 0; pen < 16; pen++)
-				front |= BIT(m_prom[bitswap<5>((color << 4) | pen, 5, 6, 3, 2, 7)], 0) << pen;
+			u16 front = BIT(m_front_colors, color) ? m_front_pens : 0;
+			if (m_prom)
+			{
+				for (unsigned pen = 0; pen < 16; pen++)
+					front |= BIT(m_prom[bitswap<5>((color << 4) | pen, 5, 6, 3, 2, 7)], 0) << pen;
+			}
 			m_tilemap->set_transmask(color, u16(~front) | transparent, transparent);
 		}
 	}
@@ -179,7 +185,7 @@ TILE_GET_INFO_MEMBER(gaelco_ms_mod4_device::get_tile_info)
 		m_tile_cb(data, code, color, flags);
 
 	tileinfo.set(0, code, color, flags);
-	tileinfo.group = m_prom ? color : 0;
+	tileinfo.group = (m_prom || m_front_colors) ? color : 0;
 }
 
 u16 gaelco_ms_mod4_device::vram_r(offs_t offset)

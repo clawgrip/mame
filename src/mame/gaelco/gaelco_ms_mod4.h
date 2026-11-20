@@ -46,6 +46,8 @@ public:
 	void set_scroll_correction(int x, int y) { m_scroll_correction_x = x; m_scroll_correction_y = y; }
 	void set_color_base(u16 base) { m_color_base = base; }
 	void set_transparent_pen(int pen) { m_transparent_pen = pen; }
+	// boards without the front pen PROM: the pens drawn in front for the colours in the mask
+	void set_front_pens(u16 colors, u16 pens) { m_front_colors = colors; m_front_pens = pens; }
 	// for games that split the tile map entry differently
 	template <typename... T> void set_tile_callback(T &&... args) { m_tile_cb.set(std::forward<T>(args)...); }
 
@@ -93,6 +95,8 @@ private:
 	u8 m_step;
 	u16 m_color_base;
 	int m_transparent_pen;
+	u16 m_front_colors;
+	u16 m_front_pens;
 	int m_scroll_correction_x;
 	int m_scroll_correction_y;
 	int m_scroll_base_x;

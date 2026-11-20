@@ -78,14 +78,35 @@
     original game horizontally; the other two programs write other scroll offsets for each board, which
     put their layers up to 4 pixels away from the original games.
 
+    Dragon Ninja puts the original game's priority register in Y bits 10-11 of its back board: 2 (bit 10)
+    on stages 1, 2, 5 and 7, 5 (both bits) on stages 3, 4 and 6 and 4 (bit 11) on the title screen. As in
+    the original game, 5 puts the back board in front, 2 draws pens 8-15 of colours 8-15 of the back
+    board over the front one, and 4 and 5 draw those pens of the front layer over the sprites. Fighting
+    Fantasy and Secret Agent keep the priority value in RAM and don't use it.
+
+    The Automat program is the one of the single board Automat bootleg in dec0.cpp (the second pair of
+    program EPROMs is the same) with the hardware accesses moved. The MOD 7/8 board shows the three layers
+    of Robocop from its RAM, at the addresses of the original BAC06 chips, with the graphics of the MOD 8
+    board: EPROMs 301-304 hold the characters (A15 low) and playfield 2 (A15 high) and 305-308 playfield
+    1, one EPROM for each bitplane, the original graphics inverted. The program writes the playfield
+    scroll values inverted to 0x400000-0x400007, and always 0x8001 (0x8000 and the original game's
+    priority value 0, bit 0 inverted), 0, 0x8031 and 0x3ff to 0x400008-0x40000f.
+
+    The YM2203s at 1.5 MHz give the pitch of the original Fighting Fantasy and Secret Agent music; Dragon
+    Ninja and Automat play their own music, which is in tune at that clock. With the Z80 at 4 MHz the
+    music plays 8 % faster than the original game on Fighting Fantasy and 1 % on Secret Agent. Fighting
+    Fantasy drops some tunes that come right after command 01, which its sound program plays with a higher
+    priority; how often depends on the clocks. The M5205 samples last as long as the original games' ones
+    at 3.4 to 4.6 kHz.
+
     TODO:
-    - Automat: MOD 7/8 and MOD 8 video
     - where the MOD 4 boards take the scroll values from: the programs write them at different places in
       each board's RAM area; whether the bands of the X values follow the screen lines or the tile map
-    - Dragon Ninja also sets Y bits 10-11 of its back board for some stages, where the original game
-      changes the shape of that tile map
-    - sound: the MOD 1 interrupt and the clocks
-    - DIP switches
+    - which board applies Dragon Ninja's priority values: its back board has a GAL16V8 (403) instead of
+      the P0403 PAL16R8 of the other boards, with four more outputs
+    - Automat: how the MOD 7/8 board counts the scroll values (the 48 and 50 pixels are fitted to the
+      original game), and the meaning of 0x400008-0x40000f
+    - clocks: the MOD 1 boards have no crystal
 */
 
 
@@ -106,29 +127,71 @@ namespace {
 
 class dec0_ms_state : public driver_device
 {
-public:
+protected:
 	dec0_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_mod1(*this, "mod1"),
 		m_mod21(*this, "mod21"),
 		m_mod51(*this, "mod51"),
-		m_screen(*this, "screen")
+		m_screen(*this, "screen"),
+		m_gfxdecode(*this, "gfxdecode"),
+		m_spritelist(*this, "spritelist")
 	{ }
 
-	void automatm(machine_config &config) ATTR_COLD;
-
-protected:
 	required_device<cpu_device> m_maincpu;
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod21_device> m_mod21;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<screen_device> m_screen;
+	required_device<gfxdecode_device> m_gfxdecode;
+
+	required_shared_ptr<u16> m_spritelist;
+
+	TILEMAP_MAPPER_MEMBER(pages_2x2_scan);
+	u8 sprite_byte(offs_t offset) const { return m_spritelist[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	void vblank_irq(int state);
+	void irq_ack_w(u16 data);
+	u16 irq_ack_r();
 
 	void base(machine_config &config) ATTR_COLD;
+};
+
+
+class automat_ms_state : public dec0_ms_state
+{
+public:
+	automat_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
+		dec0_ms_state(mconfig, type, tag),
+		m_txram(*this, "txram"),
+		m_pf1ram(*this, "pf1ram"),
+		m_pf2ram(*this, "pf2ram"),
+		m_regs(*this, "regs")
+	{ }
+
+	void automatm(machine_config &config) ATTR_COLD;
+
+protected:
+	virtual void video_start() override ATTR_COLD;
 
 private:
-	uint32_t screen_update_automatm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_shared_ptr<u16> m_txram;
+	required_shared_ptr<u16> m_pf1ram;
+	required_shared_ptr<u16> m_pf2ram;
+	required_shared_ptr<u16> m_regs;
+
+	tilemap_t *m_tx_tilemap = nullptr;
+	tilemap_t *m_pf1_tilemap = nullptr;
+	tilemap_t *m_pf2_tilemap = nullptr;
+
+	TILE_GET_INFO_MEMBER(get_tx_tile_info);
+	TILE_GET_INFO_MEMBER(get_pf1_tile_info);
+	TILE_GET_INFO_MEMBER(get_pf2_tile_info);
+	void txram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
+	void pf1ram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
+	void pf2ram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
+	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void automatm_map(address_map &map) ATTR_COLD;
 };
@@ -141,9 +204,7 @@ public:
 		dec0_ms_state(mconfig, type, tag),
 		m_mod4_tx(*this, "mod4_tx"),
 		m_mod4_a(*this, "mod4_a"),
-		m_mod4_b(*this, "mod4_b"),
-		m_gfxdecode(*this, "gfxdecode"),
-		m_spritelist(*this, "spritelist")
+		m_mod4_b(*this, "mod4_b")
 	{ }
 
 	void drgninjam(machine_config &config) ATTR_COLD;
@@ -154,16 +215,10 @@ private:
 	required_device<gaelco_ms_mod4_device> m_mod4_tx;
 	required_device<gaelco_ms_mod4_device> m_mod4_a; // front 16x16 board
 	required_device<gaelco_ms_mod4_device> m_mod4_b; // back 16x16 board
-	required_device<gfxdecode_device> m_gfxdecode;
-
-	required_shared_ptr<u16> m_spritelist;
 
 	TILEMAP_MAPPER_MEMBER(pages_4x1_scan);
-	TILEMAP_MAPPER_MEMBER(pages_2x2_scan);
 	void secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	u8 sprite_byte(offs_t offset) const { return m_spritelist[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
-	void drgninjam_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
-	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	void mod5_1_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	static u16 scroll_value(gaelco_ms_mod4_device &board, offs_t offset);
 	static void set_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y);
 	static void set_band_scroll(gaelco_ms_mod4_device &board, offs_t x, offs_t y, u32 rows);
@@ -171,9 +226,6 @@ private:
 	uint32_t screen_update_drgninjam(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update_ffantasym(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update_secretagm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-	void vblank_irq(int state);
-	void irq_ack_w(u16 data);
-	u16 irq_ack_r();
 
 	void video(machine_config &config) ATTR_COLD;
 
@@ -183,38 +235,13 @@ private:
 };
 
 
-void dec0_ms_state::automatm_map(address_map &map)
-{
-	map(0x000000, 0x03ffff).rom();
-	map(0xff8000, 0xffbfff).ram();
-}
-
-
-uint32_t dec0_ms_state::screen_update_automatm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
-{
-	return 0;
-}
-
-
-TILEMAP_MAPPER_MEMBER(ffantasy_ms_state::pages_4x1_scan)
-{
-	// four pages of 16 x 16 tiles side by side
-	return (col & 0x0f) | ((row & 0x0f) << 4) | ((col & 0x30) << 4);
-}
-
-TILEMAP_MAPPER_MEMBER(ffantasy_ms_state::pages_2x2_scan)
+TILEMAP_MAPPER_MEMBER(dec0_ms_state::pages_2x2_scan)
 {
 	// four pages of 16 x 16 tiles, two by two, the left ones first
 	return (col & 0x0f) | ((row & 0x1f) << 4) | ((col & 0x10) << 5);
 }
 
-void ffantasy_ms_state::secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
-{
-	// EPROM A14 is held high, the characters are in the upper halves
-	code |= 0x800;
-}
-
-void ffantasy_ms_state::drgninjam_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+void dec0_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
 	// code bits 8-11 in attribute bits 0-3, flip X in bit 5 and flip Y in bit 6, palette in colour bits 4-7
 	// and X bit 8 in colour bit 0
@@ -225,7 +252,120 @@ void ffantasy_ms_state::drgninjam_sprite_cb(u8 attr, u8 color, u32 &code, u32 &p
 	x8 = BIT(color, 0);
 }
 
-void ffantasy_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+void dec0_ms_state::vblank_irq(int state)
+{
+	if (state)
+		m_maincpu->set_input_line(4, ASSERT_LINE);
+}
+
+void dec0_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
+u16 dec0_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+	return 0;
+}
+
+
+TILE_GET_INFO_MEMBER(automat_ms_state::get_tx_tile_info)
+{
+	// MOD 8 EPROM lines A11-A14 take character bits 10, 11, 8 and 9
+	u16 const data = m_txram[tile_index];
+	tileinfo.set(0, bitswap<12>(data, 9, 8, 11, 10, 7, 6, 5, 4, 3, 2, 1, 0), data >> 12, 0);
+}
+
+TILE_GET_INFO_MEMBER(automat_ms_state::get_pf1_tile_info)
+{
+	// tile bits 8-10 on MOD 8 EPROM lines A13-A15, above the lines that pick the quarter
+	u16 const data = m_pf1ram[tile_index];
+	tileinfo.set(1, (data & 0x0ff) | ((data & 0x700) << 2), data >> 12, 0);
+}
+
+TILE_GET_INFO_MEMBER(automat_ms_state::get_pf2_tile_info)
+{
+	u16 const data = m_pf2ram[tile_index];
+	tileinfo.set(2, (data & 0x0ff) | ((data & 0x300) << 2), data >> 12, 0);
+}
+
+void automat_ms_state::txram_w(offs_t offset, u16 data, u16 mem_mask)
+{
+	COMBINE_DATA(&m_txram[offset]);
+	m_tx_tilemap->mark_tile_dirty(offset);
+}
+
+void automat_ms_state::pf1ram_w(offs_t offset, u16 data, u16 mem_mask)
+{
+	COMBINE_DATA(&m_pf1ram[offset]);
+	m_pf1_tilemap->mark_tile_dirty(offset);
+}
+
+void automat_ms_state::pf2ram_w(offs_t offset, u16 data, u16 mem_mask)
+{
+	COMBINE_DATA(&m_pf2ram[offset]);
+	m_pf2_tilemap->mark_tile_dirty(offset);
+}
+
+void automat_ms_state::video_start()
+{
+	m_tx_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_tx_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+	m_pf1_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf1_tile_info)), tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
+	m_pf2_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf2_tile_info)), tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
+	m_tx_tilemap->set_transparent_pen(15);
+	m_pf1_tilemap->set_transparent_pen(15);
+	m_pf2_tilemap->set_transparent_pen(15);
+}
+
+uint32_t automat_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	// the program writes the scroll values inverted, the X values minus 48 and 50
+	m_pf2_tilemap->set_scrollx((~m_regs[0] + 48) & 0x3ff);
+	m_pf2_tilemap->set_scrolly(~m_regs[1] & 0x3ff);
+	m_pf1_tilemap->set_scrollx((~m_regs[2] + 50) & 0x3ff);
+	m_pf1_tilemap->set_scrolly(~m_regs[3] & 0x3ff);
+
+	m_pf2_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
+	m_pf1_tilemap->draw(screen, bitmap, cliprect, 0);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(3));
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0);
+	return 0;
+}
+
+
+void automat_ms_state::automatm_map(address_map &map)
+{
+	map(0x000000, 0x03ffff).rom();
+	map(0x240000, 0x243fff).ram();
+	map(0x244000, 0x2447ff).ram().w(FUNC(automat_ms_state::txram_w)).share(m_txram);
+	map(0x24a000, 0x24a7ff).ram().w(FUNC(automat_ms_state::pf1ram_w)).share(m_pf1ram);
+	map(0x24d000, 0x24d7ff).ram().w(FUNC(automat_ms_state::pf2ram_w)).share(m_pf2ram);
+	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
+	map(0x30c010, 0x30c011).noprw(); // the program still clears the original game's priority register
+	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
+	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
+	map(0x400000, 0x40000f).ram().share(m_regs);
+	map(0x500000, 0x500001).rw(FUNC(automat_ms_state::irq_ack_r), FUNC(automat_ms_state::irq_ack_w));
+	map(0xff8000, 0xffbfff).ram();
+	map(0xffc000, 0xffc3ff).ram().share(m_spritelist);
+}
+
+
+TILEMAP_MAPPER_MEMBER(ffantasy_ms_state::pages_4x1_scan)
+{
+	// four pages of 16 x 16 tiles side by side
+	return (col & 0x0f) | ((row & 0x0f) << 4) | ((col & 0x30) << 4);
+}
+
+void ffantasy_ms_state::secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
+{
+	// EPROM A14 is held high, the characters are in the upper halves
+	code |= 0x800;
+}
+
+void ffantasy_ms_state::mod5_1_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
 	// MOD 5/1 boards: palette in colour bits 0-3, the programs copy X bit 8 to colour bits 4-7
 	code |= (attr & 0x0f) << 8;
@@ -267,7 +407,20 @@ uint32_t ffantasy_ms_state::screen_update_drgninjam(screen_device &screen, bitma
 	set_band_scroll(*m_mod4_tx, 0x000, 0x010, 16);
 	set_band_scroll(*m_mod4_a, 0x400, 0x410, 32);
 	set_band_scroll(*m_mod4_b, 0x400, 0x410, 32);
-	draw(screen, bitmap, cliprect);
+
+	// Y bits 10-11 of the back board: the original game's priority register 2, 4 or 5, or 0 for any other value
+	u8 const mode = BIT(scroll_value(*m_mod4_b, 0x410), 10, 2);
+	gaelco_ms_mod4_device &back = (mode == 3) ? *m_mod4_a : *m_mod4_b;
+	gaelco_ms_mod4_device &front = (mode == 3) ? *m_mod4_b : *m_mod4_a;
+
+	back.draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
+	front.draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1);
+	if (mode == 1)
+		back.draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
+	if (mode >= 2)
+		front.draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0);
+	m_mod4_tx->draw(screen, bitmap, cliprect);
 	return 0;
 }
 
@@ -286,24 +439,6 @@ uint32_t ffantasy_ms_state::screen_update_secretagm(screen_device &screen, bitma
 	set_band_scroll(*m_mod4_a, 0x610, 0x601, 32);
 	set_scroll(*m_mod4_b, 0x600, 0x601);
 	draw(screen, bitmap, cliprect);
-	return 0;
-}
-
-void ffantasy_ms_state::vblank_irq(int state)
-{
-	if (state)
-		m_maincpu->set_input_line(4, ASSERT_LINE);
-}
-
-void ffantasy_ms_state::irq_ack_w(u16 data)
-{
-	m_maincpu->set_input_line(4, CLEAR_LINE);
-}
-
-u16 ffantasy_ms_state::irq_ack_r()
-{
-	if (!machine().side_effects_disabled())
-		m_maincpu->set_input_line(4, CLEAR_LINE);
 	return 0;
 }
 
@@ -361,28 +496,176 @@ void ffantasy_ms_state::secretagm_map(address_map &map)
 }
 
 
+// The switches are wired to the YM2203 ports the other way round: switch 1 is bit 7 and switch 8 is bit 0
+// (DIP switch sheets of Dragon Ninja and Fighting Fantasy)
+
+static INPUT_PORTS_START( automatm )
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:8,7")
+	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:4" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	// flip screen and cabinet in the original game, the program only writes them to the registers of the original video chips
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:1" )
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, "Player Energy" ) PORT_DIPLOCATION("SW2:8,7")
+	PORT_DIPSETTING(    0x01, DEF_STR( Low ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( High ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_High ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
+	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x20, 0x20, "Bonus Stage Energy" ) PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Low ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( High ) )
+	PORT_DIPNAME( 0x40, 0x40, "Brink Time" ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x00, "Less" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:1" )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( drgninjam )
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B, the sound program sets bits 4 and 6 and clears bit 7
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:8,7")
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:4" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:1" )
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A, the sound program sets bits 5-7
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:8,7")
+	PORT_DIPSETTING(    0x01, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x02, "4" )
+	PORT_DIPSETTING(    0x00, "Infinite (Cheat)" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
+	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Yes ) )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:1" )
+INPUT_PORTS_END
+
 static INPUT_PORTS_START( ffantasym )
 	PORT_INCLUDE( gaelco_ms_mod1 )
 
 	PORT_START("SW1") // MOD 1 YM2203 #2 port B
-	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:8,7")
+	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:4" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:2" ) // flip screen in the original game, skipped by the program
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:1" )
 
 	PORT_START("SW2") // MOD 1 YM2203 #2 port A
-	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:8,7")
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x03, "2" )
+	PORT_DIPSETTING(    0x02, "3" )
+	PORT_DIPSETTING(    0x00, "5" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
+	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x30, 0x30, "Player & Enemy Energy" ) PORT_DIPLOCATION("SW2:4,3")
+	PORT_DIPSETTING(    0x10, DEF_STR( Very_Low ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Low ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( High ) )
+	PORT_DIPNAME( 0x40, 0x40, "Enemy Power Decrease on Continue" ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x40, "2 Dots" )
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:1" )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( secretagm )
+	PORT_INCLUDE( gaelco_ms_mod1 )
+
+	PORT_START("SW1") // MOD 1 YM2203 #2 port B
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:8,7")
+	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
+	PORT_SERVICE_DIPLOC( 0x10, IP_ACTIVE_LOW, "SW1:4" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	// flip screen and cabinet in the original game, the program only writes them to the registers of the original video chips
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:1" )
+
+	PORT_START("SW2") // MOD 1 YM2203 #2 port A
+	PORT_DIPNAME( 0x03, 0x03, "Energy" ) PORT_DIPLOCATION("SW2:8,7")
+	PORT_DIPSETTING(    0x02, "Low - 8 bars" )
+	PORT_DIPSETTING(    0x03, "Medium - 10 bars" )
+	PORT_DIPSETTING(    0x01, "High - 12 bars" )
+	PORT_DIPSETTING(    0x00, "Very High - 14 bars" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,5")
+	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Yes ) )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:1" )
 INPUT_PORTS_END
 
 
@@ -403,6 +686,47 @@ GFXDECODE_END
 
 static GFXDECODE_START( gfx_ffantasy_ms )
 	GFXDECODE_ENTRY( "sprites", 0, sprite_layout, 0x100, 16 )
+GFXDECODE_END
+
+// MOD 8: one EPROM for each bitplane; A0-A2 row, A3-A10 tile bits 0-7, A11 lower half and A12 left half of 16x16 tiles
+static const gfx_layout automatm_char_layout =
+{
+	8, 8,
+	0x1000,
+	4,
+	{ 0x30000 * 8, 0x20000 * 8, 0x10000 * 8, 0 },
+	{ STEP8(0, 1) },
+	{ STEP8(0, 8) },
+	8 * 8
+};
+
+static const gfx_layout automatm_pf1_layout =
+{
+	16, 16,
+	0x1d00,
+	4,
+	{ 0x30000 * 8, 0x20000 * 8, 0x10000 * 8, 0 },
+	{ STEP8(0x1000 * 8, 1), STEP8(0, 1) },
+	{ STEP8(0, 8), STEP8(0x800 * 8, 8) },
+	8 * 8
+};
+
+static const gfx_layout automatm_pf2_layout =
+{
+	16, 16,
+	0x0d00,
+	4,
+	{ 0x30000 * 8, 0x20000 * 8, 0x10000 * 8, 0 },
+	{ STEP8(0x1000 * 8, 1), STEP8(0, 1) },
+	{ STEP8(0, 8), STEP8(0x800 * 8, 8) },
+	8 * 8
+};
+
+static GFXDECODE_START( gfx_automatm )
+	GFXDECODE_ENTRY( "mod8",    0x00000, automatm_char_layout, 0x000, 16 ) // EPROMs 301-304, A15 low
+	GFXDECODE_ENTRY( "mod8",    0x40000, automatm_pf1_layout,  0x100, 16 ) // EPROMs 305-308
+	GFXDECODE_ENTRY( "mod8",    0x08000, automatm_pf2_layout,  0x300, 16 ) // EPROMs 301-304, A15 high
+	GFXDECODE_ENTRY( "sprites", 0,       sprite_layout,        0x200, 16 )
 GFXDECODE_END
 
 
@@ -426,6 +750,8 @@ void dec0_ms_state::base(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
+	m_mod1->set_ym_clock(1'500'000); // unknown, gives the pitch of the original Fighting Fantasy and Secret Agent music
+	m_mod1->set_adpcm_prescaler(msm5205_device::S96_4B); // unverified, the samples last as long as the original games' ones at about 4 kHz
 	m_mod1->in_callback<0>().set_ioport("IN0");
 	m_mod1->in_callback<1>().set_ioport("IN1");
 	m_mod1->in_callback<2>().set_ioport("SW2");
@@ -433,13 +759,19 @@ void dec0_ms_state::base(machine_config &config)
 	m_mod1->add_route(ALL_OUTPUTS, "mono", 0.30);
 }
 
-void dec0_ms_state::automatm(machine_config &config)
+void automat_ms_state::automatm(machine_config &config)
 {
 	base(config);
 
-	m_maincpu->set_addrmap(AS_PROGRAM, &dec0_ms_state::automatm_map);
+	m_maincpu->set_addrmap(AS_PROGRAM, &automat_ms_state::automatm_map);
 
-	m_screen->set_screen_update(FUNC(dec0_ms_state::screen_update_automatm));
+	m_screen->set_screen_update(FUNC(automat_ms_state::screen_update));
+	m_screen->screen_vblank().set(FUNC(automat_ms_state::vblank_irq));
+
+	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_automatm);
+
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(automat_ms_state::sprite_cb));
 }
 
 void ffantasy_ms_state::video(machine_config &config)
@@ -479,12 +811,16 @@ void ffantasy_ms_state::drgninjam(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_drgninjam);
 
-	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::drgninjam_sprite_cb));
+	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::sprite_cb));
 
+	// pens 8-15 of the original game in colours 8-15 can go in front of the other layer or the sprites
 	m_mod4_a->set_color_base(0x100);
 	m_mod4_a->set_half_lines(9);
+	m_mod4_a->set_front_pens(0xff00, 0x00ff);
 	m_mod4_b->set_color_base(0x200);
 	m_mod4_b->set_half_lines(9);
+	m_mod4_b->set_transparent_pen(15);
+	m_mod4_b->set_front_pens(0xff00, 0x00ff);
 }
 
 void ffantasy_ms_state::ffantasym(machine_config &config)
@@ -498,7 +834,7 @@ void ffantasy_ms_state::ffantasym(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_ffantasy_ms);
 
-	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::sprite_cb));
+	m_mod51->set_sprite_callback(FUNC(ffantasy_ms_state::mod5_1_sprite_cb));
 
 	m_mod4_a->set_color_base(0x200);
 	m_mod4_a->set_layout(FUNC(ffantasy_ms_state::pages_4x1_scan), 64, 16);
@@ -534,7 +870,7 @@ ROM_START( automatm )
 	ROM_REGION( 0x20, "mod1:prom", 0 )
 	ROM_LOAD( "mod_1-5_automat_110_82s123.ic20", 0x00, 0x20, CRC(e26e680a) SHA1(9bbe30e98e952a6113c64e1171330153ddf22ce7) )
 
-	ROM_REGION( 0x80000, "gfx1", 0 ) // on MOD 8 board
+	ROM_REGION( 0x80000, "mod8", 0 ) // on MOD 8 board
 	ROM_LOAD( "mod_8_automat_2au_301.ic15", 0x00000, 0x10000, CRC(fd3b363b) SHA1(af63d57e362f159c5b54a764e2069ca24849164b) )
 	ROM_LOAD( "mod_8_automat_2au_302.ic22", 0x10000, 0x10000, CRC(05755c02) SHA1(e1fa7d464eb7bbf2f22ca132e7df8e92911a0685) )
 	ROM_LOAD( "mod_8_automat_2au_303.ic30", 0x20000, 0x10000, CRC(9440bb38) SHA1(aee9372bfc3b2b036a208d91a706312b77042001) )
@@ -544,11 +880,11 @@ ROM_START( automatm )
 	ROM_LOAD( "mod_8_automat_2au_307.ic29", 0x60000, 0x10000, CRC(be822d87) SHA1(d5f9bb55a16f0ab2d6d11fea5d22b7ced59f9128) )
 	ROM_LOAD( "mod_8_automat_2au_308.ic36", 0x70000, 0x10000, CRC(9459159a) SHA1(20fc3f33f2e23d88b2bd21f248ed7814f03b387f) )
 
-	ROM_REGION( 0x80000, "gfx2", 0 ) // on MOD 51/1 board
-	ROM_LOAD( "mod_51-3_automat_2au_501.ic43", 0x00000, 0x20000, CRC(8e7ec3fc) SHA1(0c40cf90bb105dca2629a61ff13227b82d3b10de) )
-	ROM_LOAD( "mod_51-3_automat_2au_502.ic42", 0x20000, 0x20000, CRC(d0a46eae) SHA1(3efe3b1462b442b4a16704d15e201a4d7bd402c8) )
-	ROM_LOAD( "mod_51-3_automat_2au_503.ic41", 0x40000, 0x20000, CRC(e174cdaf) SHA1(e66c8adc6df08e30365bd0e360e78397b495582c) )
-	ROM_LOAD( "mod_51-3_automat_2au_504.ic40", 0x60000, 0x20000, CRC(e8662060) SHA1(f59f55fe5bf79be0c66f4984a0ecab17504438c7) )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_INVERT ) // on MOD 51/3 board
+	ROM_LOAD32_BYTE( "mod_51-3_automat_2au_501.ic43", 0x00003, 0x20000, CRC(8e7ec3fc) SHA1(0c40cf90bb105dca2629a61ff13227b82d3b10de) )
+	ROM_LOAD32_BYTE( "mod_51-3_automat_2au_502.ic42", 0x00002, 0x20000, CRC(d0a46eae) SHA1(3efe3b1462b442b4a16704d15e201a4d7bd402c8) )
+	ROM_LOAD32_BYTE( "mod_51-3_automat_2au_503.ic41", 0x00001, 0x20000, CRC(e174cdaf) SHA1(e66c8adc6df08e30365bd0e360e78397b495582c) )
+	ROM_LOAD32_BYTE( "mod_51-3_automat_2au_504.ic40", 0x00000, 0x20000, CRC(e8662060) SHA1(f59f55fe5bf79be0c66f4984a0ecab17504438c7) )
 
 	ROM_REGION( 0x200, "mod21", ROMREGION_ERASE00 ) // on MOD 2 board
 	ROM_LOAD( "82s129.ic4",  0x000, 0x100, NO_DUMP )
@@ -772,7 +1108,7 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 199?, automatm,  robocop,  automatm,  ffantasym, dec0_ms_state,     empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Automat (bootleg of Robocop, Modular System)", MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-GAME( 199?, drgninjam, baddudes, drgninjam, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Dragon Ninja (Modular System)",                MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-GAME( 199?, ffantasym, hippodrm, ffantasym, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Fighting Fantasy (Modular System)",            MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
-GAME( 199?, secretagm, secretag, secretagm, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Secret Agent (Modular System)",                MACHINE_NO_SOUND | MACHINE_NOT_WORKING )
+GAME( 199?, automatm,  robocop,  automatm,  automatm,  automat_ms_state,  empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Automat (bootleg of Robocop, Modular System)", MACHINE_NOT_WORKING )
+GAME( 199?, drgninjam, baddudes, drgninjam, drgninjam, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Dragon Ninja (Modular System)",                MACHINE_NOT_WORKING )
+GAME( 199?, ffantasym, hippodrm, ffantasym, ffantasym, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Fighting Fantasy (Modular System)",            MACHINE_NOT_WORKING )
+GAME( 199?, secretagm, secretag, secretagm, secretagm, ffantasy_ms_state, empty_init, ROT0, "bootleg (Gaelco / Ervisa)", "Secret Agent (Modular System)",                MACHINE_NOT_WORKING )
