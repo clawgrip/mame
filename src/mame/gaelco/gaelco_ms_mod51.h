@@ -58,6 +58,7 @@ private:
 	int m_correction_x;
 	int m_correction_y;
 	int m_x_delta;
+	int m_y_base;
 	int m_origin_x;
 	int m_origin_y;
 };
