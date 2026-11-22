@@ -31,10 +31,10 @@
     lines below the first visible line with vertical PROM 202, 233 - Y with
     205. With horizontal PROMs 201, 206, 210 and 211 this matches the
     original games within a pixel horizontally and 2 lines vertically on
-    Bad Lands, Black Tiger, Blood Bros., Cabal, Gryzor, Raiden and Secret
-    Agent, and puts the sprites on the ground of Dragon Ninja and Fighting
-    Fantasy. It doesn't fit the games with horizontal PROMs 204 and 207
-    (Last Duel, Power Spikes and Twin Cobra), whose drivers set
+    Bad Lands, Black Tiger, Blood Bros., Cabal, Gryzor, Raiden, Secret
+    Agent and Toki, and puts the sprites on the ground of Dragon Ninja and
+    Fighting Fantasy. It doesn't fit the games with horizontal PROMs 204
+    and 207 (Last Duel, Power Spikes and Twin Cobra), whose drivers set
     corrections. The lower entries are drawn over the higher ones.
 
     TODO:

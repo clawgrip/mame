@@ -22,7 +22,6 @@
         * One of the above for the scratchy sounds that happens from time to time;
         * Mixing;
     - Ranking screen has wrong colors, btanb?
-    - Slight sprite lag when game scrolls vertically, another btanb?
     - "bajo licencia" -> "under license" ... from whoever developed Modular System or TAD itself?
 
     NOTES:
@@ -259,7 +258,6 @@ IC46->PAL16V8H 74LS393N 74LS368AP 74LS377B1|U||    |   |                        
 #include "../gaelco/gaelco_ms_mod51.h"
 
 #include "cpu/m68000/m68000.h"
-#include "video/bufsprite.h"
 
 #include "screen.h"
 #include "speaker.h"
@@ -300,7 +298,7 @@ private:
 	required_shared_ptr<u16> m_bk1vram;
 	required_shared_ptr<u16> m_bk2vram;
 	required_shared_ptr<u16> m_vram;
-	required_device<buffered_spriteram16_device> m_spriteram;
+	required_shared_ptr<u16> m_spriteram;
 	required_shared_ptr<u16> m_scrollram;
 
 	virtual void video_start() override ATTR_COLD;
@@ -308,7 +306,8 @@ private:
 	TILE_GET_INFO_MEMBER(get_bk1_info);
 	TILE_GET_INFO_MEMBER(get_bk2_info);
 	TILE_GET_INFO_MEMBER(get_tile_info);
-	void draw_sprites(bitmap_ind16 &bitmap,const rectangle &cliprect);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	void bk1vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	void bk2vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	void vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
@@ -357,52 +356,12 @@ TILE_GET_INFO_MEMBER(toki_ms_state::get_bk2_info)
 			0);
 }
 
-/*
-Copies from original location to an 8-bit RAM, split into two banks like paletteram.
-First entry are global flags (unchecked)
-Offsets are in 16-bit to make this less confusing
-[0x000] tttt tttt tttt tttt ---- ---- ---- ---- tile low offset
-        ---- ---- ---- ---- yyyy yyyy yyyy yyyy Y offset
-[0x002] xxxx xxxx xxxx xxxx ---- ---- ---- ---- X offset
-        ---- ---- ---- ---- ---- -f-- ---- ---- flip X
-        ---- ---- ---- ---- ---- --t- ---- ---- tile banking
-        ---- ---- ---- ---- ---- ---- tttt tttt tile upper offset
-[0x200] x--- ---- ---- ---- ---- ---- ---- ---- x wraparound
-        ---- ---- ---- cccc ---- ---- ---- ---- color offset
-[0x202] ---- ---- ---- ---- ---- ---- ---- ---- <unused>
-*/
-void toki_ms_state::draw_sprites(bitmap_ind16 &bitmap,const rectangle &cliprect)
+void toki_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	int x,y,flipx,color;
-	u16 tile;
-	const int bank_size = m_spriteram->bytes() / 4;
-
-	for (int offs = bank_size-2; offs >= 2; offs -= 2)
-	{
-		u16 *lobank = &m_spriteram->buffer()[offs];
-		u16 *hibank = &m_spriteram->buffer()[offs+bank_size];
-
-		y = 240 - (lobank[0] & 0xff);
-
-		x = lobank[1] >> 8;
-		if (!(hibank[0] & 0x8000))
-			x -= 256;
-
-		flipx = (lobank[1] & 0x40);
-
-		tile = (lobank[0] >> 8);
-		tile |= ((lobank[1] & 0x0f) << 8);
-		if (lobank[1] & 0x20)
-			tile |= 0x1000;
-
-		color = (hibank[0] & 0x0f00) >> 8;
-
-		m_gfxdecode->gfx(1)->transmask(bitmap,cliprect,
-				tile,
-				color,
-				flipx,0,
-				x,y,m_mod51->transmask());
-	}
+	// code bits 8-11 in attribute bits 0-3 and bit 12 in bit 5, flip X in bit 6, X bit 8 inverted in colour bit 7
+	code |= ((attr & 0x0f) << 8) | (BIT(attr, 5) << 12);
+	flipx = BIT(attr, 6);
+	x8 = BIT(~color, 7);
 }
 
 void toki_ms_state::video_start()
@@ -434,7 +393,7 @@ uint32_t toki_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitma
 		m_bk1_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
 		m_bk2_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 	}
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(1));
 	m_tx_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
 	return 0;
@@ -573,7 +532,6 @@ void toki_ms_state::tokim(machine_config &config)
 	m_screen->set_raw(20_MHz_XTAL / 4, 320, 0, 256, 266, 16, 240); // MOD 21/1 PROMs 201 and 202
 	m_screen->set_screen_update(FUNC(toki_ms_state::screen_update));
 	m_screen->set_palette(m_mod21);
-	m_screen->screen_vblank().set("spriteram", FUNC(buffered_spriteram16_device::vblank_copy_rising));
 
 	GFXDECODE(config, m_gfxdecode, m_mod21, gfx_toki_ms);
 
@@ -581,8 +539,9 @@ void toki_ms_state::tokim(machine_config &config)
 	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
-
-	BUFFERED_SPRITERAM16(config, m_spriteram);
+	m_mod51->set_timing(m_mod21);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(toki_ms_state::sprite_cb));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
