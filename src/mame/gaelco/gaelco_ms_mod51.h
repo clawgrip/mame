@@ -14,6 +14,9 @@ public:
 	// receives the attribute and colour bytes of a list entry, with code preset to the code byte and palette
 	// to the low half of the colour byte
 	using sprite_delegate = device_delegate<void (u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)>;
+	// receives the attribute and colour bytes of a list entry and returns the GFX_PMASK_n bits of the
+	// priority bitmap values whose tile layer pixels cover the sprite
+	using priority_delegate = device_delegate<u32 (u8 attr, u8 color)>;
 
 	gaelco_ms_mod51_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock = 0);
 
@@ -31,6 +34,8 @@ public:
 	// the attribute and colour bits each game's EPROM sub board takes the other code bits, the flips, X bit 8
 	// and the palette from
 	template <typename... T> void set_sprite_callback(T &&... args) { m_sprite_cb.set(std::forward<T>(args)...); }
+	// the attribute and colour bits that put each game's sprites behind tile layers
+	template <typename... T> void set_priority_callback(T &&... args) { m_priority_cb.set(std::forward<T>(args)...); }
 	// the list RAM as the board sees it: code, Y, X and attributes for each entry, and the colour bytes
 	auto list_r() { return m_list_r.bind(); }
 
@@ -38,18 +43,22 @@ public:
 	u32 transmask() const { return m_transmask; }
 
 	void draw(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx);
+	// with the tile layers already drawn into the priority bitmap
+	void draw(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 &priority);
 
 protected:
 	// device_t implementation
 	virtual void device_start() override ATTR_COLD;
 
 private:
-	void entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y);
+	void entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask);
+	void draw_list(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 *priority);
 
 	required_region_ptr<u8> m_prom;
 	optional_device<gaelco_ms_mod21_device> m_timing;
 	devcb_read8 m_list_r;
 	sprite_delegate m_sprite_cb;
+	priority_delegate m_priority_cb;
 
 	u32 m_transmask;
 	u16 m_entries;

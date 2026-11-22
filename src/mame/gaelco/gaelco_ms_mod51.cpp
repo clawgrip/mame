@@ -32,16 +32,24 @@
     205. With horizontal PROMs 201, 206, 210 and 211 this matches the
     original games within a pixel horizontally and 2 lines vertically on
     Bad Lands, Black Tiger, Blood Bros., Cabal, Gryzor, Raiden, Secret
-    Agent and Toki, and puts the sprites on the ground of Dragon Ninja and
-    Fighting Fantasy. It doesn't fit the games with horizontal PROMs 204
-    and 207 (Last Duel, Power Spikes and Twin Cobra), whose drivers set
-    corrections. The lower entries are drawn over the higher ones.
+    Agent, Shadow Warriors and Toki, and puts the sprites on the ground of
+    Dragon Ninja and Fighting Fantasy. It doesn't fit the games with
+    horizontal PROMs 204 and 207 (Last Duel, Power Spikes and Twin Cobra),
+    whose drivers set corrections. The lower entries are drawn over the
+    higher ones.
+
+    The line buffer keeps the pixel of the lowest entry, and a colour bit can
+    put it behind a tile layer: colour bit 3 puts the sprite in front of the
+    foreground on Shadow Warriors and behind it on Twin Cobra. Drivers give
+    the priority mask of each entry and draw the tile layers into the screen
+    priority bitmap first, so a sprite behind a layer also hides the higher
+    entries there.
 
     TODO:
     - what drives PROM address bits 4-7
     - which attribute and colour lines are fixed on the board
     - the position constants, measured on a board
-    - priority against the tile layers, still done by the drivers that need it
+    - which board compares the priority bit with the tile layers
 
 ***************************************************************************/
 
@@ -58,6 +66,7 @@ gaelco_ms_mod51_device::gaelco_ms_mod51_device(const machine_config &mconfig, co
 	m_timing(*this, finder_base::DUMMY_TAG),
 	m_list_r(*this, 0),
 	m_sprite_cb(*this),
+	m_priority_cb(*this),
 	m_transmask(0),
 	m_entries(128),
 	m_color_offset(0x200),
@@ -85,6 +94,7 @@ void gaelco_ms_mod51_device::device_start()
 	}
 
 	m_sprite_cb.resolve();
+	m_priority_cb.resolve();
 	if (!m_sprite_cb.isnull())
 	{
 		if (!m_timing)
@@ -98,7 +108,7 @@ void gaelco_ms_mod51_device::device_start()
 }
 
 
-void gaelco_ms_mod51_device::entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y)
+void gaelco_ms_mod51_device::entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask)
 {
 	offs_t const offset = index * 4;
 	u8 const color = m_color_offset ? m_list_r(m_color_offset + offset) : 0;
@@ -111,38 +121,49 @@ void gaelco_ms_mod51_device::entry(unsigned index, u32 &code, u32 &palette, bool
 	flipx = flipy = false;
 	m_sprite_cb(attr, color, code, palette, flipx, flipy, bit8);
 	x = m_list_r(offset + 2) | (u16(bit8) << 8);
+	pmask = m_priority_cb.isnull() ? 0 : m_priority_cb(attr, color);
 }
 
 void gaelco_ms_mod51_device::draw(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx)
 {
+	draw_list(bitmap, cliprect, gfx, nullptr);
+}
+
+void gaelco_ms_mod51_device::draw(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 &priority)
+{
+	draw_list(bitmap, cliprect, gfx, &priority);
+}
+
+void gaelco_ms_mod51_device::draw_list(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 *priority)
+{
 	u16 const xmask = m_x_bit8 ? 0x1ff : 0x0ff;
-	u32 code, palette;
+	u32 code, palette, pmask;
 	bool flipx, flipy;
 	u16 x;
 	u8 y;
 
 	// the line buffer address of the first visible pixel
-	entry(0, code, palette, flipx, flipy, x, y);
+	entry(0, code, palette, flipx, flipy, x, y, pmask);
 	u16 const origin = (x + m_x_delta) & xmask;
 
-	for (unsigned index = m_entries - 1; index > 0; index--)
+	// against the tile layers the lowest entry goes first and keeps its pixels
+	for (unsigned i = 1; i < m_entries; i++)
 	{
-		entry(index, code, palette, flipx, flipy, x, y);
+		unsigned const index = priority ? i : (m_entries - i);
+		entry(index, code, palette, flipx, flipy, x, y, pmask);
 		int sx = (x - origin + m_correction_x) & xmask;
 		int const sy = m_origin_y + m_y_base - y + m_correction_y;
 
-		if (m_x_bit8)
+		// with X bit 8 partly off the left edge, without it wrapped around within 256 pixels
+		if (m_x_bit8 && (sx >= 0x1f0))
+			sx -= 0x200;
+		for (int wrap = 0; wrap < (m_x_bit8 ? 1 : 2); wrap++)
 		{
-			// partly off the left edge
-			if (sx >= 0x1f0)
-				sx -= 0x200;
-			gfx.transmask(bitmap, cliprect, code, palette, flipx, flipy, m_origin_x + sx, sy, m_transmask);
-		}
-		else
-		{
-			// X wraps around within 256 pixels
-			for (int wrap = 0; wrap < 2; wrap++)
-				gfx.transmask(bitmap, cliprect, code, palette, flipx, flipy, m_origin_x + sx - (wrap << 8), sy, m_transmask);
+			int const dx = m_origin_x + sx - (wrap << 8);
+			if (priority)
+				gfx.prio_transmask(bitmap, cliprect, code, palette, flipx, flipy, dx, sy, *priority, pmask, m_transmask);
+			else
+				gfx.transmask(bitmap, cliprect, code, palette, flipx, flipy, dx, sy, m_transmask);
 		}
 	}
 }

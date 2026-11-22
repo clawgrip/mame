@@ -19,9 +19,14 @@
     Very similar to mastninj in tecmo/gaiden.cpp. However the differences (palette and sprite RAM format, scrolling registers, sound system)
     maybe make it worthwhile to leave it as a separate driver.
 
+    Of the two sprite priority bits of the original game the program keeps one: it sets colour bit 3 for
+    the sprites drawn in front of the foreground, and writes each sprite palette to both halves so that
+    the bit doesn't change the colours. The text layer is in front of all sprites, as on the other
+    Modular System games. Against the original game the tile layers are aligned and the sprites are one
+    line lower.
+
     TODO:
-    - tilemaps y scroll needs slight adjustment;
-    - sprites positioning may be slightly off.
+    - the scroll offsets of the MOD 7/3 board, fitted to the original game
 */
 
 
@@ -83,7 +88,9 @@ private:
 	void bg_videoram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	void fg_videoram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 	void tx_videoram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-	void draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u32 sprite_priority(u8 attr, u8 color);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -145,51 +152,29 @@ void shadoww_ms_state::tx_videoram_w(offs_t offset, uint16_t data, uint16_t mem_
 	m_text_layer->mark_tile_dirty(offset & 0x03ff);
 }
 
-void shadoww_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+void shadoww_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	const int NUM_SPRITES = 0x100;
-	const int X_EXTRA_OFFSET = -0x10;
+	// code bits 8-12 in attribute bits 0-4, flip X in bit 6, flip Y in bit 7 and X bit 8 inverted in colour bit 7
+	code |= (attr & 0x1f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(~color, 7);
+}
 
-	for (int i = 0; i < NUM_SPRITES; i += 2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(3);
-
-		uint16_t const attr0 = m_spriteram[i + 0];
-		uint16_t const attr1 = m_spriteram[i + 1];
-
-		uint16_t const attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t const attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		if (!(attr2 & 0x8000))
-			continue;
-
-		int ypos = attr0 & 0x00ff;
-		int const xpos = (attr1 & 0xff00) >> 8;
-
-		ypos = (0xff - ypos);
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x001f) << 8;
-
-		int const col = (attr2 & 0x0f00) >> 8;
-
-		int const flipx = (attr1 & 0x0040);
-		int const flipy = (attr2 & 0x4000);
-
-		int const pri_mask = (col & 0x08) ? 0x00 : 0xf0 | 0xcc;
-
-		gfx->prio_transmask(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, m_mod51->transmask());
-	}
+u32 shadoww_ms_state::sprite_priority(u8 attr, u8 color)
+{
+	// colour bit 3 puts the sprite in front of the foreground
+	return BIT(color, 3) ? 0 : GFX_PMASK_1;
 }
 
 uint32_t shadoww_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	screen.priority().fill(0, cliprect);
 
-	m_background->draw(screen, bitmap, cliprect, 0, 1);
-	m_foreground->draw(screen, bitmap, cliprect, 0, 2);
-	m_text_layer->draw(screen, bitmap, cliprect, 0, 4);
-	draw_sprites(screen, bitmap, cliprect);
+	m_background->draw(screen, bitmap, cliprect, 0, 0);
+	m_foreground->draw(screen, bitmap, cliprect, 0, 1);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(3), screen.priority());
+	m_text_layer->draw(screen, bitmap, cliprect, 0, 0);
 
 	return 0;
 }
@@ -209,9 +194,9 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x07a000, 0x07a00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x07e000, 0x07e000).lw8(NAME([this] (uint8_t data) { m_maincpu->set_input_line(5, CLEAR_LINE); }));
 	map(0x07f000, 0x07f001).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrollx(0, (0x33 - data) & 0x3ff); }));
-	map(0x07f002, 0x07f003).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrolly(0, -data & 0x1ff); })); // not 100% correct
-	map(0x07f004, 0x07f005).lw16(NAME([this] (uint16_t data) { m_background->set_scrollx(0, (0x30 - data) & 0x3ff); }));
-	map(0x07f006, 0x07f007).lw16(NAME([this] (uint16_t data) { m_background->set_scrolly(0, -data & 0x1ff); })); // not 100% correct
+	map(0x07f002, 0x07f003).lw16(NAME([this] (uint16_t data) { m_foreground->set_scrolly(0, ~data & 0x1ff); }));
+	map(0x07f004, 0x07f005).lw16(NAME([this] (uint16_t data) { m_background->set_scrollx(0, (0x31 - data) & 0x3ff); }));
+	map(0x07f006, 0x07f007).lw16(NAME([this] (uint16_t data) { m_background->set_scrolly(0, ~data & 0x1ff); }));
 }
 
 static INPUT_PORTS_START( shadowwm )
@@ -318,6 +303,10 @@ void shadoww_ms_state::shadowwm(machine_config &config)
 	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod21);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(shadoww_ms_state::sprite_cb));
+	m_mod51->set_priority_callback(FUNC(shadoww_ms_state::sprite_priority));
 
 	// sound hardware
 	SPEAKER(config, "mono").front_center();
