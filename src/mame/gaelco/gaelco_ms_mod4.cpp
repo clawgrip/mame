@@ -157,12 +157,12 @@ void gaelco_ms_mod4_device::device_start()
 	{
 		// one transparency group per colour
 		u16 const transparent = (m_transparent_pen >= 0) ? (1 << m_transparent_pen) : 0;
-		for (unsigned color = 0; color < 16; color++)
+		for (u32 color = 0; color < 16; color++)
 		{
 			u16 front = BIT(m_front_colors, color) ? m_front_pens : 0;
 			if (m_prom)
 			{
-				for (unsigned pen = 0; pen < 16; pen++)
+				for (u32 pen = 0; pen < 16; pen++)
 					front |= BIT(m_prom[bitswap<5>((color << 4) | pen, 5, 6, 3, 2, 7)], 0) << pen;
 			}
 			m_tilemap->set_transmask(color, u16(~front) | transparent, transparent);

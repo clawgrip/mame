@@ -200,8 +200,8 @@ void shadoww_ms_state::main_map(address_map &map)
 	map(0x000000, 0x03ffff).rom();
 	map(0x060000, 0x063fff).ram();
 	map(0x070000, 0x070fff).ram().w(FUNC(shadoww_ms_state::tx_videoram_w)).share(m_videoram[0]);
-	map(0x072000, 0x073fff).ram().ram().w(FUNC(shadoww_ms_state::fg_videoram_w)).share(m_videoram[1]);
-	map(0x074000, 0x075fff).ram().ram().w(FUNC(shadoww_ms_state::bg_videoram_w)).share(m_videoram[2]);
+	map(0x072000, 0x073fff).ram().w(FUNC(shadoww_ms_state::fg_videoram_w)).share(m_videoram[1]);
+	map(0x074000, 0x075fff).ram().w(FUNC(shadoww_ms_state::bg_videoram_w)).share(m_videoram[2]);
 	map(0x076000, 0x076fff).ram().share(m_spriteram);
 	map(0x078000, 0x0783ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x078400, 0x0787ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));

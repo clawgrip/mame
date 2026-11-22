@@ -121,6 +121,7 @@
 
 #include "screen.h"
 #include "speaker.h"
+#include "tilemap.h"
 
 
 namespace {
@@ -148,14 +149,14 @@ protected:
 
 	required_shared_ptr<u16> m_spritelist;
 
+	void base(machine_config &config) ATTR_COLD;
+
 	TILEMAP_MAPPER_MEMBER(pages_2x2_scan);
 	u8 sprite_byte(offs_t offset) const { return m_spritelist[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	void vblank_irq(int state);
 	void irq_ack_w(u16 data);
 	u16 irq_ack_r();
-
-	void base(machine_config &config) ATTR_COLD;
 };
 
 
@@ -164,9 +165,7 @@ class automat_ms_state : public dec0_ms_state
 public:
 	automat_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		dec0_ms_state(mconfig, type, tag),
-		m_txram(*this, "txram"),
-		m_pf1ram(*this, "pf1ram"),
-		m_pf2ram(*this, "pf2ram"),
+		m_vram(*this, "vram%u", 0U),
 		m_regs(*this, "regs")
 	{ }
 
@@ -176,24 +175,20 @@ protected:
 	virtual void video_start() override ATTR_COLD;
 
 private:
-	required_shared_ptr<u16> m_txram;
-	required_shared_ptr<u16> m_pf1ram;
-	required_shared_ptr<u16> m_pf2ram;
+	enum : u8 { TX, PF1, PF2 };
+
+	required_shared_ptr_array<u16, 3> m_vram;
 	required_shared_ptr<u16> m_regs;
 
-	tilemap_t *m_tx_tilemap = nullptr;
-	tilemap_t *m_pf1_tilemap = nullptr;
-	tilemap_t *m_pf2_tilemap = nullptr;
+	tilemap_t *m_tilemap[3]{};
+
+	void automatm_map(address_map &map) ATTR_COLD;
 
 	TILE_GET_INFO_MEMBER(get_tx_tile_info);
 	TILE_GET_INFO_MEMBER(get_pf1_tile_info);
 	TILE_GET_INFO_MEMBER(get_pf2_tile_info);
-	void txram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
-	void pf1ram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
-	void pf2ram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
+	template <u32 Layer> void vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-
-	void automatm_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -216,6 +211,12 @@ private:
 	required_device<gaelco_ms_mod4_device> m_mod4_a; // front 16x16 board
 	required_device<gaelco_ms_mod4_device> m_mod4_b; // back 16x16 board
 
+	void video(machine_config &config) ATTR_COLD;
+
+	void drgninjam_map(address_map &map) ATTR_COLD;
+	void ffantasym_map(address_map &map) ATTR_COLD;
+	void secretagm_map(address_map &map) ATTR_COLD;
+
 	TILEMAP_MAPPER_MEMBER(pages_4x1_scan);
 	void secretagm_tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void mod5_1_sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
@@ -226,12 +227,6 @@ private:
 	uint32_t screen_update_drgninjam(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update_ffantasym(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update_secretagm(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-
-	void video(machine_config &config) ATTR_COLD;
-
-	void drgninjam_map(address_map &map) ATTR_COLD;
-	void ffantasym_map(address_map &map) ATTR_COLD;
-	void secretagm_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -274,63 +269,59 @@ u16 dec0_ms_state::irq_ack_r()
 TILE_GET_INFO_MEMBER(automat_ms_state::get_tx_tile_info)
 {
 	// MOD 8 EPROM lines A11-A14 take character bits 10, 11, 8 and 9
-	u16 const data = m_txram[tile_index];
-	tileinfo.set(0, bitswap<12>(data, 9, 8, 11, 10, 7, 6, 5, 4, 3, 2, 1, 0), data >> 12, 0);
+	u16 const data = m_vram[TX][tile_index];
+	tileinfo.set(TX, bitswap<12>(data, 9, 8, 11, 10, 7, 6, 5, 4, 3, 2, 1, 0), data >> 12, 0);
 }
 
 TILE_GET_INFO_MEMBER(automat_ms_state::get_pf1_tile_info)
 {
 	// tile bits 8-10 on MOD 8 EPROM lines A13-A15, above the lines that pick the quarter
-	u16 const data = m_pf1ram[tile_index];
-	tileinfo.set(1, (data & 0x0ff) | ((data & 0x700) << 2), data >> 12, 0);
+	u16 const data = m_vram[PF1][tile_index];
+	tileinfo.set(PF1, (data & 0x0ff) | ((data & 0x700) << 2), data >> 12, 0);
 }
 
 TILE_GET_INFO_MEMBER(automat_ms_state::get_pf2_tile_info)
 {
-	u16 const data = m_pf2ram[tile_index];
-	tileinfo.set(2, (data & 0x0ff) | ((data & 0x300) << 2), data >> 12, 0);
+	u16 const data = m_vram[PF2][tile_index];
+	tileinfo.set(PF2, (data & 0x0ff) | ((data & 0x300) << 2), data >> 12, 0);
 }
 
-void automat_ms_state::txram_w(offs_t offset, u16 data, u16 mem_mask)
+template <u32 Layer>
+void automat_ms_state::vram_w(offs_t offset, u16 data, u16 mem_mask)
 {
-	COMBINE_DATA(&m_txram[offset]);
-	m_tx_tilemap->mark_tile_dirty(offset);
-}
-
-void automat_ms_state::pf1ram_w(offs_t offset, u16 data, u16 mem_mask)
-{
-	COMBINE_DATA(&m_pf1ram[offset]);
-	m_pf1_tilemap->mark_tile_dirty(offset);
-}
-
-void automat_ms_state::pf2ram_w(offs_t offset, u16 data, u16 mem_mask)
-{
-	COMBINE_DATA(&m_pf2ram[offset]);
-	m_pf2_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&m_vram[Layer][offset]);
+	m_tilemap[Layer]->mark_tile_dirty(offset);
 }
 
 void automat_ms_state::video_start()
 {
-	m_tx_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_tx_tile_info)), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
-	m_pf1_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf1_tile_info)), tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
-	m_pf2_tilemap = &machine().tilemap().create(*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf2_tile_info)), tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
-	m_tx_tilemap->set_transparent_pen(15);
-	m_pf1_tilemap->set_transparent_pen(15);
-	m_pf2_tilemap->set_transparent_pen(15);
+	dec0_ms_state::video_start();
+
+	m_tilemap[TX] = &machine().tilemap().create(
+			*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_tx_tile_info)),
+			TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+	m_tilemap[PF1] = &machine().tilemap().create(
+			*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf1_tile_info)),
+			tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
+	m_tilemap[PF2] = &machine().tilemap().create(
+			*m_gfxdecode, tilemap_get_info_delegate(*this, FUNC(automat_ms_state::get_pf2_tile_info)),
+			tilemap_mapper_delegate(*this, FUNC(automat_ms_state::pages_2x2_scan)), 16, 16, 32, 32);
+	for (tilemap_t *tilemap : m_tilemap)
+		tilemap->set_transparent_pen(15);
 }
 
 uint32_t automat_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	// the program writes the scroll values inverted, the X values minus 48 and 50
-	m_pf2_tilemap->set_scrollx((~m_regs[0] + 48) & 0x3ff);
-	m_pf2_tilemap->set_scrolly(~m_regs[1] & 0x3ff);
-	m_pf1_tilemap->set_scrollx((~m_regs[2] + 50) & 0x3ff);
-	m_pf1_tilemap->set_scrolly(~m_regs[3] & 0x3ff);
+	m_tilemap[PF2]->set_scrollx((~m_regs[0] + 48) & 0x3ff);
+	m_tilemap[PF2]->set_scrolly(~m_regs[1] & 0x3ff);
+	m_tilemap[PF1]->set_scrollx((~m_regs[2] + 50) & 0x3ff);
+	m_tilemap[PF1]->set_scrolly(~m_regs[3] & 0x3ff);
 
-	m_pf2_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
-	m_pf1_tilemap->draw(screen, bitmap, cliprect, 0);
+	m_tilemap[PF2]->draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE);
+	m_tilemap[PF1]->draw(screen, bitmap, cliprect, 0);
 	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(3));
-	m_tx_tilemap->draw(screen, bitmap, cliprect, 0);
+	m_tilemap[TX]->draw(screen, bitmap, cliprect, 0);
 	return 0;
 }
 
@@ -339,9 +330,9 @@ void automat_ms_state::automatm_map(address_map &map)
 {
 	map(0x000000, 0x03ffff).rom();
 	map(0x240000, 0x243fff).ram();
-	map(0x244000, 0x2447ff).ram().w(FUNC(automat_ms_state::txram_w)).share(m_txram);
-	map(0x24a000, 0x24a7ff).ram().w(FUNC(automat_ms_state::pf1ram_w)).share(m_pf1ram);
-	map(0x24d000, 0x24d7ff).ram().w(FUNC(automat_ms_state::pf2ram_w)).share(m_pf2ram);
+	map(0x244000, 0x2447ff).ram().w(FUNC(automat_ms_state::vram_w<TX>)).share(m_vram[TX]);
+	map(0x24a000, 0x24a7ff).ram().w(FUNC(automat_ms_state::vram_w<PF1>)).share(m_vram[PF1]);
+	map(0x24d000, 0x24d7ff).ram().w(FUNC(automat_ms_state::vram_w<PF2>)).share(m_vram[PF2]);
 	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x30c010, 0x30c011).noprw(); // the program still clears the original game's priority register
 	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
@@ -858,7 +849,7 @@ void ffantasy_ms_state::secretagm(machine_config &config)
 }
 
 ROM_START( automatm )
-	ROM_REGION( 0x100000, "maincpu", 0 ) // on MOD 6/1 board
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on MOD 6/1 board
 	ROM_LOAD16_BYTE( "mod_6-1_automat_2au_603.ic17", 0x00000, 0x10000, CRC(efce0f8e) SHA1(c27a2db6c5cf92b9682be12d00d4c8b2998a88ee) )
 	ROM_LOAD16_BYTE( "mod_6-1_automat_2au_606.ic26", 0x00001, 0x10000, CRC(f19fc5b6) SHA1(3d27ed69a4ab4d799c4afa779ac5d5083cd73cc2) )
 	ROM_LOAD16_BYTE( "mod_6-1_automat_2au_602.ic20", 0x20000, 0x10000, CRC(9d7b79e0) SHA1(e0d901b9b3cd62f7c947da04f7447ebfa88bf44a) )
@@ -923,15 +914,15 @@ ROM_START( automatm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "mod_51-3_a502_63s141.ic10",       0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
+	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_automat_604_gal16v8.ic13", 0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "mod_6-1_automat_633_gal16v8.ic7",  0x000, 0x117, CRC(b12c8fc7) SHA1(5bbae33f146fb9ae935e790afda17324dd7b0e55) )
-	ROM_LOAD( "mod_7-8_7133_gal20v8.ic7",         0x000, 0x157, CRC(75c0363e) SHA1(0d3daf816a4fb549ef9e4a2d3cf2530acab3e6de) )
-	ROM_LOAD( "mod_7-8_7233_gal20v8.ic54",        0x000, 0x157, CRC(ca393ed5) SHA1(8ba8b85b1bf415f2f7ad3c75de271c8013254c7f) )
-	ROM_LOAD( "mod_7-8_7333_gal16v8.ic55",        0x000, 0x117, CRC(0c61be97) SHA1(8c6c5f29e8b91f90ff67caeed30e9e55860b335f) )
-	ROM_LOAD( "mod_7-8_7433_gal16v8.ic9",         0x000, 0x117, CRC(73e881cf) SHA1(43099330b37fac559f1984f11199d45f28aa4c01) )
-	ROM_LOAD( "mod_7-8_7533_gal16v8.ic59",        0x000, 0x117, CRC(f4cdd3f7) SHA1(9095f4618099a9d7fc65a181b569f5d25a342b3b) )
-	ROM_LOAD( "mod_7-8_7633_gal20v9.ic44",        0x000, 0x157, CRC(9ffe8cbe) SHA1(3a0ad6a9ea30bc534202b2289da164c970749b1f) )
+	ROM_LOAD( "mod_6-1_automat_633_gal16v8.ic7",  0x200, 0x117, CRC(b12c8fc7) SHA1(5bbae33f146fb9ae935e790afda17324dd7b0e55) )
+	ROM_LOAD( "mod_7-8_7133_gal20v8.ic7",         0x400, 0x157, CRC(75c0363e) SHA1(0d3daf816a4fb549ef9e4a2d3cf2530acab3e6de) )
+	ROM_LOAD( "mod_7-8_7233_gal20v8.ic54",        0x600, 0x157, CRC(ca393ed5) SHA1(8ba8b85b1bf415f2f7ad3c75de271c8013254c7f) )
+	ROM_LOAD( "mod_7-8_7333_gal16v8.ic55",        0x800, 0x117, CRC(0c61be97) SHA1(8c6c5f29e8b91f90ff67caeed30e9e55860b335f) )
+	ROM_LOAD( "mod_7-8_7433_gal16v8.ic9",         0xa00, 0x117, CRC(73e881cf) SHA1(43099330b37fac559f1984f11199d45f28aa4c01) )
+	ROM_LOAD( "mod_7-8_7533_gal16v8.ic59",        0xc00, 0x117, CRC(f4cdd3f7) SHA1(9095f4618099a9d7fc65a181b569f5d25a342b3b) )
+	ROM_LOAD( "mod_7-8_7633_gal20v9.ic44",        0xe00, 0x157, CRC(9ffe8cbe) SHA1(3a0ad6a9ea30bc534202b2289da164c970749b1f) )
 ROM_END
 
 ROM_START( drgninjam )
@@ -988,7 +979,7 @@ ROM_START( drgninjam )
 ROM_END
 
 ROM_START( ffantasym )
-	ROM_REGION( 0x100000, "maincpu", 0 ) // on MOD 6/1 board, extremely similar to ffantasybl in dec0.cpp
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on MOD 6/1 board, extremely similar to ffantasybl in dec0.cpp
 	ROM_LOAD16_BYTE( "ff_6-1_5fa_603.ic17", 0x00000, 0x10000, CRC(124ebff8) SHA1(20423990903dc3d682e2df6fb4dec0ae6b49036d) )
 	ROM_LOAD16_BYTE( "ff_6-1_5fa_606.ic8",  0x00001, 0x10000, CRC(94fa4a64) SHA1(fa1405144fc525debd1b62f78b5434cf7670e1cb) )
 	ROM_LOAD16_BYTE( "ff_6-1_5fa_602.ic20", 0x20000, 0x10000, CRC(68d50c5d) SHA1(d4a96c9ecb565c3c84ca76537492101264007cc1) )
@@ -1037,17 +1028,17 @@ ROM_START( ffantasym )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "ff_6-1_604_gal16v8.ic13",      0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "ff_6-1_635_gal16v8.ic7",       0x000, 0x117, CRC(e23c6566) SHA1(2f2455246ff3478649560815a7b700cba64cdf71) )
-	ROM_LOAD( "ff_4-3_p0403_pal16r8a.ic29",   0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "ff_4-3-a_p0402_pal16r8a.ic29", 0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "ff_4-3-b_p0403_pal16r8a.ic29", 0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "ff_51-3_p0503_pal16r6a.ic46",  0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
-	ROM_LOAD( "ff_5-1_5135_gal16v8.ic9",      0x000, 0x117, CRC(80d10466) SHA1(b35633737eb3565f94e5c90c5a2ad507f8185f11) )
-	ROM_LOAD( "ff_5-1_5235_gal16v8.ic8",      0x000, 0x117, CRC(26d8db4b) SHA1(ced3d00d72756f9370ec69f7fec4327b98d13c91) )
+	ROM_LOAD( "ff_6-1_635_gal16v8.ic7",       0x200, 0x117, CRC(e23c6566) SHA1(2f2455246ff3478649560815a7b700cba64cdf71) )
+	ROM_LOAD( "ff_4-3_p0403_pal16r8a.ic29",   0x400, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "ff_4-3-a_p0402_pal16r8a.ic29", 0x600, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "ff_4-3-b_p0403_pal16r8a.ic29", 0x800, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "ff_51-3_p0503_pal16r6a.ic46",  0xa00, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
+	ROM_LOAD( "ff_5-1_5135_gal16v8.ic9",      0xc00, 0x117, CRC(80d10466) SHA1(b35633737eb3565f94e5c90c5a2ad507f8185f11) )
+	ROM_LOAD( "ff_5-1_5235_gal16v8.ic8",      0xe00, 0x117, CRC(26d8db4b) SHA1(ced3d00d72756f9370ec69f7fec4327b98d13c91) )
 ROM_END
 
 ROM_START( secretagm )
-	ROM_REGION( 0x100000, "maincpu", 0 ) // on MOD 6/1 board
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on MOD 6/1 board
 	ROM_LOAD16_BYTE( "mod_6-1_ag_603.ic17", 0x00000, 0x10000, CRC(4a61489b) SHA1(41f3b99bbd60ebac567477b98dc7c0158f972d60) )
 	ROM_LOAD16_BYTE( "mod_6-1_ag_606.ic8",  0x00001, 0x10000, CRC(94dfe5a1) SHA1(01a4c25fa883b0a4bea5d8555e38eb40c302b6d5) )
 	ROM_LOAD16_BYTE( "mod_6-1_ag_602.ic20", 0x20000, 0x10000, CRC(bc67dfa0) SHA1(0e32ab1ef9008e95c2e0b8a6916766b255681987) )
@@ -1094,15 +1085,15 @@ ROM_START( secretagm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "mod_51-3_p0502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
+	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_6-1_604_gal16v8.ic13",      0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "mod_6-1_637_gal16v8.ic7",       0x000, 0x117, CRC(c621d812) SHA1(fef3a6cdce3e42f9c6e8ad4590a1c6491f247c60) )
-	ROM_LOAD( "mod_4-3_0_10403_pal16r8a.ic29", 0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "mod_4-3_a_p0403_pal16r8.ic29",  0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "mod_4-3_b_403_pal16r8.ic29",    0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
-	ROM_LOAD( "mod_51-3_503_gal16v8.ic46",     0x000, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
-	ROM_LOAD( "mod_5-1_5137_gal16v8.ic9",      0x000, 0x117, CRC(80d10466) SHA1(b35633737eb3565f94e5c90c5a2ad507f8185f11) )
-	ROM_LOAD( "mod_5-1_5237_gal16v8.ic8",      0x000, 0x117, CRC(26d8db4b) SHA1(ced3d00d72756f9370ec69f7fec4327b98d13c91) )
+	ROM_LOAD( "mod_6-1_637_gal16v8.ic7",       0x200, 0x117, CRC(c621d812) SHA1(fef3a6cdce3e42f9c6e8ad4590a1c6491f247c60) )
+	ROM_LOAD( "mod_4-3_0_10403_pal16r8a.ic29", 0x400, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "mod_4-3_a_p0403_pal16r8.ic29",  0x600, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "mod_4-3_b_403_pal16r8.ic29",    0x800, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
+	ROM_LOAD( "mod_51-3_503_gal16v8.ic46",     0xa00, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
+	ROM_LOAD( "mod_5-1_5137_gal16v8.ic9",      0xc00, 0x117, CRC(80d10466) SHA1(b35633737eb3565f94e5c90c5a2ad507f8185f11) )
+	ROM_LOAD( "mod_5-1_5237_gal16v8.ic8",      0xe00, 0x117, CRC(26d8db4b) SHA1(ced3d00d72756f9370ec69f7fec4327b98d13c91) )
 ROM_END
 
 } // anonymous namespace
