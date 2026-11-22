@@ -35,9 +35,9 @@
     https://blog.system11.org/?p=2960
 
     TODO:
-    - V1: controls lockout and Run press deduced from the BIOS and the
-      system11 description, JAMMA inputs at $b000 bits 4-7 unknown (they
-      start the selected game), single joypad?
+    - V1: controls lockout, Run press and single joypad deduced from the
+      BIOS, JAMMA inputs at $b000 bits 4-7 unknown (VT-2.0 starts the
+      selected game with them)
     - 8155 timer clock is derived from the BIOS timings (the play time counts
       seconds at 100 ticks per second), not measured
     - power-fail TRAP and battery-backed RAM (the BIOS only keeps the RAM
@@ -260,15 +260,23 @@ in each coin insertion routine, you need to insert n coins (based on DSW setting
     V1 hardware, as used by the BIOS:
 
     Same 8085 memory map, without the RAM at $e000 (it only uses the 8155
-    RAM) and without the game ID at $f000. Only RST 5.5 is used.
+    RAM) and without the game ID at $f000. Only RST 5.5 is used (RST 6.5,
+    RST 7.5 and TRAP restart the BIOS).
 
     The attract mode cycles through the slots every minute. The player
-    chooses a game with the joystick and confirms it with start (or any of
-    the inputs at $b000 bits 4-7), then the game runs freely: the start
-    button is wired to Run. With 5 seconds left, the BIOS locks the controls
-    and holds Run for 5 seconds (pausing the game) while the time display
-    stops, then presses Run again and gives back the controls for the last
-    5 seconds before resetting the game.
+    chooses a game with the joystick (VT-2.0 flashes its lamp) and confirms
+    it with start (VT-2.0 also takes the inputs at $b000 bits 4-7), or the
+    BIOS starts it after 20 seconds; the play time counts from 10 seconds
+    later. Then the game runs freely: the start button is wired to Run. With
+    5 seconds left, the BIOS locks the controls and holds Run for 5 seconds
+    (pausing the game) while the time display stops, then presses Run again
+    and gives back the controls for the last 5 seconds before resetting the
+    game.
+
+    Run is taken as pressed when port B bit 3 is high, as the BIOS keeps it
+    low while the controls are locked in attract mode. The BIOS has a single
+    lockout bit and reads only the P2 start button, so the PC Engine is
+    taken to have a single joypad.
 
     8155 port A: two BCD digits of the time display
     8155 port B:
@@ -370,6 +378,7 @@ public:
 
 	void tourvision(machine_config &config) ATTR_COLD;
 
+	ioport_value bios_version_r();
 	DECLARE_INPUT_CHANGED_MEMBER(bookkeeping_changed);
 	DECLARE_INPUT_CHANGED_MEMBER(clear_time_changed);
 
@@ -407,6 +416,8 @@ public:
 	{ }
 
 	void tourvision_v1(machine_config &config) ATTR_COLD;
+
+	ioport_value bios_version_r();
 
 protected:
 	virtual void machine_start() override ATTR_COLD;
@@ -615,6 +626,13 @@ u8 tourvision_state::jamma_r()
 	return (m_io_start->read() & 0xf3) | (BIT(p1, 7) << 2) | (BIT(p1, 5) << 3);
 }
 
+ioport_value tourvision_state::bios_version_r()
+{
+	// in ROM_SYSTEM_BIOS order, for the DIP switches that changed meaning
+	constexpr u8 VERSIONS[] = { 0x60, 0x55, 0x54, 0x53, 0x52, 0x51, 0x43, 0x42, 0x40 };
+	return VERSIONS[system_bios() - 1];
+}
+
 INPUT_CHANGED_MEMBER(tourvision_state::bookkeeping_changed)
 {
 	m_subcpu->set_input_line(I8085_RST65_LINE, newval ? ASSERT_LINE : CLEAR_LINE);
@@ -731,6 +749,13 @@ u8 tourvision_v1_state::jamma_r()
 	// the BIOS reads the start buttons and P1 left/right for the game selection
 	u8 const p1 = m_io_pad[0]->read();
 	return (m_io_start->read() & 0xf2) | BIT(p1, 3) | (BIT(p1, 7) << 2) | (BIT(p1, 5) << 3);
+}
+
+ioport_value tourvision_v1_state::bios_version_r()
+{
+	// in ROM_SYSTEM_BIOS order, for the DIP switches that changed meaning
+	constexpr u8 VERSIONS[] = { 0x20, 0x11 };
+	return VERSIONS[system_bios() - 1];
 }
 
 void tourvision_v1_state::i8155_a_w(u8 data)
@@ -869,11 +894,19 @@ INPUT_PORTS_START( tourvision )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE2 ) PORT_NAME("Clear Time") PORT_CHANGED_MEMBER(DEVICE_SELF, FUNC(tourvision_state::clear_time_changed), 0)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_MEMORY_RESET ) PORT_NAME("RAM Clear (hold on power up)")
 
+	PORT_START("BIOS")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_CUSTOM_MEMBER(FUNC(tourvision_state::bios_version_r))
+
 	PORT_START("DSW2")
-	// with SWB:1, SWB:2 and SWB:8 on, the system shows each game for the purchased time, without letting anyone play
-	PORT_DIPNAME( 0x03, 0x03, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2")
+	// in exhibition mode the system shows each game for the purchased time, without letting anyone play
+	PORT_DIPNAME( 0x03, 0x03, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2") PORT_CONDITION("BIOS", 0xff, NOTLESSTHAN, 0x53)
 	PORT_DIPSETTING(    0x00, "4" ) PORT_CONDITION("DSW2", 0x80, EQUALS, 0x80)
 	PORT_DIPSETTING(    0x00, "4 (Exhibition Mode)" ) PORT_CONDITION("DSW2", 0x80, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x01, "3" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "1" )
+	PORT_DIPNAME( 0x03, 0x03, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2") PORT_CONDITION("BIOS", 0xff, LESSTHAN, 0x53)
+	PORT_DIPSETTING(    0x00, "4" )
 	PORT_DIPSETTING(    0x01, "3" )
 	PORT_DIPSETTING(    0x02, "2" )
 	PORT_DIPSETTING(    0x03, "1" )
@@ -897,8 +930,11 @@ INPUT_PORTS_START( tourvision )
 	PORT_DIPSETTING(    0x10, "1080 seconds" )
 	PORT_DIPSETTING(    0x08, "1200 seconds" )
 	PORT_DIPSETTING(    0x00, "1500 seconds" )
-	PORT_DIPNAME( 0x80, 0x80, "Slot on Power Up" ) PORT_DIPLOCATION("SWB:8")
+	PORT_DIPNAME( 0x80, 0x80, "Slot on Power Up" ) PORT_DIPLOCATION("SWB:8") PORT_CONDITION("BIOS", 0xff, NOTLESSTHAN, 0x53)
 	PORT_DIPSETTING(    0x00, "First" )
+	PORT_DIPSETTING(    0x80, "Last Played" )
+	PORT_DIPNAME( 0x80, 0x80, "Slot on Power Up" ) PORT_DIPLOCATION("SWB:8") PORT_CONDITION("BIOS", 0xff, LESSTHAN, 0x53)
+	PORT_DIPSETTING(    0x00, "First (Exhibition Mode)" )
 	PORT_DIPSETTING(    0x80, "Last Played" )
 INPUT_PORTS_END
 
@@ -915,15 +951,27 @@ INPUT_PORTS_START( tourvision_v1 )
 	PORT_MODIFY("START")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_CUSTOM ) // P1 start
 
+	PORT_START("BIOS")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_CUSTOM_MEMBER(FUNC(tourvision_v1_state::bios_version_r))
+
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2")
+	PORT_DIPNAME( 0x03, 0x03, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2") PORT_CONDITION("BIOS", 0xff, NOTLESSTHAN, 0x20)
 	PORT_DIPSETTING(    0x00, "4" )
 	PORT_DIPSETTING(    0x01, "3" )
 	PORT_DIPSETTING(    0x02, "2" )
 	PORT_DIPSETTING(    0x03, "1" )
-	PORT_DIPNAME( 0x04, 0x04, "P1+P2 Start Returns to Game Selection" ) PORT_DIPLOCATION("SWB:3")
+	PORT_DIPNAME( 0x04, 0x04, "P1+P2 Start Returns to Game Selection" ) PORT_DIPLOCATION("SWB:3") PORT_CONDITION("BIOS", 0xff, NOTLESSTHAN, 0x20)
 	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x07, 0x07, "Coin B Coins" ) PORT_DIPLOCATION("SWB:1,2,3") PORT_CONDITION("BIOS", 0xff, LESSTHAN, 0x20)
+	PORT_DIPSETTING(    0x00, "8" )
+	PORT_DIPSETTING(    0x01, "7" )
+	PORT_DIPSETTING(    0x02, "6" )
+	PORT_DIPSETTING(    0x03, "5" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "3" )
+	PORT_DIPSETTING(    0x06, "2" )
+	PORT_DIPSETTING(    0x07, "1" )
 	PORT_DIPNAME( 0x78, 0x78, "Coin B Play Time" ) PORT_DIPLOCATION("SWB:4,5,6,7")
 	PORT_DIPSETTING(    0x78, "240 seconds" )
 	PORT_DIPSETTING(    0x70, "300 seconds" )
@@ -1022,4 +1070,4 @@ ROM_END
 
 //     YEAR  NAME       PARENT   MACHINE        INPUT          CLASS                INIT             ROT   COMPANY                  FULLNAME                                FLAGS
 GAMEL( 19??, tourvis,   0,       tourvision,    tourvision,    tourvision_state,    init_pce_common, ROT0, u8"bootleg (TourVisión)", u8"TourVisión V4 (PC Engine bootleg)", MACHINE_IS_BIOS_ROOT, layout_tourvis )
-GAMEL( 19??, tourvisv1, tourvis, tourvision_v1, tourvision_v1, tourvision_v1_state, init_pce_common, ROT0, u8"bootleg (TourVisión)", u8"TourVisión V1 (PC Engine bootleg)", MACHINE_IS_BIOS_ROOT | MACHINE_NOT_WORKING, layout_tourvisv1 )
+GAMEL( 19??, tourvisv1, tourvis, tourvision_v1, tourvision_v1, tourvision_v1_state, init_pce_common, ROT0, u8"bootleg (TourVisión)", u8"TourVisión V1 (PC Engine bootleg)", MACHINE_IS_BIOS_ROOT, layout_tourvisv1 )
