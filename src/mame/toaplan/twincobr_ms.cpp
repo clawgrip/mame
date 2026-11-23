@@ -25,9 +25,8 @@
     frame the program converts the palette, reversing the pens because the MOD 4 and MOD 51 boards
     invert the pixels, and the sprite list, giving 16 sprite palettes to the colours in use: from the
     bottom for the sprites the original game draws in front of the foreground and from the top for
-    the others, which colour bit 3 puts behind it. The first sprite of each colour it converts chooses
-    for all of them. It sets the flip screen switch of the original game and undoes the flip on the
-    sprites.
+    the others. The first sprite of each colour it converts chooses for all of them. It sets the flip
+    screen switch of the original game and undoes the flip on the sprites.
 
     The second halves of 603 and 606 hold the original second program pair (b30_26_ii.8j and
     b30_27_ii.8h), not used.
@@ -37,8 +36,9 @@
       pixels left and the sprites 5 pixels left and 2 lines down, the player's helicopter off the centre of
       its helipad; the corrections keep the alignment of the original game. Twin Cobra is the only game
       with horizontal PROM 207, the reason is unknown
-    - sprite priority, deduced from the program: the battleship's turrets share their colour with
-      sprites behind the foreground, so they go behind the ship, while the original game shows them
+    - sprite priority: the program's palettes suggest that colour bit 3 puts a sprite behind the
+      foreground, but the battleship's turrets share their colour with sprites behind it and would
+      be hidden by the ship, while the original game shows them, so it isn't emulated
     - the program still writes a few colour changes to the palette addresses of the original game
       (0x509e0, 0x50b30 and 0x50bd0), past the palette RAM; its converted copy at 0x2f27e is never
       called
@@ -101,7 +101,6 @@ private:
 	u8 irq_ack_r();
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
-	u32 sprite_priority(u8 attr, u8 color);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
 
@@ -153,12 +152,6 @@ void twincobr_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bo
 	x8 = BIT(~attr, 7);
 }
 
-u32 twincobr_ms_state::sprite_priority(u8 attr, u8 color)
-{
-	// colour bit 3 puts the sprite behind the foreground
-	return BIT(color, 3) ? GFX_PMASK_1 : 0;
-}
-
 uint32_t twincobr_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	// the program writes the flip screen scroll of the original game plus 0x70 (x) and minus 0x116 (y)
@@ -169,10 +162,9 @@ uint32_t twincobr_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 		board.set_scrolly(m_scroll[i][1]);
 	}
 
-	screen.priority().fill(0, cliprect);
 	m_mod4[1]->draw(screen, bitmap, cliprect);
-	m_mod4[0]->draw(screen, bitmap, cliprect, 0, 1);
-	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0), screen.priority());
+	m_mod4[0]->draw(screen, bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_tx->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -286,7 +278,6 @@ void twincobr_ms_state::twincobrm(machine_config &config)
 	m_mod51->set_position_correction(5, -2); // see the TODO
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(twincobr_ms_state::sprite_cb));
-	m_mod51->set_priority_callback(FUNC(twincobr_ms_state::sprite_priority));
 
 	GAELCO_MS_MOD4(config, m_mod4[0]);
 	m_mod4[0]->set_timing(m_mod21);

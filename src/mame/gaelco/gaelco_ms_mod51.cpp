@@ -40,10 +40,9 @@
 
     The line buffer keeps the pixel of the lowest entry, and a colour bit can
     put it behind a tile layer: colour bit 3 puts the sprite in front of the
-    foreground on Shadow Warriors and behind it on Twin Cobra. Drivers give
-    the priority mask of each entry and draw the tile layers into the screen
-    priority bitmap first, so a sprite behind a layer also hides the higher
-    entries there.
+    foreground on Shadow Warriors. Drivers give the priority mask of each
+    entry and draw the tile layers into the screen priority bitmap first, so
+    a sprite behind a layer also hides the higher entries there.
 
     TODO:
     - what drives PROM address bits 4-7
