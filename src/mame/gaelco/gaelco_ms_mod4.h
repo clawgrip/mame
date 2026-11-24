@@ -78,7 +78,7 @@ private:
 
 	required_region_ptr<u8> m_rom;
 	optional_region_ptr<u8> m_prom;
-	optional_device<gaelco_ms_timing_interface> m_timing;
+	optional_device<device_gaelco_ms_timing_interface> m_timing;
 	memory_share_creator<u16> m_ram;
 	tile_delegate m_tile_cb;
 	tilemap_mapper_delegate m_mapper_cb;

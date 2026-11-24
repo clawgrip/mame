@@ -523,7 +523,8 @@ uint32_t bigkarnk_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 	const int NUM_SPRITES = 0x200;
 	const int X_EXTRA_OFFSET = 112;
 
-	for (int i = NUM_SPRITES-2; i >= 0; i-=2)
+	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
+	for (int i = NUM_SPRITES-2; i >= 2; i-=2)
 	{
 		gfx_element *gfx = m_gfxdecode->gfx(2);
 

@@ -126,12 +126,12 @@ private:
 	u8 m_bank3 = 0;
 
 	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
-	template <unsigned Which> void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write) ATTR_COLD;
+	template <u32 Which> void install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write) ATTR_COLD;
 	void bank_w(u8 data);
 	void vblank_w(int state);
 	u8 irq_ack_r();
-	template <unsigned Which> u8 mod4_r(offs_t offset);
-	template <unsigned Which> void mod4_w(offs_t offset, u8 data);
+	template <u32 Which> u8 mod4_r(offs_t offset);
+	template <u32 Which> void mod4_w(offs_t offset, u8 data);
 
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
@@ -143,7 +143,7 @@ private:
 };
 
 
-template <unsigned Which>
+template <u32 Which>
 u8 gryzor_ms_state::mod4_r(offs_t offset)
 {
 	// two pages of 1024 attribute and 1024 code bytes, as in the video chips of the original game
@@ -151,7 +151,7 @@ u8 gryzor_ms_state::mod4_r(offs_t offset)
 	return BIT(offset, 10) ? m_mod4[Which]->code_r(entry) : m_mod4[Which]->attr_r(entry);
 }
 
-template <unsigned Which>
+template <u32 Which>
 void gryzor_ms_state::mod4_w(offs_t offset, u8 data)
 {
 	offs_t const entry = (offset & 0x3ff) | (BIT(offset, 11) << 10);
@@ -243,7 +243,7 @@ u8 gryzor_ms_state::irq_ack_r()
 }
 
 
-template <unsigned Which>
+template <u32 Which>
 void gryzor_ms_state::install_mod4(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write)
 {
 	if (write)
@@ -267,7 +267,7 @@ void gryzor_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_t 
 		case 0x61: // palette, A10 selects the blue byte
 			for (offs_t area = start; area < end; area += 0x800)
 			{
-				for (unsigned half = 0; half < 2; half++)
+				for (u32 half = 0; half < 2; half++)
 				{
 					offs_t const first = area + (half << 10);
 					if (write)

@@ -8,7 +8,7 @@
 
     MOD 9/2   - "SYSTEM 2" sound, I/O and video timing board: Z0840006PSC, 2 x YM2203C, 2 x Y3014B, OKI M5205
                 with a 384 kHz resonator, 20 MHz and 16 MHz XTALs, 3 x 6116 RAM, three GALs (9138, 9238 and
-                9338), two 8 dip switches banks and optocouplers for the inputs.
+                9338), two 8 DIP switches banks and optocouplers for the inputs.
     CPU board - With the COMP 3Z-1 sub board on top: 2 x Z0840008PSC, 4 ROMs, 2 x 6264 RAM, 16 MHz XTAL
                 and two GALs (3138 and 3238). The board under it has another 6264.
     MOD 4/3   - Tilemap board for the text: logic + 4 ROMs, GAL 403, long thin sub-board C0473.
@@ -16,7 +16,7 @@
     MOD 4/3   - Tilemap board for the background: logic + 4 ROMs, PAL P0403, long thin sub-board C0475.
     MOD 51/1  - Sprite board: logic, PROM P0502, PAL P0503 and the 8 ROMs on a REF 1M sub-board.
 
-    PCB pics, dip switches and more info: https://www.recreativas.org/modular-system-euro-league-4219-gaelco-sa
+    PCB pics, DIP switches and more info: https://www.recreativas.org/modular-system-euro-league-4219-gaelco-sa
 
     The programs are those of the Euro League hack of World Cup '90 in wc90b.cpp with the hardware
     accesses moved. The first CPU writes the tile maps of the original game straight to the MOD 4
@@ -100,9 +100,9 @@ private:
 	u8 m_adpcm_data = 0;
 	bool m_adpcm_toggle = false;
 
-	u8 mod4_read(unsigned which, offs_t offset) const;
-	template <unsigned Which> u8 mod4_r(offs_t offset) { return mod4_read(Which, offset); }
-	template <unsigned Which> void mod4_w(offs_t offset, u8 data);
+	u8 mod4_read(u32 which, offs_t offset) const;
+	template <u32 Which> u8 mod4_r(offs_t offset) { return mod4_read(Which, offset); }
+	template <u32 Which> void mod4_w(offs_t offset, u8 data);
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	u32 sprite_priority(u8 attr, u8 color);
@@ -122,14 +122,14 @@ private:
 };
 
 
-u8 euroleag_ms_state::mod4_read(unsigned which, offs_t offset) const
+u8 euroleag_ms_state::mod4_read(u32 which, offs_t offset) const
 {
 	// each 4 KB holds 2048 attribute bytes and then 2048 code bytes, as in the video RAM of the original game
 	offs_t const entry = (offset & 0x7ff) | (BIT(offset, 12) << 11);
 	return BIT(offset, 11) ? m_mod4[which]->code_r(entry) : m_mod4[which]->attr_r(entry);
 }
 
-template <unsigned Which>
+template <u32 Which>
 void euroleag_ms_state::mod4_w(offs_t offset, u8 data)
 {
 	offs_t const entry = (offset & 0x7ff) | (BIT(offset, 12) << 11);
@@ -165,7 +165,7 @@ u32 euroleag_ms_state::sprite_priority(u8 attr, u8 color)
 u32 euroleag_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	// the offsets are fitted, see the TODO
-	auto const scroll = [this] (unsigned which, offs_t offset)
+	auto const scroll = [this] (u32 which, offs_t offset)
 	{
 		m_mod4[which]->set_scrollx(33 + (mod4_read(which, offset) | (mod4_read(which, offset + 1) << 8)));
 		m_mod4[which]->set_scrolly(1 + (mod4_read(which, offset + 2) | (mod4_read(which, offset + 3) << 8)));
@@ -297,7 +297,7 @@ static INPUT_PORTS_START( euroleagm )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 
-	// on the SYSTEM 2 board, locations from the dip switch sheet of the cage
+	// on the MOD 9/2 board, locations from the DIP switch sheet of the cage
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:1,2,3,4")
 	PORT_DIPSETTING(    0x00, DEF_STR( 10C_1C ) )
@@ -419,7 +419,7 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	m_mod4[MOD4_BG]->set_tile_callback(FUNC(euroleag_ms_state::tile_cb));
 
 	GAELCO_MS_MOD9(config, m_mod9, 20_MHz_XTAL);
-	m_mod9->set_screen("screen");
+	m_mod9->set_screen(screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
@@ -450,7 +450,7 @@ ROM_START( euroleagm )
 	ROM_LOAD( "3z-1_fu303.ic19", 0x00000, 0x10000, CRC(348195fa) SHA1(41c59e38ec4ba4f3c2185dd32dbf4ea0318ab375) ) // c000-dfff and f000-ffff empty
 	ROM_LOAD( "3z-1_fu304.ic16", 0x10000, 0x10000, CRC(9e421c4b) SHA1(e23a1f1d5d1e960696f45df653869712eb889839) ) // banked at f000-f7ff
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on the SYSTEM 2 board
+	ROM_REGION( 0x10000, "audiocpu", 0 ) // on the MOD 9/2 board
 	ROM_LOAD( "system2_fu101.ic6", 0x00000, 0x10000, CRC(712566ca) SHA1(9e46f9d449ff549b7a6d82283d8f903189b058e7) )
 
 	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on the MOD 4/3 board with sub-board C0473

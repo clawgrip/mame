@@ -70,11 +70,11 @@ public:
 	void clock(u32 inputs);
 
 private:
-	bool term(unsigned row, u32 levels) const
+	bool term(u32 row, u32 levels) const
 	{
 		return m_enabled[row] && ((levels & m_high[row]) == m_high[row]) && !(levels & m_low[row]);
 	}
-	bool sum(unsigned cell, unsigned first, u32 levels) const;
+	bool sum(u32 cell, u32 first, u32 levels) const;
 	u32 array_levels(u32 inputs) const;
 
 	std::array<u32, 64> m_high; // the pins each product term needs high
@@ -100,7 +100,7 @@ gal20v8::gal20v8(u8 const *data, u32 length, char const *tag) :
 	if (!file || (jedbin_parse(*file, &jed) != JEDERR_NONE) || (jed.numfuses != 2706) || jed_get_fuse(&jed, 2704))
 		throw emu_fatalerror("%s: bad GAL20V8 fuse map, or not in registered mode\n", tag);
 
-	for (unsigned row = 0; row < 64; row++)
+	for (u32 row = 0; row < 64; row++)
 	{
 		m_enabled[row] = jed_get_fuse(&jed, 2640 + row);
 		for (auto const &input : INPUTS)
@@ -112,7 +112,7 @@ gal20v8::gal20v8(u8 const *data, u32 length, char const *tag) :
 		}
 		m_blown[row] = !m_high[row] && !m_low[row];
 	}
-	for (unsigned cell = 0; cell < 8; cell++)
+	for (u32 cell = 0; cell < 8; cell++)
 	{
 		if (!jed_get_fuse(&jed, 2632 + cell))
 			m_registered |= 1U << cell;
@@ -121,9 +121,9 @@ gal20v8::gal20v8(u8 const *data, u32 length, char const *tag) :
 	}
 }
 
-bool gal20v8::sum(unsigned cell, unsigned first, u32 levels) const
+bool gal20v8::sum(u32 cell, u32 first, u32 levels) const
 {
-	for (unsigned row = cell * 8 + first; row < (cell + 1) * 8; row++)
+	for (u32 row = cell * 8 + first; row < (cell + 1) * 8; row++)
 	{
 		if (!m_blown[row] && term(row, levels))
 			return true;
@@ -135,15 +135,15 @@ u32 gal20v8::array_levels(u32 inputs) const
 {
 	// the array sees the flip-flops and the pins of the combinatorial outputs, which can feed each other
 	u32 levels = inputs;
-	for (unsigned cell = 0; cell < 8; cell++)
+	for (u32 cell = 0; cell < 8; cell++)
 	{
 		if (BIT(m_registered, cell))
 			levels = (levels & ~(1U << (22 - cell))) | (u32(BIT(m_q, cell)) << (22 - cell));
 	}
-	for (unsigned pass = 0; pass < 8; pass++)
+	for (u32 pass = 0; pass < 8; pass++)
 	{
 		u32 const previous = levels;
-		for (unsigned cell = 0; cell < 8; cell++)
+		for (u32 cell = 0; cell < 8; cell++)
 		{
 			// the first term enables the output
 			if (!BIT(m_registered, cell) && term(cell * 8, levels))
@@ -158,7 +158,7 @@ u32 gal20v8::array_levels(u32 inputs) const
 u32 gal20v8::pins(u32 inputs) const
 {
 	u32 levels = array_levels(inputs);
-	for (unsigned cell = 0; cell < 8; cell++)
+	for (u32 cell = 0; cell < 8; cell++)
 	{
 		if (BIT(m_registered, cell))
 			levels ^= 1U << (22 - cell);
@@ -170,7 +170,7 @@ void gal20v8::clock(u32 inputs)
 {
 	u32 const levels = array_levels(inputs);
 	u8 q = 0;
-	for (unsigned cell = 0; cell < 8; cell++)
+	for (u32 cell = 0; cell < 8; cell++)
 	{
 		if (BIT(m_registered, cell) && (sum(cell, 0, levels) != BIT(m_active_high, cell)))
 			q |= 1U << cell;
@@ -210,7 +210,7 @@ DEFINE_DEVICE_TYPE(GAELCO_MS_MOD9, gaelco_ms_mod9_device, "gaelco_ms_mod9", "Gae
 
 gaelco_ms_mod9_device::gaelco_ms_mod9_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD9, tag, owner, clock),
-	gaelco_ms_timing_interface(mconfig, *this),
+	device_gaelco_ms_timing_interface(mconfig, *this),
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_gal(*this, DEVICE_SELF)
 {
@@ -231,8 +231,8 @@ void gaelco_ms_mod9_device::device_start()
 	// by counter values
 	std::vector<u8> frame(512 * 512, 0xff);
 	u16 h = 0, v = 0;
-	unsigned frames = 0;
-	for (unsigned step = 0; (frames < 3) && (step < 4 * 512 * 512); step++)
+	u32 frames = 0;
+	for (u32 step = 0; (frames < 3) && (step < 4 * 512 * 512); step++)
 	{
 		if (frames == 2)
 		{

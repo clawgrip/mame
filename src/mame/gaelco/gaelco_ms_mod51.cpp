@@ -86,7 +86,7 @@ void gaelco_ms_mod51_device::device_start()
 
 	// the pixel is on address bits 0-3
 	m_transmask = 0;
-	for (unsigned pen = 0; pen < 16; pen++)
+	for (u32 pen = 0; pen < 16; pen++)
 	{
 		if (!(m_prom[pen] & 0x0f))
 			m_transmask |= 1 << pen;
@@ -107,7 +107,7 @@ void gaelco_ms_mod51_device::device_start()
 }
 
 
-void gaelco_ms_mod51_device::entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask)
+void gaelco_ms_mod51_device::entry(u32 index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask)
 {
 	offs_t const offset = index * 4;
 	u8 const color = m_color_offset ? m_list_r(m_color_offset + offset) : 0;
@@ -146,9 +146,9 @@ void gaelco_ms_mod51_device::draw_list(bitmap_ind16 &bitmap, const rectangle &cl
 	u16 const origin = (x + m_x_delta) & xmask;
 
 	// against the tile layers the lowest entry goes first and keeps its pixels
-	for (unsigned i = 1; i < m_entries; i++)
+	for (u32 i = 1; i < m_entries; i++)
 	{
-		unsigned const index = priority ? i : (m_entries - i);
+		u32 const index = priority ? i : (m_entries - i);
 		entry(index, code, palette, flipx, flipy, x, y, pmask);
 		int sx = (x - origin + m_correction_x) & xmask;
 		int const sy = m_origin_y + m_y_base - y + m_correction_y;

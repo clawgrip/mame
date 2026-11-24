@@ -188,7 +188,8 @@ void wrally_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, 
 	const int NUM_SPRITES = 0x200;
 	const int X_EXTRA_OFFSET = 78;
 
-	for (int i = 0; i < NUM_SPRITES; i += 2)
+	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
+	for (int i = 2; i < NUM_SPRITES; i += 2)
 	{
 		gfx_element* gfx = m_gfxdecode->gfx(3);
 

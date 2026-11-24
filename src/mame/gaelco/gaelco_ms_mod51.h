@@ -51,11 +51,11 @@ protected:
 	virtual void device_start() override ATTR_COLD;
 
 private:
-	void entry(unsigned index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask);
+	void entry(u32 index, u32 &code, u32 &palette, bool &flipx, bool &flipy, u16 &x, u8 &y, u32 &pmask);
 	void draw_list(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 *priority);
 
 	required_region_ptr<u8> m_prom;
-	optional_device<gaelco_ms_timing_interface> m_timing;
+	optional_device<device_gaelco_ms_timing_interface> m_timing;
 	devcb_read8 m_list_r;
 	sprite_delegate m_sprite_cb;
 	priority_delegate m_priority_cb;

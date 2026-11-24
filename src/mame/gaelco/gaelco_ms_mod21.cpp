@@ -55,7 +55,7 @@ DEFINE_DEVICE_TYPE(GAELCO_MS_MOD21, gaelco_ms_mod21_device, "gaelco_ms_mod21", "
 gaelco_ms_mod21_device::gaelco_ms_mod21_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD21, tag, owner, clock),
 	device_palette_interface(mconfig, *this),
-	gaelco_ms_timing_interface(mconfig, *this),
+	device_gaelco_ms_timing_interface(mconfig, *this),
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_prom(*this, DEVICE_SELF),
 	m_green_red{ },

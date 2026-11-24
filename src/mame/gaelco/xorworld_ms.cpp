@@ -155,7 +155,8 @@ u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	const int X_EXTRA_OFFSET = global_x_offset + spritexoffset;
 	// m_scrollregs[3] would be sprite y offset?
 
-	for (int i = NUM_SPRITES - 2; i >= 0; i -= 2)
+	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
+	for (int i = NUM_SPRITES - 2; i >= 2; i -= 2)
 	{
 		gfx_element* gfx = m_gfxdecode->gfx(0);
 

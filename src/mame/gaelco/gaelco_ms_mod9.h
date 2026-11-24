@@ -10,7 +10,7 @@
 #include "screen.h"
 
 
-class gaelco_ms_mod9_device : public device_t, public gaelco_ms_timing_interface
+class gaelco_ms_mod9_device : public device_t, public device_gaelco_ms_timing_interface
 {
 public:
 	gaelco_ms_mod9_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);

@@ -10,7 +10,7 @@
 
 // the board that generates the video timing of a cage (MOD 21/1 or MOD 9/2), which the tile and sprite boards
 // position their pictures from
-class gaelco_ms_timing_interface : public device_interface
+class device_gaelco_ms_timing_interface : public device_interface
 {
 public:
 	// where the first visible pixel and line are in the screen bitmap
@@ -23,7 +23,7 @@ public:
 	u16 vsync_to_visible() const { return m_vsync_to_visible; }
 
 protected:
-	gaelco_ms_timing_interface(const machine_config &mconfig, device_t &device);
+	device_gaelco_ms_timing_interface(const machine_config &mconfig, device_t &device);
 
 	// takes the totals of a line and a frame, the first visible and the first blanked pixel and line, and the
 	// first ones after the sync pulses, and checks the screen against them

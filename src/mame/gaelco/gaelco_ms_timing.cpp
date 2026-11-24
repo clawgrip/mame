@@ -14,7 +14,7 @@
 #include "gaelco_ms_timing.h"
 
 
-gaelco_ms_timing_interface::gaelco_ms_timing_interface(const machine_config &mconfig, device_t &device) :
+device_gaelco_ms_timing_interface::device_gaelco_ms_timing_interface(const machine_config &mconfig, device_t &device) :
 	device_interface(device, "gaelco_ms_timing"),
 	m_origin_x(0),
 	m_origin_y(0),
@@ -25,8 +25,8 @@ gaelco_ms_timing_interface::gaelco_ms_timing_interface(const machine_config &mco
 }
 
 
-void gaelco_ms_timing_interface::set_timing(screen_device &screen, u32 pixel_clock, u16 htotal, u16 hvisible, u16 hblank,
-		u16 hsync_end, u16 vtotal, u16 vvisible, u16 vblank, u16 vsync_end)
+void device_gaelco_ms_timing_interface::set_timing(screen_device &screen, u32 pixel_clock, u16 htotal, u16 hvisible,
+		u16 hblank, u16 hsync_end, u16 vtotal, u16 vvisible, u16 vblank, u16 vsync_end)
 {
 	m_hsync_to_visible = (hvisible + htotal - hsync_end) % htotal;
 	m_hblank_to_visible = (hvisible + htotal - hblank) % htotal;
