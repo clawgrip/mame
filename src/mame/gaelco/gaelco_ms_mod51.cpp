@@ -81,7 +81,7 @@ gaelco_ms_mod51_device::gaelco_ms_mod51_device(const machine_config &mconfig, co
 
 void gaelco_ms_mod51_device::device_start()
 {
-	if (m_timing && !m_timing->started())
+	if (m_timing && !m_timing->device().started())
 		throw device_missing_dependencies();
 
 	// the pixel is on address bits 0-3
@@ -97,7 +97,7 @@ void gaelco_ms_mod51_device::device_start()
 	if (!m_sprite_cb.isnull())
 	{
 		if (!m_timing)
-			fatalerror("%s: drawing the sprite list needs the MOD 21/1 timing\n", tag());
+			fatalerror("%s: drawing the sprite list needs the video timing\n", tag());
 
 		m_x_delta = m_timing->hblank_to_visible() - 2;
 		m_y_base = 241 - m_timing->vsync_to_visible();

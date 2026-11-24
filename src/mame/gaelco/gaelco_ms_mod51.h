@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "gaelco_ms_mod21.h"
+#include "gaelco_ms_timing.h"
 
 
 class gaelco_ms_mod51_device : public device_t
@@ -20,7 +20,7 @@ public:
 
 	gaelco_ms_mod51_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock = 0);
 
-	// the MOD 21/1 board whose timing the line buffer follows
+	// the MOD 21/1 or MOD 9/2 board whose timing the line buffer follows
 	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
 	// list length, where the colour bytes start (0 for none) and whether X has a bit 8
 	void set_list(u16 entries, offs_t color_offset, bool x_bit8)
@@ -55,7 +55,7 @@ private:
 	void draw_list(bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element &gfx, bitmap_ind8 *priority);
 
 	required_region_ptr<u8> m_prom;
-	optional_device<gaelco_ms_mod21_device> m_timing;
+	optional_device<gaelco_ms_timing_interface> m_timing;
 	devcb_read8 m_list_r;
 	sprite_delegate m_sprite_cb;
 	priority_delegate m_priority_cb;

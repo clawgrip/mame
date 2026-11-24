@@ -99,7 +99,7 @@ void gaelco_ms_mod4_device::device_start()
 {
 	if (m_timing)
 	{
-		if (!m_timing->started())
+		if (!m_timing->device().started())
 			throw device_missing_dependencies();
 
 		// the counters start at the end of the sync pulses, the pixels come out 10 pixels after the counter

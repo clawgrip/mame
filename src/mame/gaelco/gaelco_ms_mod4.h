@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "gaelco_ms_mod21.h"
+#include "gaelco_ms_timing.h"
 
 #include "tilemap.h"
 
@@ -40,7 +40,7 @@ public:
 		m_rows = rows;
 		m_step = 1;
 	}
-	// the MOD 21/1 board whose timing the scroll counters follow
+	// the MOD 21/1 or MOD 9/2 board whose timing the scroll counters follow
 	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
 	// added to the scroll for the games whose pictures the fitted positions don't explain
 	void set_scroll_correction(int x, int y) { m_scroll_correction_x = x; m_scroll_correction_y = y; }
@@ -78,7 +78,7 @@ private:
 
 	required_region_ptr<u8> m_rom;
 	optional_region_ptr<u8> m_prom;
-	optional_device<gaelco_ms_mod21_device> m_timing;
+	optional_device<gaelco_ms_timing_interface> m_timing;
 	memory_share_creator<u16> m_ram;
 	tile_delegate m_tile_cb;
 	tilemap_mapper_delegate m_mapper_cb;

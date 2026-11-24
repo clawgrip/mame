@@ -55,15 +55,11 @@ DEFINE_DEVICE_TYPE(GAELCO_MS_MOD21, gaelco_ms_mod21_device, "gaelco_ms_mod21", "
 gaelco_ms_mod21_device::gaelco_ms_mod21_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD21, tag, owner, clock),
 	device_palette_interface(mconfig, *this),
+	gaelco_ms_timing_interface(mconfig, *this),
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_prom(*this, DEVICE_SELF),
 	m_green_red{ },
-	m_blue{ },
-	m_origin_x(0),
-	m_origin_y(0),
-	m_hsync_to_visible(0),
-	m_hblank_to_visible(0),
-	m_vsync_to_visible(0)
+	m_blue{ }
 {
 }
 
@@ -72,30 +68,14 @@ void gaelco_ms_mod21_device::device_start()
 	// the horizontal PROM is at 0x000 and the vertical one at 0x100, two pixels or lines per entry
 	u16 const hentries = entries(0x000);
 	u16 const ventries = entries(0x100);
-	u16 const htotal = hentries * 2;
-	u16 const vtotal = ventries * 2;
 
 	u16 hvisible, hblank, hsync, hsync_end, vvisible, vblank, vsync, vsync_end;
 	low_run(0x000, hentries, 0, hvisible, hblank);
 	low_run(0x000, hentries, 2, hsync, hsync_end);
 	low_run(0x100, ventries, 1, vvisible, vblank);
 	low_run(0x100, ventries, 2, vsync, vsync_end);
-	m_hsync_to_visible = (hvisible + hentries - hsync_end) % hentries * 2;
-	m_hblank_to_visible = (hvisible + hentries - hblank) % hentries * 2;
-	m_vsync_to_visible = (vvisible + ventries - vsync_end) % ventries * 2;
-
-	// the visible area of the screen starts at the first visible pixel and line
-	u16 const width = (hblank + hentries - hvisible) % hentries * 2;
-	u16 const height = (vblank + ventries - vvisible) % ventries * 2;
-	rectangle const &visarea = m_screen->visible_area();
-	m_origin_x = visarea.left();
-	m_origin_y = visarea.top();
-	if ((m_screen->clock() != clock() / 4) || (m_screen->width() != htotal) || (m_screen->height() != vtotal) ||
-			(visarea.width() != width) || (visarea.height() != height))
-	{
-		fatalerror("%s: the screen doesn't match the timing PROMs, set_raw(%u, %u, hbend, hbend + %u, %u, vbend, vbend + %u)\n",
-				tag(), clock() / 4, htotal, width, vtotal, height);
-	}
+	set_timing(*m_screen, clock() / 4, hentries * 2, hvisible * 2, hblank * 2, hsync_end * 2,
+			ventries * 2, vvisible * 2, vblank * 2, vsync_end * 2);
 
 	save_item(NAME(m_green_red));
 	save_item(NAME(m_blue));

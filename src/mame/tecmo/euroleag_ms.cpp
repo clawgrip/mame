@@ -6,9 +6,9 @@
     Modular System is a stack of boards in a cage, there are other games on this 'system'.
     For this game the cage contains 6 boards:
 
-    SYSTEM 2  - Sound and I/O board: Z0840006PSC, 2 x YM2203C, 2 x Y3014B, OKI M5205 with a 384 kHz
-                resonator, 20 MHz and 16 MHz XTALs, 3 x 6116 RAM, three GALs (9138, 9238 and 9338), two
-                8 dip switches banks and optocouplers for the inputs.
+    MOD 9/2   - "SYSTEM 2" sound, I/O and video timing board: Z0840006PSC, 2 x YM2203C, 2 x Y3014B, OKI M5205
+                with a 384 kHz resonator, 20 MHz and 16 MHz XTALs, 3 x 6116 RAM, three GALs (9138, 9238 and
+                9338), two 8 dip switches banks and optocouplers for the inputs.
     CPU board - With the COMP 3Z-1 sub board on top: 2 x Z0840008PSC, 4 ROMs, 2 x 6264 RAM, 16 MHz XTAL
                 and two GALs (3138 and 3238). The board under it has another 6264.
     MOD 4/3   - Tilemap board for the text: logic + 4 ROMs, GAL 403, long thin sub-board C0473.
@@ -25,22 +25,23 @@
     CPU builds the MOD 51 sprite list, with colours 0-7 that the sprites take from palettes 8-15, and
     writes the palette in the format of the original game.
 
-    There is no MOD 21/1 board: the video timing and the palette RAM are elsewhere, maybe on the
-    SYSTEM 2 board, which has counters, a GAL20V8 and two of the 6116.
+    There is no MOD 21/1 board: the MOD 9/2 board generates the video timing, and the palette RAM is
+    elsewhere, maybe the two 6116 next to its timing GAL.
 
     Gaelco requested the registry of the "Euro League" trademark on 1990, and it was a Gaelco
     protected trademark (in Spain) until 1999 (they paid a 5-year renew in 1994):
     https://www.patentes-y-marcas.com/marca/euro-league-m1546246
 
     TODO:
-    - the video timing, which positions the layers and the sprites; the offsets are fitted
-    - draw the sprites with the MOD 51 device, which needs that timing
+    - the scroll offsets of the MOD 4 boards, fitted: with the MOD 9/2 timing the position model of the
+      MOD 4 device puts the layers 5 pixels left (see the MOD 9/2 TODO for the horizontal sync)
 */
 
 #include "emu.h"
 
 #include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
+#include "../gaelco/gaelco_ms_mod9.h"
 
 #include "cpu/z80/z80.h"
 #include "machine/gen_latch.h"
@@ -67,6 +68,7 @@ public:
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod4(*this, { "mod4_tx", "mod4_fg", "mod4_bg" }),
 		m_mod51(*this, "mod51"),
+		m_mod9(*this, "mod9"),
 		m_spriteram(*this, "spriteram"),
 		m_mainbank(*this, "mainbank"),
 		m_subbank(*this, "subbank"),
@@ -89,6 +91,7 @@ private:
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<u8> m_spriteram;
 	required_memory_bank m_mainbank;
 	required_memory_bank m_subbank;
@@ -101,7 +104,8 @@ private:
 	template <unsigned Which> u8 mod4_r(offs_t offset) { return mod4_read(Which, offset); }
 	template <unsigned Which> void mod4_w(offs_t offset, u8 data);
 	void tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect, bool behind);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u32 sprite_priority(u8 attr, u8 color);
 	u32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_bank_w(u8 data);
@@ -141,25 +145,21 @@ void euroleag_ms_state::tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	code = (data & 0x03ff) | (BIT(data, 11) << 10);
 }
 
-void euroleag_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect, bool behind)
+void euroleag_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// the MOD 51 list: entry 0 isn't a sprite, the lower entries are drawn over the higher ones and the colour
-	// bytes are 0x200 bytes after the list
-	gfx_element &gfx = *m_gfxdecode->gfx(0);
-	for (offs_t offs = 0x200 - 4; offs >= 4; offs -= 4)
-	{
-		// code bits 8-11 in attribute bits 0-3, bit 4 puts the sprite behind the foreground and text, X bit 8 in
-		// bit 5, flip X in bit 6 and flip Y in bit 7
-		u8 const attr = m_spriteram[offs + 3];
-		if (BIT(attr, 4) != behind)
-			continue;
+	// code bits 8-11 in attribute bits 0-3, X bit 8 in bit 5, flip X in bit 6 and flip Y in bit 7; the program writes
+	// colours 0-7 and the sprites take palettes 8-15
+	code |= (attr & 0x0f) << 8;
+	palette = 8 | (color & 0x07);
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(attr, 5);
+}
 
-		u32 const code = m_spriteram[offs] | ((attr & 0x0f) << 8);
-		u32 const color = 8 | (m_spriteram[offs + 0x200] & 0x07);
-		int const sx = m_spriteram[offs + 2] - (BIT(attr, 5) ? 0 : 0x100);
-		int const sy = 240 - m_spriteram[offs + 1];
-		gfx.transmask(bitmap, cliprect, code, color, BIT(attr, 6), BIT(attr, 7), sx, sy, m_mod51->transmask());
-	}
+u32 euroleag_ms_state::sprite_priority(u8 attr, u8 color)
+{
+	// attribute bit 4 puts the sprite behind the foreground and the text
+	return BIT(attr, 4) ? GFX_PMASK_1 : 0;
 }
 
 u32 euroleag_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -174,11 +174,11 @@ u32 euroleag_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	scroll(MOD4_FG, 0x0ffc);
 	scroll(MOD4_BG, 0x1f00);
 
+	screen.priority().fill(0, cliprect);
 	m_mod4[MOD4_BG]->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect, true);
-	m_mod4[MOD4_FG]->draw(screen, bitmap, cliprect);
-	m_mod4[MOD4_TX]->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect, false);
+	m_mod4[MOD4_FG]->draw(screen, bitmap, cliprect, 0, 1);
+	m_mod4[MOD4_TX]->draw(screen, bitmap, cliprect, 0, 1);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0), screen.priority());
 
 	return 0;
 }
@@ -391,10 +391,7 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	m_audiocpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sound_map);
 
 	screen_device &screen(SCREEN(config, "screen"));
-	screen.set_refresh_hz(60);
-	screen.set_vblank_time(ATTOSECONDS_IN_USEC(0));
-	screen.set_size(32*8, 32*8);
-	screen.set_visarea(0*8, 32*8-1, 2*8, 30*8-1);
+	screen.set_raw(20_MHz_XTAL / 4, 320, 0, 256, 264, 16, 240);
 	screen.set_screen_update(FUNC(euroleag_ms_state::screen_update));
 	screen.set_palette(m_palette);
 
@@ -421,7 +418,14 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	m_mod4[MOD4_BG]->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 	m_mod4[MOD4_BG]->set_tile_callback(FUNC(euroleag_ms_state::tile_cb));
 
+	GAELCO_MS_MOD9(config, m_mod9, 20_MHz_XTAL);
+	m_mod9->set_screen("screen");
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod9);
+	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
+	m_mod51->set_sprite_callback(FUNC(euroleag_ms_state::sprite_cb));
+	m_mod51->set_priority_callback(FUNC(euroleag_ms_state::sprite_priority));
 
 	SPEAKER(config, "mono").front_center();
 
@@ -480,6 +484,9 @@ ROM_START( euroleagm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on the MOD 51/1 board
 	ROM_LOAD( "r4_p0502_82s129.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
+	ROM_REGION( 0x157, "mod9", 0 ) // on the MOD 9/2 board, video timing
+	ROM_LOAD( "system2_9238_gal20v8.ic18", 0x000, 0x157, CRC(dd571a59) SHA1(ef2c7b33922dd79513a4fbe6f04a2f2c2c795ada) )
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "r2_p0403_pal16r8a.ic29",    0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
 	ROM_LOAD( "r3_p0403_pal16r8a.ic29",    0x000, 0x104, CRC(d8c6ac25) SHA1(d6184e491313ff8da5b1ce60ffe8ef517716807c) )
@@ -488,7 +495,6 @@ ROM_START( euroleagm )
 	ROM_LOAD( "3z-1_3238_gal16v8.ic24",    0x000, 0x117, CRC(e9e538d9) SHA1(9ea73a903a06111843fe64ae55cb29ee88803334) ) // Same as Gaelco Goldart ?
 	ROM_LOAD( "r1_403_gal16v8.ic29",       0x000, 0x117, CRC(c136de93) SHA1(116f6d3b456d20621ab07a005c1421f57569915c) )
 	ROM_LOAD( "system2_9138_gal16v8.ic42", 0x000, 0x117, CRC(bd9ad8c3) SHA1(50e00b0cf7d075f9daed0338bc336a74caa3b66b) )
-	ROM_LOAD( "system2_9238_gal20v8.ic18", 0x000, 0x157, CRC(dd571a59) SHA1(ef2c7b33922dd79513a4fbe6f04a2f2c2c795ada) )
 	ROM_LOAD( "system2_9338_gal16v8.ic10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 ROM_END
 
