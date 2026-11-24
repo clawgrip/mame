@@ -8,6 +8,7 @@
 
 #include "emu.h"
 #include "gaelco_ms_mod51.h"
+#include "gaelco_ms_mod9.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "emupal.h"
@@ -33,6 +34,7 @@ public:
 		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod51(*this, "mod51"),
+		m_mod9(*this, "mod9"),
 		m_videoram(*this, "videoram"),
 		m_videoram2(*this, "videoram2"),
 		m_bitmapram(*this, "bitmapram"),
@@ -59,6 +61,7 @@ private:
 	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<uint16_t> m_videoram;
 	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint8_t> m_bitmapram;
@@ -74,6 +77,8 @@ private:
 	virtual void machine_reset() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
 
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void splashms_map(address_map &map) ATTR_COLD;
@@ -180,15 +185,24 @@ TILE_GET_INFO_MEMBER(splashms_state::get_tile_info_tilemap2)
 	tileinfo.set(2,tile,attr,TILE_FLIPYX(fx));
 }
 
+void splashms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-13 in attribute bits 0-5, flip X in bit 6, flip Y in bit 7 and X bit 8 in colour byte bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(color, 7);
+}
+
 uint32_t splashms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 //  bitmap.fill(0, cliprect);
 
-	for (int y = 0; y < 256; y++)
+	for (int y = cliprect.top(); y <= cliprect.bottom(); y++)
 	{
 		uint16_t *const dst = &bitmap.pix(y);
 
-		for (int x = 0; x < 512; x++)
+		for (int x = cliprect.left(); x <= cliprect.right(); x++)
 		{
 			uint8_t const pix = m_bitmapram[(y * 512) + x];
 			//if (pix)
@@ -204,36 +218,7 @@ uint32_t splashms_state::screen_update(screen_device &screen, bitmap_ind16 &bitm
 
 	m_bg_tilemap2->draw(screen, bitmap, cliprect, 0, 0);
 
-	// TODO, convert to device, share between Modualar System games
-	const int NUM_SPRITES = 0x100;
-	const int X_EXTRA_OFFSET = 64;
-
-	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
-	for (int i = NUM_SPRITES-2; i >= 2; i-=2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(0);
-
-		uint16_t attr0 = m_spriteram[i + 0];
-		uint16_t attr1 = m_spriteram[i + 1];
-
-		uint16_t attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t attr3 = m_spriteram[i + NUM_SPRITES+1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00)>>8;
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-		ypos |= (attr2 & 0x4000) ? 0x100 : 0x000; // maybe
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipx = (attr1 & 0x0040);
-		int flipy = (attr1 & 0x0080);
-
-		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,m_mod51->transmask());
-	}
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
@@ -473,10 +458,7 @@ void splashms_state::splashm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(512, 256);
-	m_screen->set_visarea(16, (16+368)-1, 0, 256-16-1);
+	m_screen->set_raw(28_MHz_XTAL / 4, 464, 0, 384, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(splashms_state::screen_update));
 	m_screen->set_palette(m_palette);
 
@@ -484,7 +466,14 @@ void splashms_state::splashm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_splashms);
 
+	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL); // not verified, the crystal of the other MOD 9/2 boards
+	m_mod9->set_screen(m_screen);
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod9);
+	m_mod51->set_list(128, 0x200, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(splashms_state::sprite_cb));
 
 	GENERIC_LATCH_8(config, m_soundlatch);
 	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
@@ -563,6 +552,9 @@ ROM_START( splashm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
+	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
+
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
 	ROM_LOAD( "5-1_5250_gal16v8as.ic8",      0x000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
@@ -577,7 +569,6 @@ ROM_START( splashm )
 	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
 	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
 	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
 	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
 ROM_END
 
@@ -622,6 +613,9 @@ ROM_START( splashma )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
+	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
+
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
 	ROM_LOAD( "5-1_5250_gal16v8as.ic8",      0x000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
@@ -636,7 +630,6 @@ ROM_START( splashma )
 	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
 	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
 	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
 	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
 ROM_END
 

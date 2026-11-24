@@ -29,6 +29,7 @@
 #include "../gaelco/gaelco_ms_mod1.h"
 #include "../gaelco/gaelco_ms_mod4.h"
 #include "../gaelco/gaelco_ms_mod51.h"
+#include "../gaelco/gaelco_ms_moda.h"
 
 #include "cpu/m68000/m68000.h"
 
@@ -48,6 +49,7 @@ public:
 		m_mod1(*this, "mod1"),
 		m_mod4(*this, "mod4"),
 		m_mod51(*this, "mod51"),
+		m_moda(*this, "moda"),
 		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
 		m_paletteram(*this, "palette"),
@@ -65,6 +67,7 @@ private:
 	required_device<gaelco_ms_mod1_adpcm_device> m_mod1;
 	required_device<gaelco_ms_mod4_device> m_mod4;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_moda_device> m_moda;
 	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
@@ -77,6 +80,9 @@ private:
 
 	virtual void machine_start() override ATTR_COLD;
 	void galspanic_ms_palette(palette_device &palette) const;
+
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 
 	uint32_t screen_update_backgrounds(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -140,6 +146,14 @@ void galspanic_ms_state::galspanic_ms_palette(palette_device &palette) const
 		palette.set_pen_color(2048 + i, pal5bit(i >> 5), pal5bit(i >> 10), pal5bit(i >> 0));
 }
 
+void galspanic_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-13 in attribute bits 0-5, flip Y in colour byte bit 6 and X bit 8 in bit 7
+	code |= (attr & 0x3f) << 8;
+	flipy = BIT(color, 6);
+	x8 = BIT(color, 7);
+}
+
 uint32_t galspanic_ms_state::screen_update_backgrounds(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	int count;
@@ -185,35 +199,7 @@ uint32_t galspanic_ms_state::screen_update(screen_device &screen, bitmap_ind16 &
 
 	m_mod4->draw(screen, bitmap, cliprect);
 
-	// TODO, convert to device, share between Modualar System games
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = 240;
-
-	for (int i = NUM_SPRITES-2; i >= 0; i-=2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(0);
-
-		uint16_t attr0 = m_spriteram[i + 0];
-		uint16_t attr1 = m_spriteram[i + 1];
-
-		uint16_t attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00)>>8;
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipx = 0; // different
-		int flipy = (attr2 & 0x4000);
-
-		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-14,m_mod51->transmask());
-	}
-
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	return 0;
 }
@@ -286,12 +272,9 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	m_maincpu->set_addrmap(AS_PROGRAM, &galspanic_ms_state::newquiz_map);
 	m_maincpu->set_vblank_int("screen", FUNC(galspanic_ms_state::irq6_line_hold)); // changed from original
 
-	/* video hardware */
+	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(256, 256);
-	m_screen->set_visarea(0, 256-1, 0, 256-32-1);
+	m_screen->set_raw(24_MHz_XTAL / 4, 385, 0, 256, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(galspanic_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 
@@ -299,7 +282,14 @@ void galspanic_ms_state::newquiz(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_galspanic_ms);
 
+	GAELCO_MS_MODA(config, m_moda, 24_MHz_XTAL);
+	m_moda->set_screen(m_screen);
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_moda);
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(galspanic_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4);
 	m_mod4->set_palette(m_palette);
@@ -307,7 +297,7 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	m_mod4->set_layout(TILEMAP_SCAN_ROWS, 32, 16, 2);
 	m_mod4->set_transparent_pen(15);
 
-	/* sound hardware */
+	// sound hardware
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD1_ADPCM(config, m_mod1, 4'000'000); // unknown, no crystal on the board
@@ -379,14 +369,16 @@ ROM_START( galpanicm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
 	ROM_LOAD( "51_502_63s141n.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as Euro League modular bootleg
 
-	ROM_REGION( 0x157, "gal", 0 )
+	ROM_REGION( 0x157, "moda", 0 ) // on COMP MOD-A board, video timing
+	ROM_LOAD( "a_a-247_gal20v8-20hb1.ic8",  0x000, 0x157, CRC(ace1b4e0) SHA1(511fa1fa8f44ad463fba4ece2beb9c35a336b7db) )
+
+	ROM_REGION( 0x117, "gal", 0 )
 	ROM_LOAD( "a_a-147_gal16v8-20hb1.ic47", 0x000, 0x117, CRC(39102e72) SHA1(227e25df1555c226e5ae8fc7bcb0f2e2996e24cb) )
 	ROM_LOAD( "a_a-347_gal16v8-25lp.ic50",  0x000, 0x117, CRC(f377f5c7) SHA1(0ae69fe49735fb45245892d40a0bc97b5d387021) )
 	ROM_LOAD( "4_403_gal16v8-20hb1.ic29",   0x000, 0x117, CRC(c136de93) SHA1(116f6d3b456d20621ab07a005c1421f57569915c) )
 	ROM_LOAD( "5_5147_gal16v8-25hb1.ic9",   0x000, 0x117, CRC(702d486a) SHA1(d1b262404f24312c7baa4ba3f030a3cc95fb31b0) )
 	ROM_LOAD( "5_5247_gal16v8-25hb1.ic8",   0x000, 0x117, CRC(493272fb) SHA1(e02efe240e0820842088b5e23f785672e896aa6b) )
 	ROM_LOAD( "51_503_gal16v8-20hb1.ic46",  0x000, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
-	ROM_LOAD( "a_a-247_gal20v8-20hb1.ic8",  0x000, 0x157, CRC(ace1b4e0) SHA1(511fa1fa8f44ad463fba4ece2beb9c35a336b7db) )
 	ROM_LOAD( "a_a-447_gal16v8-25lnc.ic51", 0x000, 0x117, NO_DUMP )
 	ROM_LOAD( "cpu_606_gal16v8.ic13",       0x000, 0x117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )
 	ROM_LOAD( "cpu_647_gal16v8.ic7",        0x000, 0x117, CRC(f71d744b) SHA1(c44db82e424d0e36144dfc408e8a7e3d43fc8245) )

@@ -23,12 +23,15 @@
      - service mode colours are broken (probably due to being a prototype?)
      - do the higher attribute bits in the 16x16 layer have meaning? (probably not)
      - what determines sound NMI frequency on these Modular boards as it's different to splash?
+     - the MOD 9/2 GAL isn't dumped: with Big Karnak's the picture is 320 pixels wide, 64 more than the
+       original game, and the sprites of code 0 the program leaves at Y 0xf8 and X 0x100 show at the top
 
 ***************************************************************************************************/
 
 #include "emu.h"
 
 #include "gaelco_ms_mod51.h"
+#include "gaelco_ms_mod9.h"
 
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
@@ -56,6 +59,7 @@ public:
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_mod51(*this, "mod51")
+		, m_mod9(*this, "mod9")
 		, m_videoram_8x8_mg(*this, "videoram_8x8mg")
 		, m_videoram_8x8_mg_8x8_fg(*this, "videoram_8x8fg")
 		, m_videoram_16x16_bg(*this, "videoram16x16bg")
@@ -81,6 +85,7 @@ private:
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<uint16_t> m_videoram_8x8_mg;
 	required_shared_ptr<uint16_t> m_videoram_8x8_mg_8x8_fg;
 	required_shared_ptr<uint16_t> m_videoram_16x16_bg;
@@ -92,6 +97,8 @@ private:
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	u32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void videoram8x8_mg_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
@@ -126,14 +133,23 @@ void xorworld_ms_state::video_start()
 	m_tilemap_8x8_fg->set_transparent_pen(0);
 }
 
+void xorworld_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-13 in attribute bits 0-5, flip X in bit 6, flip Y in bit 7 and X bit 8 in colour byte bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(color, 7);
+}
+
 u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	// based on other Modular games I think this is correct
 	// scrollregs 0/1 for layer at 90000 (middle layer?)
-	// scrollregs 2/3 for sprite global offsets?
+	// scrollregs 2/3 unknown, 2 is written once with 0x8ffe
 	// scrollregs 4/5 for layer at 80000 (frontmost?)
 	// scrollregs 6/7 for layer at a0000 (backmost)
-	int global_x_offset = 128;
+	int global_x_offset = 112;
 
 	m_tilemap_8x8_fg->set_scrollx(0, global_x_offset-(m_scrollregs[4]));
 	m_tilemap_8x8_fg->set_scrolly(0, -(m_scrollregs[5]));
@@ -146,47 +162,7 @@ u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	m_tilemap_8x8_mg->draw(screen, bitmap, cliprect, 0, 0);
 	m_tilemap_8x8_fg->draw(screen, bitmap, cliprect, 0, 0);
 
-	int spritexoffset = m_scrollregs[2] & 0xfff;
-	if (spritexoffset & 0x800)
-		spritexoffset -= 0x1000;
-
-	// TODO, convert to device, share between Modular System games
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = global_x_offset + spritexoffset;
-	// m_scrollregs[3] would be sprite y offset?
-
-	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
-	for (int i = NUM_SPRITES - 2; i >= 2; i -= 2)
-	{
-		gfx_element* gfx = m_gfxdecode->gfx(0);
-
-		uint16_t attr0 = m_spriteram[i + 0];
-		uint16_t attr1 = m_spriteram[i + 1];
-
-		uint16_t attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t attr3 = m_spriteram[i + NUM_SPRITES+1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-
-		// unknown, unused sprites (sometimes garbage sprites) have a ypos of 00f8 and not much else
-		if (ypos == 0x00f8)
-			continue;
-
-		int xpos = (attr1 & 0xff00) >> 8;
-
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-		ypos |= (attr2 & 0x4000) ? 0x100 : 0x000; // maybe
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipx = (attr1 & 0x0040);
-		int flipy = (attr1 & 0x0080);
-
-		gfx->transmask(bitmap, cliprect, tile, (attr2 & 0x0f00) >> 8, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, m_mod51->transmask());
-	}
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 
 	return 0;
 }
@@ -398,10 +374,7 @@ void xorworld_ms_state::xorworld_ms(machine_config &config)
 	m_maincpu->set_vblank_int("screen", FUNC(xorworld_ms_state::irq4_line_hold));
 
 	SCREEN(config, m_screen);
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(0));
-	m_screen->set_size(32*8, 32*8);
-	m_screen->set_visarea(0*8, 32*8-1, 0*8, 30*8-1);
+	m_screen->set_raw(28_MHz_XTAL / 4, 448, 0, 320, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(xorworld_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 
@@ -409,7 +382,14 @@ void xorworld_ms_state::xorworld_ms(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_xorworld_ms);
 
+	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
+	m_mod9->set_screen(m_screen);
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod9);
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(xorworld_ms_state::sprite_cb));
 
 	// Sound hardware
 	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
@@ -467,6 +447,53 @@ ROM_START( xorworldm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
+	ROM_REGION( 0x157, "mod9", ROMREGION_ERASEFF ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
+	// not dumped, the 9248 of Big Karnak's board
+	ROM_FILL( 0x000, 0x02, 0x00 )
+	ROM_FILL( 0x002, 0x01, 0x0a )
+	ROM_FILL( 0x003, 0x01, 0x92 )
+	ROM_FILL( 0x009, 0x01, 0xfd )
+	ROM_FILL( 0x00e, 0x01, 0xdf )
+	ROM_FILL( 0x013, 0x0a, 0x00 )
+	ROM_FILL( 0x01e, 0x01, 0xfb )
+	ROM_FILL( 0x022, 0x32, 0x00 )
+	ROM_FILL( 0x056, 0x01, 0xdf )
+	ROM_FILL( 0x05d, 0x01, 0x7f )
+	ROM_FILL( 0x05e, 0x1e, 0x00 )
+	ROM_FILL( 0x07e, 0x01, 0xdf )
+	ROM_FILL( 0x07f, 0x01, 0xee )
+	ROM_FILL( 0x080, 0x01, 0xae )
+	ROM_FILL( 0x081, 0x02, 0xdd )
+	ROM_FILL( 0x083, 0x01, 0xfd )
+	ROM_FILL( 0x086, 0x1e, 0x00 )
+	ROM_FILL( 0x0a4, 0x01, 0xdd )
+	ROM_FILL( 0x0a5, 0x01, 0xfd )
+	ROM_FILL( 0x0a9, 0x01, 0xee )
+	ROM_FILL( 0x0b0, 0x01, 0xdf )
+	ROM_FILL( 0x0b1, 0x01, 0xdd )
+	ROM_FILL( 0x0b2, 0x01, 0x5d )
+	ROM_FILL( 0x0b5, 0x01, 0xdf )
+	ROM_FILL( 0x0b6, 0x01, 0xee )
+	ROM_FILL( 0x0b7, 0x01, 0xae )
+	ROM_FILL( 0x0ba, 0x01, 0xef )
+	ROM_FILL( 0x0bd, 0x0f, 0x00 )
+	ROM_FILL( 0x0ce, 0x01, 0xdf )
+	ROM_FILL( 0x0cf, 0x01, 0xdd )
+	ROM_FILL( 0x0d0, 0x01, 0x5d )
+	ROM_FILL( 0x0d3, 0x01, 0xef )
+	ROM_FILL( 0x0d6, 0x1e, 0x00 )
+	ROM_FILL( 0x0f4, 0x01, 0xdd )
+	ROM_FILL( 0x0f5, 0x01, 0xfd )
+	ROM_FILL( 0x0f9, 0x01, 0xee )
+	ROM_FILL( 0x0fe, 0x1e, 0x00 )
+	ROM_FILL( 0x11e, 0x01, 0xdf )
+	ROM_FILL( 0x11f, 0x01, 0xee )
+	ROM_FILL( 0x120, 0x01, 0x6e )
+	ROM_FILL( 0x121, 0x24, 0x00 )
+	ROM_FILL( 0x14d, 0x01, 0x03 )
+	ROM_FILL( 0x156, 0x01, 0x02 )
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
 	ROM_LOAD( "mod_5-1_51fx_gal16v8.ic9",  0x0000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -479,7 +506,6 @@ ROM_START( xorworldm )
 	ROM_LOAD( "mod_7-4_gal16v8.ic55",      0x0000, 0x117, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic59",      0x0000, 0x117, BAD_DUMP CRC(55b86dd5) SHA1(4a05d86002f929f38171282d2aad5d986283c45b) ) // Bruteforced
 	ROM_LOAD( "mod_9-2_gal16v8.ic10",      0x0000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced
-	ROM_LOAD( "mod_9-2_gal20v8.ic18",      0x0000, 0x157, NO_DUMP )
 	ROM_LOAD( "mod_9-2_gal16v8.ic42",      0x0000, 0x117, BAD_DUMP CRC(d62f0a0d) SHA1(76bd995c8b71b12b752ed517d87a78e55a8bab00) ) // Bruteforced
 	ROM_LOAD( "mod_51-3_503_gal16v8.ic46", 0x0000, 0x117, NO_DUMP )
 ROM_END
@@ -519,6 +545,53 @@ ROM_START( xorworldma )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
+	ROM_REGION( 0x157, "mod9", ROMREGION_ERASEFF ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
+	// not dumped, the 9248 of Big Karnak's board
+	ROM_FILL( 0x000, 0x02, 0x00 )
+	ROM_FILL( 0x002, 0x01, 0x0a )
+	ROM_FILL( 0x003, 0x01, 0x92 )
+	ROM_FILL( 0x009, 0x01, 0xfd )
+	ROM_FILL( 0x00e, 0x01, 0xdf )
+	ROM_FILL( 0x013, 0x0a, 0x00 )
+	ROM_FILL( 0x01e, 0x01, 0xfb )
+	ROM_FILL( 0x022, 0x32, 0x00 )
+	ROM_FILL( 0x056, 0x01, 0xdf )
+	ROM_FILL( 0x05d, 0x01, 0x7f )
+	ROM_FILL( 0x05e, 0x1e, 0x00 )
+	ROM_FILL( 0x07e, 0x01, 0xdf )
+	ROM_FILL( 0x07f, 0x01, 0xee )
+	ROM_FILL( 0x080, 0x01, 0xae )
+	ROM_FILL( 0x081, 0x02, 0xdd )
+	ROM_FILL( 0x083, 0x01, 0xfd )
+	ROM_FILL( 0x086, 0x1e, 0x00 )
+	ROM_FILL( 0x0a4, 0x01, 0xdd )
+	ROM_FILL( 0x0a5, 0x01, 0xfd )
+	ROM_FILL( 0x0a9, 0x01, 0xee )
+	ROM_FILL( 0x0b0, 0x01, 0xdf )
+	ROM_FILL( 0x0b1, 0x01, 0xdd )
+	ROM_FILL( 0x0b2, 0x01, 0x5d )
+	ROM_FILL( 0x0b5, 0x01, 0xdf )
+	ROM_FILL( 0x0b6, 0x01, 0xee )
+	ROM_FILL( 0x0b7, 0x01, 0xae )
+	ROM_FILL( 0x0ba, 0x01, 0xef )
+	ROM_FILL( 0x0bd, 0x0f, 0x00 )
+	ROM_FILL( 0x0ce, 0x01, 0xdf )
+	ROM_FILL( 0x0cf, 0x01, 0xdd )
+	ROM_FILL( 0x0d0, 0x01, 0x5d )
+	ROM_FILL( 0x0d3, 0x01, 0xef )
+	ROM_FILL( 0x0d6, 0x1e, 0x00 )
+	ROM_FILL( 0x0f4, 0x01, 0xdd )
+	ROM_FILL( 0x0f5, 0x01, 0xfd )
+	ROM_FILL( 0x0f9, 0x01, 0xee )
+	ROM_FILL( 0x0fe, 0x1e, 0x00 )
+	ROM_FILL( 0x11e, 0x01, 0xdf )
+	ROM_FILL( 0x11f, 0x01, 0xee )
+	ROM_FILL( 0x120, 0x01, 0x6e )
+	ROM_FILL( 0x121, 0x24, 0x00 )
+	ROM_FILL( 0x14d, 0x01, 0x03 )
+	ROM_FILL( 0x156, 0x01, 0x02 )
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
 	ROM_LOAD( "mod_5-1_51fx_gal16v8.ic9",  0x0000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -531,7 +604,6 @@ ROM_START( xorworldma )
 	ROM_LOAD( "mod_7-4_gal16v8.ic55",      0x0000, 0x117, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic59",      0x0000, 0x117, BAD_DUMP CRC(55b86dd5) SHA1(4a05d86002f929f38171282d2aad5d986283c45b) ) // Bruteforced
 	ROM_LOAD( "mod_9-2_gal16v8.ic10",      0x0000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced
-	ROM_LOAD( "mod_9-2_gal20v8.ic18",      0x0000, 0x157, NO_DUMP )
 	ROM_LOAD( "mod_9-2_gal16v8.ic42",      0x0000, 0x117, BAD_DUMP CRC(d62f0a0d) SHA1(76bd995c8b71b12b752ed517d87a78e55a8bab00) ) // Bruteforced
 	ROM_LOAD( "mod_51-3_503_gal16v8.ic46", 0x0000, 0x117, NO_DUMP )
 ROM_END

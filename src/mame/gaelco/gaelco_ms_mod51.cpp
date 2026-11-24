@@ -35,12 +35,17 @@
     Agent, Shadow Warriors and Toki, and puts the sprites on the ground of
     Dragon Ninja and Fighting Fantasy. It doesn't fit the games with
     horizontal PROMs 204 and 207 (Last Duel, Power Spikes and Twin Cobra),
-    whose drivers set corrections. The lower entries are drawn over the
-    higher ones.
+    whose drivers set corrections. In the cages with a GAL sync generator,
+    whose pin 17 is the vertical sync of the boards (see
+    gaelco_ms_timing.cpp), it gives the positions fitted for Gals Panic
+    exactly, and puts the sprites of Big Karnak, Euro League, Splash, World
+    Rally and Xor World within 2 pixels of the positions fitted against
+    their tile layers. The lower entries are drawn over the higher ones.
 
     The line buffer keeps the pixel of the lowest entry, and a colour bit can
     put it behind a tile layer: colour bit 3 puts the sprite in front of the
-    foreground on Shadow Warriors. Drivers give the priority mask of each
+    foreground on Shadow Warriors, and behind the background tiles with
+    attribute bit 5 on World Rally. Drivers give the priority mask of each
     entry and draw the tile layers into the screen priority bitmap first, so
     a sprite behind a layer also hides the higher entries there.
 

@@ -283,6 +283,7 @@ Sound Board 9/2
 
 #include "emu.h"
 #include "gaelco_ms_mod51.h"
+#include "gaelco_ms_mod9.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "emupal.h"
@@ -311,6 +312,7 @@ public:
 		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod51(*this, "mod51"),
+		m_mod9(*this, "mod9"),
 		m_spriteram(*this, "spriteram"),
 		m_videoram1(*this, "videoram1"),
 		m_videoram2(*this, "videoram2"),
@@ -336,6 +338,7 @@ private:
 	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_shared_ptr<uint16_t> m_videoram1;
 	required_shared_ptr<uint16_t> m_videoram2;
@@ -346,6 +349,8 @@ private:
 	virtual void machine_start() override ATTR_COLD;
 	virtual void machine_reset() override ATTR_COLD;
 
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void bigkarnkm_map(address_map &map) ATTR_COLD;
@@ -502,6 +507,15 @@ void bigkarnk_ms_state::machine_start()
 }
 
 
+void bigkarnk_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
+{
+	// code bits 8-13 in attribute bits 0-5, flip X in bit 6, flip Y in bit 7 and X bit 8 in colour byte bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(color, 7);
+}
+
 uint32_t bigkarnk_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	bitmap.fill(0, cliprect);
@@ -518,37 +532,7 @@ uint32_t bigkarnk_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 	m_bg_tilemap3->draw(screen, bitmap, cliprect, 0, 0);
 	m_bg_tilemap2->draw(screen, bitmap, cliprect, 0, 0);
 
-
-	// TODO, convert to device, share between Modualar System games
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = 112;
-
-	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
-	for (int i = NUM_SPRITES-2; i >= 2; i-=2)
-	{
-		gfx_element *gfx = m_gfxdecode->gfx(2);
-
-		uint16_t attr0 = m_spriteram[i + 0];
-		uint16_t attr1 = m_spriteram[i + 1];
-
-		uint16_t attr2 = m_spriteram[i + NUM_SPRITES];
-		//uint16_t attr3 = m_spriteram[i + NUM_SPRITES + 1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-		int xpos = (attr1 & 0xff00)>>8;
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-		ypos |= (attr2 & 0x4000) ? 0x100 : 0x000; // maybe
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipx = (attr1 & 0x0040);
-		int flipy = (attr1 & 0x0080);
-
-		gfx->transmask(bitmap,cliprect,tile,(attr2&0x0f00)>>8,flipx,flipy,xpos-16-X_EXTRA_OFFSET,ypos-16,m_mod51->transmask());
-	}
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(2));
 
 	m_bg_tilemap1->draw(screen, bitmap, cliprect, 0, 0);
 
@@ -722,10 +706,7 @@ void bigkarnk_ms_state::bigkarnkm(machine_config &config)
 
 	// video hardware
 	SCREEN(config, m_screen);
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(512, 256);
-	m_screen->set_visarea(0, 320-1, 0, 256-16-1);
+	m_screen->set_raw(28_MHz_XTAL / 4, 448, 0, 320, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(bigkarnk_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 
@@ -733,7 +714,14 @@ void bigkarnk_ms_state::bigkarnkm(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_bigkarnk_ms);
 
+	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
+	m_mod9->set_screen(m_screen);
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod9);
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(bigkarnk_ms_state::sprite_cb));
 
 	GENERIC_LATCH_8(config, m_soundlatch);
 	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
@@ -819,6 +807,9 @@ ROM_START( bigkarnkm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51_p0502_n82s129n.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
+	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "snd_9248_gal20v8-25lp.ic18", 0x000, 0x157, CRC(13123ce6) SHA1(85b012d706021963899ad3bc6d29fbe50d8433ab) )
+
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "51_p0503_pal16r6acn.ic48",     0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) ) // matches one of the Euro League Modular System PALs
 	ROM_LOAD( "5_5148_gal16v8-25lnc.ic9",     0x000, 0x117, CRC(86f8b803) SHA1(8dc5117344c95a81ec6f856e5063f521dc428f19) )
@@ -832,7 +823,6 @@ ROM_START( bigkarnkm )
 	ROM_LOAD( "cpu_606_gal16v8-25hb1.ic13",   0x000, 0x117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )
 	ROM_LOAD( "cpu_648_gal16v8-25ln.ic7",     0x000, 0x117, CRC(4b415042) SHA1(4804558a5f5459d5f880fd1979c7fce8d5486beb) )
 	ROM_LOAD( "snd_9148_gal16v8-25hb1.ic142", 0x000, 0x117, CRC(65e89f3d) SHA1(58f392598094547896ed7871626282136f00a120) )
-	ROM_LOAD( "snd_9248_gal20v8-25lp.ic18",   0x000, 0x157, CRC(13123ce6) SHA1(85b012d706021963899ad3bc6d29fbe50d8433ab) )
 	ROM_LOAD( "snd_9348_gal16v8-25hb1.ic10",  0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 ROM_END
 

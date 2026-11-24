@@ -40,7 +40,7 @@ public:
 		m_rows = rows;
 		m_step = 1;
 	}
-	// the MOD 21/1 or MOD 9/2 board whose timing the scroll counters follow
+	// the board whose video timing the scroll counters follow
 	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
 	// added to the scroll for the games whose pictures the fitted positions don't explain
 	void set_scroll_correction(int x, int y) { m_scroll_correction_x = x; m_scroll_correction_y = y; }

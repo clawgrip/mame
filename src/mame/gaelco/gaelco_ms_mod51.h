@@ -20,7 +20,7 @@ public:
 
 	gaelco_ms_mod51_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock = 0);
 
-	// the MOD 21/1 or MOD 9/2 board whose timing the line buffer follows
+	// the board whose video timing the line buffer follows
 	template <typename T> void set_timing(T &&tag) { m_timing.set_tag(std::forward<T>(tag)); }
 	// list length, where the colour bytes start (0 for none) and whether X has a bit 8
 	void set_list(u16 entries, offs_t color_offset, bool x_bit8)

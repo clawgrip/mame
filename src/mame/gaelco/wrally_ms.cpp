@@ -38,6 +38,7 @@
 #include "emu.h"
 
 #include "gaelco_ms_mod51.h"
+#include "gaelco_ms_mod9.h"
 
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
@@ -64,6 +65,7 @@ public:
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_mod51(*this, "mod51")
+		, m_mod9(*this, "mod9")
 		, m_vram(*this, "vram")
 		, m_bg_vram(*this, "bg_vram")
 		, m_bg2_vram(*this, "bg2_vram")
@@ -89,6 +91,7 @@ private:
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
+	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<u16> m_vram;
 	required_shared_ptr<u16> m_bg_vram;
 	required_shared_ptr<u16> m_bg2_vram;
@@ -102,7 +105,9 @@ private:
 	tilemap_t *m_bg_tilemap = nullptr;
 	tilemap_t *m_bg2_tilemap = nullptr;
 
-	void draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u32 sprite_priority(u8 attr, u8 color) { return BIT(color, 3) ? GFX_PMASK_4 : 0; } // behind bg tiles with attribute bit 5
 	u32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	TILE_GET_INFO_MEMBER(get_tile_info);
@@ -182,51 +187,13 @@ void wrally_ms_state::video_start()
 //  m_bg2_tilemap->set_transparent_pen(0);
 }
 
-void wrally_ms_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+void wrally_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	// TODO, convert to device, share between Modular System games
-	const int NUM_SPRITES = 0x200;
-	const int X_EXTRA_OFFSET = 78;
-
-	// entry 0 isn't a sprite, the line buffer of the MOD 51 board takes its X origin from it
-	for (int i = 2; i < NUM_SPRITES; i += 2)
-	{
-		gfx_element* gfx = m_gfxdecode->gfx(3);
-
-		u16 attr0 = m_spriteram[i + 0];
-		u16 attr1 = m_spriteram[i + 1];
-
-		u16 attr2 = m_spriteram[i + NUM_SPRITES];
-		//u16 attr3 = m_spriteram[i + NUM_SPRITES+1]; // unused?
-
-		int ypos = attr0 & 0x00ff;
-
-		// unknown, unused sprites (sometimes garbage sprites) have a ypos of 00f8 and not much else
-		if (ypos == 0x00f8)
-			continue;
-
-		int xpos = (attr1 & 0xff00) >> 8;
-
-		xpos |= (attr2 & 0x8000) ? 0x100 : 0x000;
-
-		ypos = (0xff - ypos);
-		ypos |= (attr2 & 0x4000) ? 0x100 : 0x000; // maybe
-
-		int tile = (attr0 & 0xff00) >> 8;
-		tile |= (attr1 & 0x003f) << 8;
-
-		int flipx = (attr1 & 0x0040);
-		int flipy = (attr1 & 0x0080);
-		int col = (attr2 & 0x0f00) >> 8;
-
-		int pri_mask;
-		if (col & 8)
-			pri_mask = 0xf0;
-		else
-			pri_mask = 0x00;
-
-		gfx->prio_transmask(bitmap, cliprect, tile, col, flipx, flipy, xpos - 16 - X_EXTRA_OFFSET, ypos - 16, screen.priority(), pri_mask, m_mod51->transmask());
-	}
+	// code bits 8-13 in attribute bits 0-5, flip X in bit 6, flip Y in bit 7 and X bit 8 in colour byte bit 7
+	code |= (attr & 0x3f) << 8;
+	flipx = BIT(attr, 6);
+	flipy = BIT(attr, 7);
+	x8 = BIT(color, 7);
 }
 
 u32 wrally_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
@@ -235,23 +202,23 @@ u32 wrally_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, 
 	bitmap.fill(0, cliprect);
 
 	// are these using the correct reg pairs?
-	m_bg_tilemap->set_scrollx(0, 80-(m_scrollregs[0]));
+	m_bg_tilemap->set_scrollx(0, 64-(m_scrollregs[0]));
 	m_bg_tilemap->set_scrolly(0, -m_scrollregs[1]);
 
-	m_bg2_tilemap->set_scrollx(0, 80-(m_scrollregs[6]));
+	m_bg2_tilemap->set_scrollx(0, 64-(m_scrollregs[6]));
 	m_bg2_tilemap->set_scrolly(0, -m_scrollregs[7]);
 
 	// what are m_scrollregs 2,3 and 4,5?
 	// one is probably tx scroll, the other priority control (or not?)
 
-	m_tx_tilemap->set_scrollx(0, 80);
+	m_tx_tilemap->set_scrollx(0, 64);
 	m_tx_tilemap->set_scrolly(0, 0);
 
 	m_bg2_tilemap->draw(screen, bitmap, cliprect, 0, 1);
 	m_bg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_CATEGORY(0), 2);
 	m_bg_tilemap->draw(screen, bitmap, cliprect, TILEMAP_DRAW_CATEGORY(1), 4);
 
-	draw_sprites(screen, bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(3), screen.priority());
 
 	m_tx_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
@@ -451,10 +418,7 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 	m_maincpu->set_vblank_int("screen", FUNC(wrally_ms_state::irq4_line_hold));
 
 	SCREEN(config, m_screen);
-	m_screen->set_refresh_hz(60);
-	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(0));
-	m_screen->set_size(64*8, 32*8);
-	m_screen->set_visarea(0*8, 46*8-1, 0*8, 29*8-1); // visarea based on test mode
+	m_screen->set_raw(28_MHz_XTAL / 4, 465, 0, 384, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(wrally_ms_state::screen_update));
 	m_screen->set_palette(m_palette);
 
@@ -462,7 +426,15 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 
 	GFXDECODE(config, m_gfxdecode, "palette", gfx_wrally_ms);
 
+	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
+	m_mod9->set_screen(m_screen);
+
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod9);
+	m_mod51->set_list(256, 0x400, true);
+	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
+	m_mod51->set_sprite_callback(FUNC(wrally_ms_state::sprite_cb));
+	m_mod51->set_priority_callback(FUNC(wrally_ms_state::sprite_priority));
 
 	// Sound hardware
 
@@ -577,6 +549,9 @@ ROM_START( wrallym )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-1_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
+	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_LOAD( "mod_9-2_92fl_gal20v8as.ic18", 0x000, 0x157, CRC(3a1465c2) SHA1(c98227c29301fdff7ab8144222ff0c257412dd78) )
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_51-1_p0503_pal16r6a.ic46",   0x0000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
 	ROM_LOAD( "mod_7-3_71_espe_gal20v8as.ic7",  0x0000, 0x157, CRC(b0644601) SHA1(8b0410006bdffe552ee27d027bdb5b3c642fe49c) )
@@ -591,7 +566,6 @@ ROM_START( wrallym )
 	ROM_LOAD( "mod_9-2_9350_gal16v8as.u10",     0x0000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 	ROM_LOAD( "mod_9-2_91fl_gal16v8as.u42",     0x0000, 0x117, CRC(ac8a5e11) SHA1(cbe68b38e0bce978722753a3feeafad9dcf05d25) )
 	ROM_LOAD( "aud_oki_gal16v8as.bin",          0x0000, 0x117, NO_DUMP )
-	ROM_LOAD( "mod_9-2_92fl_gal20v8as.ic18",    0x0000, 0x157, CRC(3a1465c2) SHA1(c98227c29301fdff7ab8144222ff0c257412dd78) )
 ROM_END
 
 } // anonymous namespace
