@@ -22,7 +22,6 @@
     TODO:
      - service mode colours are broken (probably due to being a prototype?)
      - do the higher attribute bits in the 16x16 layer have meaning? (probably not)
-     - what determines sound NMI frequency on these Modular boards as it's different to splash?
      - the MOD 9/2 GAL isn't dumped: with Big Karnak's the picture is 320 pixels wide, 64 more than the
        original game, and the sprites of code 0 the program leaves at Y 0xf8 and X 0x100 show at the top
 
@@ -34,14 +33,7 @@
 #include "gaelco_ms_mod9.h"
 
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
 
-#include "machine/gen_latch.h"
-
-#include "sound/msm5205.h"
-#include "sound/ymopl.h"
-
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -54,8 +46,6 @@ public:
 	xorworld_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
-		, m_soundcpu(*this, "soundcpu")
-		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_mod51(*this, "mod51")
@@ -65,9 +55,6 @@ public:
 		, m_videoram_16x16_bg(*this, "videoram16x16bg")
 		, m_scrollregs(*this, "scrollregs")
 		, m_spriteram(*this, "spriteram")
-		, m_soundlatch(*this, "soundlatch")
-		, m_msm(*this, "msm")
-		, m_ymsnd(*this, "ymsnd")
 	{ }
 
 	void xorworld_ms(machine_config &config) ATTR_COLD;
@@ -75,13 +62,10 @@ public:
 	void init_xorworld_ms() ATTR_COLD;
 
 protected:
-	virtual void machine_start() override ATTR_COLD;
 	virtual void video_start() override ATTR_COLD;
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_soundcpu;
-	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
@@ -91,9 +75,6 @@ private:
 	required_shared_ptr<uint16_t> m_videoram_16x16_bg;
 	required_shared_ptr<uint16_t> m_scrollregs;
 	required_shared_ptr<uint16_t> m_spriteram;
-	required_device<generic_latch_8_device> m_soundlatch;
-	required_device<msm5205_device> m_msm;
-	required_device<ym3812_device> m_ymsnd;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 
@@ -110,12 +91,6 @@ private:
 	TILE_GET_INFO_MEMBER(get_tile_info_tilemap_16x16bg);
 
 	void xorworld_ms_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
-
-	void msm5205_int(int state);
-	void adpcm_data_w(uint8_t data);
-	void adpcm_control_w(uint8_t data);
-	int m_adpcm_data = 0;
 
 	tilemap_t *m_tilemap_8x8_mg = nullptr;
 	tilemap_t *m_tilemap_8x8_fg = nullptr;
@@ -223,94 +198,49 @@ void xorworld_ms_state::xorworld_ms_map(address_map &map)
 	map(0x0c0000, 0x0c000f).ram().share("scrollregs");
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
-	map(0x200000, 0x2007ff).ram().w(m_palette, FUNC(palette_device::write16)).share("palette");
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
 
-	map(0x400000, 0x400001).portr("IN0");
-	map(0x400002, 0x400003).portr("IN1");
-	map(0x400006, 0x400007).portr("DSW1");
-	map(0x400008, 0x400009).portr("DSW2");
-	map(0x40000c, 0x40000d).noprw(); // unknown
-	map(0x40000e, 0x40000e).w(m_soundlatch, FUNC(generic_latch_8_device::write));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
 
 	map(0xff0000, 0xffffff).ram();
 }
 
-void xorworld_ms_state::adpcm_data_w(uint8_t data)
-{
-	m_adpcm_data = data;
-}
-
-void xorworld_ms_state::adpcm_control_w(uint8_t data)
-{
-	m_msm->reset_w(BIT(data, 7));
-}
-
-void xorworld_ms_state::msm5205_int(int state)
-{
-	m_msm->data_w(m_adpcm_data >> 4);
-	m_adpcm_data = (m_adpcm_data << 4) & 0xf0;
-}
-
-void xorworld_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0xe000, 0xe000).w(FUNC(xorworld_ms_state::adpcm_control_w));
-	map(0xe400, 0xe400).w(FUNC(xorworld_ms_state::adpcm_data_w));
-
-	map(0xe800, 0xe801).rw("ymsnd", FUNC(ym3812_device::read), FUNC(ym3812_device::write));
-
-	map(0xf000, 0xf7ff).ram();
-	map(0xf800, 0xf800).r(m_soundlatch, FUNC(generic_latch_8_device::read));
-}
-
 static INPUT_PORTS_START( xorworld_ms )
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
+	PORT_INCLUDE( gaelco_ms_mod9 )
+
+	PORT_MODIFY("IN0")
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("P1 Button 3 / P1 Start")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
+	PORT_MODIFY("IN1")
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 ) PORT_NAME("P2 Button 3 / P2 Start")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 
+	// on the MOD 9/2 board
 	PORT_START("DSW1")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_DIPNAME( 0x0700, 0x0700, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0100, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0700, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0600, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x0300, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x0200, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) ) // unused according to service mode
-	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x6000, 0x6000, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x6000, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) ) // unused according to service mode
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("DSW2")
 	// no 2nd dip bank?
-	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static const gfx_layout tiles8x8x4_layout =
@@ -357,11 +287,6 @@ void xorworld_ms_state::descramble_16x16tiles(u8* src, int len)
 	}
 }
 
-void xorworld_ms_state::machine_start()
-{
-	save_item(NAME(m_adpcm_data));
-}
-
 void xorworld_ms_state::init_xorworld_ms()
 {
 	descramble_16x16tiles(memregion("gfx_16x16bg")->base(), memregion("gfx_16x16bg")->bytes());
@@ -371,45 +296,30 @@ void xorworld_ms_state::xorworld_ms(machine_config &config)
 {
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &xorworld_ms_state::xorworld_ms_map);
-	m_maincpu->set_vblank_int("screen", FUNC(xorworld_ms_state::irq4_line_hold));
 
 	SCREEN(config, m_screen);
 	m_screen->set_raw(28_MHz_XTAL / 4, 448, 0, 320, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(xorworld_ms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod9);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod9, gfx_xorworld_ms);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_xorworld_ms);
+	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
 	m_mod9->set_screen(m_screen);
+	m_mod9->irq_callback().set_inputline(m_maincpu, 4);
+	m_mod9->in_callback<0>().set_ioport("IN0");
+	m_mod9->in_callback<1>().set_ioport("IN1");
+	m_mod9->in_callback<2>().set_ioport("DSW1");
+	m_mod9->in_callback<3>().set_ioport("DSW2");
+	m_mod9->add_route(ALL_OUTPUTS, "mono", 1.0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(xorworld_ms_state::sprite_cb));
-
-	// Sound hardware
-	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
-	m_soundcpu->set_addrmap(AS_PROGRAM, &xorworld_ms_state::sound_map);
-	m_soundcpu->set_periodic_int(FUNC(xorworld_ms_state::nmi_line_pulse), attotime::from_hz(2500));
-
-	GENERIC_LATCH_8(config, m_soundlatch);
-	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
-
-	SPEAKER(config, "mono").front_center();
-
-	YM3812(config, m_ymsnd, XTAL(16'000'000) / 4);
-	m_ymsnd->add_route(ALL_OUTPUTS, "mono", 0.80);
-	// YM3812 does not set the IRQ line, so can't be driving tempo
-	//m_ymsnd->irq_handler().set(FUNC(xorworld_ms_state::ym_irq));
-
-	MSM5205(config, m_msm, XTAL(384'000));
-	m_msm->vck_legacy_callback().set(FUNC(xorworld_ms_state::msm5205_int));
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.80);
 }
 
 ROM_START( xorworldm )
@@ -441,13 +351,13 @@ ROM_START( xorworldm )
 	ROM_LOAD32_BYTE( "mod_5-1_27c512.ic18", 0x00001, 0x10000, CRC(d0c7a07b) SHA1(698883f2a91a34c802c1bc9a86bec0a77f4de7fe) )
 	ROM_LOAD32_BYTE( "mod_5-1_27c512.ic24", 0x00000, 0x10000, CRC(fd2cbaed) SHA1(037523a3eae058e848763bbfc067d8271c70074b) )
 
-	ROM_REGION( 0x010000, "soundcpu", 0 )
+	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
-	ROM_REGION( 0x157, "mod9", ROMREGION_ERASEFF ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", ROMREGION_ERASEFF ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
 	// not dumped, the 9248 of Big Karnak's board
 	ROM_FILL( 0x000, 0x02, 0x00 )
@@ -494,6 +404,9 @@ ROM_START( xorworldm )
 	ROM_FILL( 0x14d, 0x01, 0x03 )
 	ROM_FILL( 0x156, 0x01, 0x02 )
 
+	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "mod_9-2_gal16v8.ic10", 0x000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced, the logic of the other boards' 93xx
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
 	ROM_LOAD( "mod_5-1_51fx_gal16v8.ic9",  0x0000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -505,7 +418,6 @@ ROM_START( xorworldm )
 	ROM_LOAD( "mod_7-4_gal20v8.ic54",      0x0000, 0x157, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic55",      0x0000, 0x117, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic59",      0x0000, 0x117, BAD_DUMP CRC(55b86dd5) SHA1(4a05d86002f929f38171282d2aad5d986283c45b) ) // Bruteforced
-	ROM_LOAD( "mod_9-2_gal16v8.ic10",      0x0000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced
 	ROM_LOAD( "mod_9-2_gal16v8.ic42",      0x0000, 0x117, BAD_DUMP CRC(d62f0a0d) SHA1(76bd995c8b71b12b752ed517d87a78e55a8bab00) ) // Bruteforced
 	ROM_LOAD( "mod_51-3_503_gal16v8.ic46", 0x0000, 0x117, NO_DUMP )
 ROM_END
@@ -539,13 +451,13 @@ ROM_START( xorworldma )
 	ROM_LOAD32_BYTE( "mod_5-1_27c512.ic18", 0x00001, 0x10000, CRC(d0c7a07b) SHA1(698883f2a91a34c802c1bc9a86bec0a77f4de7fe) )
 	ROM_LOAD32_BYTE( "mod_5-1_27c512.ic24", 0x00000, 0x10000, CRC(fd2cbaed) SHA1(037523a3eae058e848763bbfc067d8271c70074b) )
 
-	ROM_REGION( 0x010000, "soundcpu", 0 )
+	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
-	ROM_REGION( 0x157, "mod9", ROMREGION_ERASEFF ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", ROMREGION_ERASEFF ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
 	// not dumped, the 9248 of Big Karnak's board
 	ROM_FILL( 0x000, 0x02, 0x00 )
@@ -592,6 +504,9 @@ ROM_START( xorworldma )
 	ROM_FILL( 0x14d, 0x01, 0x03 )
 	ROM_FILL( 0x156, 0x01, 0x02 )
 
+	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "mod_9-2_gal16v8.ic10", 0x000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced, the logic of the other boards' 93xx
+
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
 	ROM_LOAD( "mod_5-1_51fx_gal16v8.ic9",  0x0000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -603,7 +518,6 @@ ROM_START( xorworldma )
 	ROM_LOAD( "mod_7-4_gal20v8.ic54",      0x0000, 0x157, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic55",      0x0000, 0x117, NO_DUMP )
 	ROM_LOAD( "mod_7-4_gal16v8.ic59",      0x0000, 0x117, BAD_DUMP CRC(55b86dd5) SHA1(4a05d86002f929f38171282d2aad5d986283c45b) ) // Bruteforced
-	ROM_LOAD( "mod_9-2_gal16v8.ic10",      0x0000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced
 	ROM_LOAD( "mod_9-2_gal16v8.ic42",      0x0000, 0x117, BAD_DUMP CRC(d62f0a0d) SHA1(76bd995c8b71b12b752ed517d87a78e55a8bab00) ) // Bruteforced
 	ROM_LOAD( "mod_51-3_503_gal16v8.ic46", 0x0000, 0x117, NO_DUMP )
 ROM_END

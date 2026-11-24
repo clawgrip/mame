@@ -285,15 +285,9 @@ Sound Board 9/2
 #include "gaelco_ms_mod51.h"
 #include "gaelco_ms_mod9.h"
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
-#include "sound/msm5205.h"
-#include "sound/ymopl.h"
-#include "machine/gen_latch.h"
-#include "machine/bankdev.h"
 
 
 namespace {
@@ -304,12 +298,7 @@ public:
 	bigkarnk_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
-		m_soundcpu(*this, "soundcpu"),
-		m_soundlatch(*this, "soundlatch"),
-		m_msm(*this, "msm"),
-		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
-		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod51(*this, "mod51"),
 		m_mod9(*this, "mod9"),
@@ -317,8 +306,7 @@ public:
 		m_videoram1(*this, "videoram1"),
 		m_videoram2(*this, "videoram2"),
 		m_videoram3(*this, "videoram3"),
-		m_scrollregs(*this, "scrollregs"),
-		m_soundrom(*this, "soundrom")
+		m_scrollregs(*this, "scrollregs")
 	{ }
 
 	void bigkarnkm(machine_config &config);
@@ -329,13 +317,8 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_soundcpu;
-	required_device<generic_latch_8_device> m_soundlatch;
-	required_device<msm5205_device> m_msm;
-	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
-	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gaelco_ms_mod9_device> m_mod9;
@@ -344,18 +327,14 @@ private:
 	required_shared_ptr<uint16_t> m_videoram2;
 	required_shared_ptr<uint16_t> m_videoram3;
 	required_shared_ptr<uint16_t> m_scrollregs;
-	required_device<address_map_bank_device> m_soundrom;
 
 	virtual void machine_start() override ATTR_COLD;
-	virtual void machine_reset() override ATTR_COLD;
 
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void bigkarnkm_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
-	void soundrom_map(address_map &map) ATTR_COLD;
 
 	uint16_t vram1_r(offs_t offset, uint16_t mem_mask);
 	uint16_t vram2_r(offs_t offset, uint16_t mem_mask);
@@ -372,11 +351,6 @@ private:
 	tilemap_t *m_bg_tilemap1 = nullptr;
 	tilemap_t *m_bg_tilemap2 = nullptr;
 	tilemap_t *m_bg_tilemap3 = nullptr;
-
-	void splash_msm5205_int(int state);
-	void splash_adpcm_data_w(uint8_t data);
-	void splash_adpcm_control_w(uint8_t data);
-	int m_adpcm_data = 0;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
@@ -488,15 +462,9 @@ void bigkarnk_ms_state::bigkarnkm_map(address_map &map)
 
 	map(0x102000, 0x103fff).ram();
 
-	map(0x200000, 0x2007ff).ram().w(m_palette, FUNC(palette_device::write16)).share("palette");
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
 
-	map(0x400000, 0x400001).portr("IN0");
-	map(0x400002, 0x400003).portr("IN1");
-	map(0x400006, 0x400007).portr("IN2");
-	map(0x400008, 0x400009).portr("IN3");
-
-	map(0x40000c, 0x40000d).noprw();
-	map(0x40000e, 0x40000e).w(m_soundlatch, FUNC(generic_latch_8_device::write));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
 
 	map(0xff0000, 0xffffff).ram();
 }
@@ -540,30 +508,10 @@ uint32_t bigkarnk_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 }
 
 static INPUT_PORTS_START( bigkarnkm )
+	PORT_INCLUDE( gaelco_ms_mod9 )
 
-	PORT_START("IN0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN2")
+	// on the MOD 9/2 board
+	PORT_START("DSW1")
 	PORT_DIPNAME( 0x000f, 0x000f, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:8,7,6,5")
 	PORT_DIPSETTING(      0x0007, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( 3C_1C ) )
@@ -588,9 +536,8 @@ static INPUT_PORTS_START( bigkarnkm )
 	PORT_DIPSETTING(      0x00b0, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x00a0, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(      0x0000, "Free Play (if Coin A too)" )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN3")
+	PORT_START("DSW2")
 	PORT_DIPNAME( 0x0007, 0x0006, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:8,7,6")
 	PORT_DIPSETTING(      0x0007, "0" )
 	PORT_DIPSETTING(      0x0006, "1" )
@@ -612,7 +559,6 @@ static INPUT_PORTS_START( bigkarnkm )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
 	PORT_SERVICE_DIPLOC(  0x0080, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static const gfx_layout tiles16x16x4_layout =
@@ -644,97 +590,37 @@ static GFXDECODE_START( gfx_bigkarnk_ms )
 	GFXDECODE_ENTRY( "sprites", 0, tiles16x16x4_layout, 0x200, 32 )
 GFXDECODE_END
 
-void bigkarnk_ms_state::splash_adpcm_data_w(uint8_t data)
-{
-	m_adpcm_data = data;
-}
-
-void bigkarnk_ms_state::splash_adpcm_control_w(uint8_t data)
-{
-	m_msm->reset_w(BIT(data, 7));
-
-	int bank = data & 0x7f;
-
-	if ((bank != 0x02) &&
-		(bank != 0x04) && (bank != 0x05) && (bank != 0x06) && (bank != 0x07) &&
-		(bank != 0x0c) && (bank != 0x0d) && (bank != 0x0e) && (bank != 0x0f))
-	{
-		logerror("splash_adpcm_control_w %02x\n", data);
-	}
-
-	m_soundrom->set_bank(bank & 0xf);
-}
-
-void bigkarnk_ms_state::splash_msm5205_int(int state)
-{
-	m_msm->data_w(m_adpcm_data >> 4);
-	m_adpcm_data = (m_adpcm_data << 4) & 0xf0;
-}
-void bigkarnk_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-
-	map(0x8000, 0xbfff).m(m_soundrom, FUNC(address_map_bank_device::amap8));
-
-	map(0xe000, 0xe000).w(FUNC(bigkarnk_ms_state::splash_adpcm_control_w));
-	map(0xe400, 0xe400).w(FUNC(bigkarnk_ms_state::splash_adpcm_data_w));
-
-	map(0xe800, 0xe801).rw("ymsnd", FUNC(ym3812_device::read), FUNC(ym3812_device::write));
-
-	map(0xf000, 0xf7ff).ram();
-	map(0xf800, 0xf800).r(m_soundlatch, FUNC(generic_latch_8_device::read));
-}
-
-void bigkarnk_ms_state::soundrom_map(address_map &map)
-{
-	map(0x00000, 0x3ffff).rom().region("soundcpu", 0x000000);
-}
-
 
 void bigkarnk_ms_state::bigkarnkm(machine_config &config)
 {
 	// basic machine hardware
 	M68000(config, m_maincpu, 12_MHz_XTAL);
 	m_maincpu->set_addrmap(AS_PROGRAM, &bigkarnk_ms_state::bigkarnkm_map);
-	m_maincpu->set_vblank_int("screen", FUNC(bigkarnk_ms_state::irq6_line_hold));
-
-	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
-	m_soundcpu->set_addrmap(AS_PROGRAM, &bigkarnk_ms_state::sound_map);
-	m_soundcpu->set_periodic_int(FUNC(bigkarnk_ms_state::nmi_line_pulse), attotime::from_hz(60*64));
-
-	ADDRESS_MAP_BANK(config, m_soundrom).set_map(&bigkarnk_ms_state::soundrom_map).set_options(ENDIANNESS_LITTLE, 8, 18, 0x4000);
 
 	// video hardware
 	SCREEN(config, m_screen);
 	m_screen->set_raw(28_MHz_XTAL / 4, 448, 0, 320, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(bigkarnk_ms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod9);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod9, gfx_bigkarnk_ms);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_bigkarnk_ms);
+	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
 	m_mod9->set_screen(m_screen);
+	m_mod9->irq_callback().set_inputline(m_maincpu, 6);
+	m_mod9->in_callback<0>().set_ioport("IN0");
+	m_mod9->in_callback<1>().set_ioport("IN1");
+	m_mod9->in_callback<2>().set_ioport("DSW1");
+	m_mod9->in_callback<3>().set_ioport("DSW2");
+	m_mod9->add_route(ALL_OUTPUTS, "mono", 1.0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
 	m_mod51->set_list(256, 0x400, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(bigkarnk_ms_state::sprite_cb));
-
-	GENERIC_LATCH_8(config, m_soundlatch);
-	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
-
-	// sound hardware
-	SPEAKER(config, "mono").front_center();
-
-	YM3812(config, "ymsnd", XTAL(16'000'000)/4).add_route(ALL_OUTPUTS, "mono", 0.80);
-
-	MSM5205(config, m_msm, XTAL(384'000));
-	m_msm->vck_legacy_callback().set(FUNC(bigkarnk_ms_state::splash_msm5205_int));
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.80);
 }
 
 
@@ -759,12 +645,6 @@ void bigkarnk_ms_state::init_bigkarnkm()
 }
 
 
-void bigkarnk_ms_state::machine_reset()
-{
-	m_soundrom->set_bank(0);
-}
-
-
 
 ROM_START( bigkarnkm )
 	ROM_REGION( 0x080000, "maincpu", 0 )    // 68000 code
@@ -773,10 +653,9 @@ ROM_START( bigkarnkm )
 	ROM_LOAD16_BYTE( "cpu_ka_6.ic11", 0x040001, 0x020000, CRC(30674ef3) SHA1(d1b29337068ed7323c104a48de593c9ac4668e66) )
 	ROM_LOAD16_BYTE( "cpu_ka_6.ic20", 0x040000, 0x020000, CRC(332d6dea) SHA1(cd7e402642f57c12cb7405c49b75bfaa0d104421) )
 
-	ROM_REGION( 0x040000, "soundcpu", 0 )    // Z80 code (uses YM3812 + M5205)
-	ROM_LOAD( "snd_ka.ic6",           0x000000, 0x010000, CRC(48a66be8) SHA1(0ca8e4ef5b5e257d56afda6946c5f2a0712917a3) ) // 0,1,2,3
-	ROM_LOAD( "snd_ka.ic11",          0x010000, 0x010000, CRC(8e53a6b8) SHA1(5082bbcb042216a6d58c654a52c98d75df700ac8) ) // 4,5,6,7
-	ROM_CONTINUE(0x30000,0x10000) // c,d,e,f
+	ROM_REGION( 0x30000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
+	ROM_LOAD( "snd_ka.ic6",           0x000000, 0x010000, CRC(48a66be8) SHA1(0ca8e4ef5b5e257d56afda6946c5f2a0712917a3) )
+	ROM_LOAD( "snd_ka.ic11",          0x010000, 0x020000, CRC(8e53a6b8) SHA1(5082bbcb042216a6d58c654a52c98d75df700ac8) )
 
 	ROM_REGION( 0x180000, "sprites", ROMREGION_ERASEFF | ROMREGION_INVERT ) // sprites (same rom subboard type as galpanic_ms.cpp)
 	ROM_LOAD32_BYTE( "5_ka.ic4",      0x080003, 0x020000, CRC(2bee07ea) SHA1(afd8769955314768db894e4e98f65422fc0dbb4f) )
@@ -807,8 +686,11 @@ ROM_START( bigkarnkm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51_p0502_n82s129n.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
-	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9248_gal20v8-25lp.ic18", 0x000, 0x157, CRC(13123ce6) SHA1(85b012d706021963899ad3bc6d29fbe50d8433ab) )
+
+	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "snd_9348_gal16v8-25hb1.ic10",  0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "51_p0503_pal16r6acn.ic48",     0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) ) // matches one of the Euro League Modular System PALs
@@ -823,10 +705,9 @@ ROM_START( bigkarnkm )
 	ROM_LOAD( "cpu_606_gal16v8-25hb1.ic13",   0x000, 0x117, CRC(6fc7e412) SHA1(b9512d597bb9cec765b8caf26a51e7e4ed5d07b3) )
 	ROM_LOAD( "cpu_648_gal16v8-25ln.ic7",     0x000, 0x117, CRC(4b415042) SHA1(4804558a5f5459d5f880fd1979c7fce8d5486beb) )
 	ROM_LOAD( "snd_9148_gal16v8-25hb1.ic142", 0x000, 0x117, CRC(65e89f3d) SHA1(58f392598094547896ed7871626282136f00a120) )
-	ROM_LOAD( "snd_9348_gal16v8-25hb1.ic10",  0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 ROM_END
 
 } // anonymous namespace
 
 
-GAME( 1991, bigkarnkm,  bigkarnk,  bigkarnkm,  bigkarnkm,  bigkarnk_ms_state, init_bigkarnkm, ROT0, "Gaelco", "Big Karnak (Modular System)", MACHINE_NOT_WORKING | MACHINE_NO_SOUND )
+GAME( 1991, bigkarnkm,  bigkarnk,  bigkarnkm,  bigkarnkm,  bigkarnk_ms_state, init_bigkarnkm, ROT0, "Gaelco", "Big Karnak (Modular System)", MACHINE_NOT_WORKING | MACHINE_IMPERFECT_SOUND )

@@ -25,8 +25,7 @@
     CPU builds the MOD 51 sprite list, with colours 0-7 that the sprites take from palettes 8-15, and
     writes the palette in the format of the original game.
 
-    There is no MOD 21/1 board: the MOD 9/2 board generates the video timing, and the palette RAM is
-    elsewhere, maybe the two 6116 next to its timing GAL.
+    There is no MOD 21/1 board: the MOD 9/2 board generates the video timing and has the palette RAM.
 
     Gaelco requested the registry of the "Euro League" trademark on 1990, and it was a Gaelco
     protected trademark (in Spain) until 1999 (they paid a 5-year renew in 1994):
@@ -35,6 +34,7 @@
     TODO:
     - the scroll offsets of the MOD 4 boards, fitted: with the MOD 9/2 timing the position model of the
       MOD 4 device puts the layers 5 pixels left (see the MOD 9/2 TODO for the horizontal sync)
+    - how the CPU board gives the second CPU its interrupt
 */
 
 #include "emu.h"
@@ -44,11 +44,7 @@
 #include "../gaelco/gaelco_ms_mod9.h"
 
 #include "cpu/z80/z80.h"
-#include "machine/gen_latch.h"
-#include "sound/msm5205.h"
-#include "sound/ymopn.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -62,17 +58,13 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "sub"),
-		m_audiocpu(*this, "audiocpu"),
-		m_msm(*this, "msm"),
-		m_palette(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod4(*this, { "mod4_tx", "mod4_fg", "mod4_bg" }),
 		m_mod51(*this, "mod51"),
 		m_mod9(*this, "mod9"),
 		m_spriteram(*this, "spriteram"),
 		m_mainbank(*this, "mainbank"),
-		m_subbank(*this, "subbank"),
-		m_audiobank(*this, "audiobank")
+		m_subbank(*this, "subbank")
 	{ }
 
 	void euroleagm(machine_config &config) ATTR_COLD;
@@ -85,20 +77,13 @@ private:
 
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
-	required_device<cpu_device> m_audiocpu;
-	required_device<msm5205_device> m_msm;
-	required_device<palette_device> m_palette;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device_array<gaelco_ms_mod4_device, 3> m_mod4;
 	required_device<gaelco_ms_mod51_device> m_mod51;
-	required_device<gaelco_ms_mod9_device> m_mod9;
+	required_device<gaelco_ms_mod9_ym2203_device> m_mod9;
 	required_shared_ptr<u8> m_spriteram;
 	required_memory_bank m_mainbank;
 	required_memory_bank m_subbank;
-	required_memory_bank m_audiobank;
-
-	u8 m_adpcm_data = 0;
-	bool m_adpcm_toggle = false;
 
 	u8 mod4_read(u32 which, offs_t offset) const;
 	template <u32 Which> u8 mod4_r(offs_t offset) { return mod4_read(Which, offset); }
@@ -110,15 +95,10 @@ private:
 
 	void main_bank_w(u8 data);
 	void sub_bank_w(u8 data);
-	void main_irq_ack_w(u8 data);
 	void sub_irq_ack_w(u8 data);
-	void adpcm_control_w(u8 data);
-	void adpcm_data_w(u8 data);
-	void adpcm_int(int state);
 
 	void main_map(address_map &map) ATTR_COLD;
 	void sub_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
 };
 
 
@@ -194,40 +174,9 @@ void euroleag_ms_state::sub_bank_w(u8 data)
 	m_subbank->set_entry(data >> 3);
 }
 
-void euroleag_ms_state::main_irq_ack_w(u8 data)
-{
-	m_maincpu->set_input_line(0, CLEAR_LINE);
-}
-
 void euroleag_ms_state::sub_irq_ack_w(u8 data)
 {
 	m_subcpu->set_input_line(0, CLEAR_LINE);
-}
-
-void euroleag_ms_state::adpcm_control_w(u8 data)
-{
-	m_audiobank->set_entry(BIT(data, 0));
-	m_msm->reset_w(BIT(data, 3));
-}
-
-void euroleag_ms_state::adpcm_data_w(u8 data)
-{
-	m_adpcm_data = data;
-}
-
-void euroleag_ms_state::adpcm_int(int state)
-{
-	// two samples for each byte, the high nibble first, and an NMI for the next byte
-	m_adpcm_toggle = !m_adpcm_toggle;
-	if (m_adpcm_toggle)
-	{
-		m_msm->data_w(m_adpcm_data >> 4);
-		m_audiocpu->pulse_input_line(INPUT_LINE_NMI, attotime::zero);
-	}
-	else
-	{
-		m_msm->data_w(m_adpcm_data & 0x0f);
-	}
 }
 
 
@@ -241,12 +190,7 @@ void euroleag_ms_state::main_map(address_map &map)
 	map(0xf000, 0xf7ff).bankr(m_mainbank);
 	map(0xf800, 0xfbff).ram().share("main_sub");
 	map(0xfc00, 0xfc00).w(FUNC(euroleag_ms_state::main_bank_w));
-	map(0xfd00, 0xfd00).portr("P1");
-	map(0xfd02, 0xfd02).portr("P2");
-	map(0xfd06, 0xfd06).portr("DSW1");
-	map(0xfd08, 0xfd08).portr("DSW2");
-	map(0xfd0c, 0xfd0c).w(FUNC(euroleag_ms_state::main_irq_ack_w));
-	map(0xfd0e, 0xfd0e).w("soundlatch", FUNC(generic_latch_8_device::write));
+	map(0xfd00, 0xfd0f).rw(m_mod9, FUNC(gaelco_ms_mod9_ym2203_device::io_r), FUNC(gaelco_ms_mod9_ym2203_device::io_w));
 }
 
 void euroleag_ms_state::sub_map(address_map &map)
@@ -255,7 +199,7 @@ void euroleag_ms_state::sub_map(address_map &map)
 	map(0xc000, 0xcfff).ram();
 	map(0xd000, 0xd7ff).ram().share(m_spriteram);
 	map(0xd800, 0xdfff).ram();
-	map(0xe000, 0xe7ff).ram().w(m_palette, FUNC(palette_device::write8)).share("palette");
+	map(0xe000, 0xe7ff).rw(m_mod9, FUNC(gaelco_ms_mod9_ym2203_device::palette8_r), FUNC(gaelco_ms_mod9_ym2203_device::palette8_w));
 	map(0xe800, 0xefff).rom();
 	map(0xf000, 0xf7ff).bankr(m_subbank);
 	map(0xf800, 0xfbff).ram().share("main_sub");
@@ -263,39 +207,9 @@ void euroleag_ms_state::sub_map(address_map &map)
 	map(0xfd0c, 0xfd0c).w(FUNC(euroleag_ms_state::sub_irq_ack_w));
 }
 
-void euroleag_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0x8000, 0xbfff).bankr(m_audiobank);
-	map(0xe000, 0xe000).w(FUNC(euroleag_ms_state::adpcm_control_w));
-	map(0xe400, 0xe400).w(FUNC(euroleag_ms_state::adpcm_data_w));
-	map(0xe800, 0xe801).rw("ymsnd1", FUNC(ym2203_device::read), FUNC(ym2203_device::write));
-	map(0xec00, 0xec01).rw("ymsnd2", FUNC(ym2203_device::read), FUNC(ym2203_device::write));
-	map(0xf000, 0xf7ff).ram();
-	map(0xf800, 0xf800).r("soundlatch", FUNC(generic_latch_8_device::read));
-}
-
 
 static INPUT_PORTS_START( euroleagm )
-	PORT_START("P1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
-
-	PORT_START("P2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_INCLUDE( gaelco_ms_mod9 )
 
 	// on the MOD 9/2 board, locations from the DIP switch sheet of the cage
 	PORT_START("DSW1")
@@ -370,10 +284,6 @@ void euroleag_ms_state::machine_start()
 {
 	m_mainbank->configure_entries(0, 32, memregion("maincpu")->base() + 0x10000, 0x800);
 	m_subbank->configure_entries(0, 32, memregion("sub")->base() + 0x10000, 0x800);
-	m_audiobank->configure_entries(0, 2, memregion("audiocpu")->base() + 0x8000, 0x4000);
-
-	save_item(NAME(m_adpcm_data));
-	save_item(NAME(m_adpcm_toggle));
 }
 
 
@@ -381,63 +291,54 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 {
 	Z80(config, m_maincpu, 16_MHz_XTAL / 2); // divider guessed
 	m_maincpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::main_map);
-	m_maincpu->set_vblank_int("screen", FUNC(euroleag_ms_state::irq0_line_assert));
 
 	Z80(config, m_subcpu, 16_MHz_XTAL / 2); // divider guessed
 	m_subcpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sub_map);
 	m_subcpu->set_vblank_int("screen", FUNC(euroleag_ms_state::irq0_line_assert));
 
-	Z80(config, m_audiocpu, 20_MHz_XTAL / 4); // crystal and divider guessed
-	m_audiocpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sound_map);
-
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_raw(20_MHz_XTAL / 4, 320, 0, 256, 264, 16, 240);
 	screen.set_screen_update(FUNC(euroleag_ms_state::screen_update));
-	screen.set_palette(m_palette);
+	screen.set_palette(m_mod9);
 
-	GFXDECODE(config, m_gfxdecode, m_palette, gfx_euroleag_ms);
-	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 1024).set_endianness(ENDIANNESS_BIG);
+	GFXDECODE(config, m_gfxdecode, m_mod9, gfx_euroleag_ms);
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_TX]);
-	m_mod4[MOD4_TX]->set_palette(m_palette);
+	m_mod4[MOD4_TX]->set_palette(m_mod9);
 	m_mod4[MOD4_TX]->set_color_base(0x100);
 	m_mod4[MOD4_TX]->set_tile_size(8);
 	m_mod4[MOD4_TX]->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 	m_mod4[MOD4_TX]->set_transparent_pen(15);
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_FG]);
-	m_mod4[MOD4_FG]->set_palette(m_palette);
+	m_mod4[MOD4_FG]->set_palette(m_mod9);
 	m_mod4[MOD4_FG]->set_color_base(0x200);
 	m_mod4[MOD4_FG]->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 	m_mod4[MOD4_FG]->set_transparent_pen(15);
 	m_mod4[MOD4_FG]->set_tile_callback(FUNC(euroleag_ms_state::tile_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4[MOD4_BG]);
-	m_mod4[MOD4_BG]->set_palette(m_palette);
+	m_mod4[MOD4_BG]->set_palette(m_mod9);
 	m_mod4[MOD4_BG]->set_color_base(0x300);
 	m_mod4[MOD4_BG]->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 	m_mod4[MOD4_BG]->set_tile_callback(FUNC(euroleag_ms_state::tile_cb));
 
-	GAELCO_MS_MOD9(config, m_mod9, 20_MHz_XTAL);
+	SPEAKER(config, "mono").front_center();
+
+	GAELCO_MS_MOD9_YM2203(config, m_mod9, 20_MHz_XTAL);
 	m_mod9->set_screen(screen);
+	m_mod9->irq_callback().set_inputline(m_maincpu, 0);
+	m_mod9->in_callback<0>().set_ioport("IN0");
+	m_mod9->in_callback<1>().set_ioport("IN1");
+	m_mod9->in_callback<2>().set_ioport("DSW1");
+	m_mod9->in_callback<3>().set_ioport("DSW2");
+	m_mod9->add_route(ALL_OUTPUTS, "mono", 1.0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
 	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
 	m_mod51->set_sprite_callback(FUNC(euroleag_ms_state::sprite_cb));
 	m_mod51->set_priority_callback(FUNC(euroleag_ms_state::sprite_priority));
-
-	SPEAKER(config, "mono").front_center();
-
-	GENERIC_LATCH_8(config, "soundlatch").data_pending_callback().set_inputline(m_audiocpu, 0);
-
-	YM2203(config, "ymsnd1", 16_MHz_XTAL / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // crystal and divider guessed
-	YM2203(config, "ymsnd2", 16_MHz_XTAL / 4).add_route(ALL_OUTPUTS, "mono", 0.40); // crystal and divider guessed
-
-	MSM5205(config, m_msm, 384_kHz_XTAL);
-	m_msm->vck_legacy_callback().set(FUNC(euroleag_ms_state::adpcm_int));
-	m_msm->set_prescaler_selector(msm5205_device::S96_4B); // 4 kHz, 4-bit
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.20);
 }
 
 
@@ -450,7 +351,7 @@ ROM_START( euroleagm )
 	ROM_LOAD( "3z-1_fu303.ic19", 0x00000, 0x10000, CRC(348195fa) SHA1(41c59e38ec4ba4f3c2185dd32dbf4ea0318ab375) ) // c000-dfff and f000-ffff empty
 	ROM_LOAD( "3z-1_fu304.ic16", 0x10000, 0x10000, CRC(9e421c4b) SHA1(e23a1f1d5d1e960696f45df653869712eb889839) ) // banked at f000-f7ff
 
-	ROM_REGION( 0x10000, "audiocpu", 0 ) // on the MOD 9/2 board
+	ROM_REGION( 0x10000, "mod9", 0 ) // on the MOD 9/2 board, sound program and samples
 	ROM_LOAD( "system2_fu101.ic6", 0x00000, 0x10000, CRC(712566ca) SHA1(9e46f9d449ff549b7a6d82283d8f903189b058e7) )
 
 	ROM_REGION( 0x20000, "mod4_tx", ROMREGION_INVERT ) // on the MOD 4/3 board with sub-board C0473
@@ -484,8 +385,11 @@ ROM_START( euroleagm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on the MOD 51/1 board
 	ROM_LOAD( "r4_p0502_82s129.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x157, "mod9", 0 ) // on the MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", 0 ) // on the MOD 9/2 board
 	ROM_LOAD( "system2_9238_gal20v8.ic18", 0x000, 0x157, CRC(dd571a59) SHA1(ef2c7b33922dd79513a4fbe6f04a2f2c2c795ada) )
+
+	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on the MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "system2_9338_gal16v8.ic10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "r2_p0403_pal16r8a.ic29",    0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )
@@ -495,7 +399,6 @@ ROM_START( euroleagm )
 	ROM_LOAD( "3z-1_3238_gal16v8.ic24",    0x000, 0x117, CRC(e9e538d9) SHA1(9ea73a903a06111843fe64ae55cb29ee88803334) ) // Same as Gaelco Goldart ?
 	ROM_LOAD( "r1_403_gal16v8.ic29",       0x000, 0x117, CRC(c136de93) SHA1(116f6d3b456d20621ab07a005c1421f57569915c) )
 	ROM_LOAD( "system2_9138_gal16v8.ic42", 0x000, 0x117, CRC(bd9ad8c3) SHA1(50e00b0cf7d075f9daed0338bc336a74caa3b66b) )
-	ROM_LOAD( "system2_9338_gal16v8.ic10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 ROM_END
 
 } // anonymous namespace

@@ -11,13 +11,9 @@
 #include "gaelco_ms_mod9.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
-#include "sound/msm5205.h"
-#include "sound/ymopl.h"
-#include "machine/gen_latch.h"
 #include "machine/bankdev.h"
 
 
@@ -28,10 +24,7 @@ public:
 		driver_device(mconfig, type, tag),
 		m_maincpu(*this, "maincpu"),
 		m_subcpu(*this, "subcpu"),
-		m_soundcpu(*this, "soundcpu"),
-		m_palette(*this, "palette"),
 		m_screen(*this, "screen"),
-		m_paletteram(*this, "palette"),
 		m_gfxdecode(*this, "gfxdecode"),
 		m_mod51(*this, "mod51"),
 		m_mod9(*this, "mod9"),
@@ -40,9 +33,7 @@ public:
 		m_bitmapram(*this, "bitmapram"),
 		m_scrollregs(*this, "scrollregs"),
 		m_spriteram(*this, "spriteram"),
-		m_msm(*this, "msm"),
 		m_bgdata(*this, "subcpu"),
-		m_soundlatch(*this, "soundlatch"),
 		m_subram(*this, "subrambank"),
 		m_subrom(*this, "subrombank")
 	{ }
@@ -53,12 +44,9 @@ public:
 private:
 	required_device<cpu_device> m_maincpu;
 	required_device<cpu_device> m_subcpu;
-	required_device<cpu_device> m_soundcpu;
 
-	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 
-	required_shared_ptr<uint16_t> m_paletteram;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
 	required_device<gaelco_ms_mod9_device> m_mod9;
@@ -67,9 +55,7 @@ private:
 	required_shared_ptr<uint8_t> m_bitmapram;
 	required_shared_ptr<uint16_t> m_scrollregs;
 	required_shared_ptr<uint16_t> m_spriteram;
-	required_device<msm5205_device> m_msm;
 	required_region_ptr<uint8_t> m_bgdata;
-	required_device<generic_latch_8_device> m_soundlatch;
 	required_device<address_map_bank_device> m_subram;
 	required_device<address_map_bank_device> m_subrom;
 
@@ -84,9 +70,7 @@ private:
 	void splashms_map(address_map &map) ATTR_COLD;
 	void sub_map(address_map &map) ATTR_COLD;
 	void sub_portmap(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map) ATTR_COLD;
 
-	uint16_t unknown_0x40000c_r();
 	uint8_t frommain_command_r();
 	void vram_w(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
 
@@ -104,23 +88,11 @@ private:
 	void sub_rambankselect_w(uint8_t data);
 	void sub_rombankselect_w(uint8_t data);
 
-	void splash_msm5205_int(int state);
-	void splash_adpcm_data_w(uint8_t data);
-	void splash_adpcm_control_w(uint8_t data);
-	int m_adpcm_data = 0;
-
 	void subrambank_map(address_map &map) ATTR_COLD;
 	void subrombank_map(address_map &map) ATTR_COLD;
 
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
-
-
-uint16_t splashms_state::unknown_0x40000c_r()
-{
-	logerror("%06x: unknown_0x40000c_r\n", machine().describe_context());
-	return machine().rand();
-}
 
 
 void splashms_state::sub_rambankselect_w(uint8_t data)
@@ -250,17 +222,10 @@ void splashms_state::splashms_map(address_map &map)
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
 
-	map(0x200000, 0x200fff).ram().w(m_palette, FUNC(palette_device::write16)).share("palette");
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
 
-	map(0x400000, 0x400001).portr("IN0");
-	map(0x400002, 0x400003).portr("IN1");
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
 	map(0x400004, 0x400005).w(FUNC(splashms_state::to_subcpu_0x400004_w));
-	map(0x400006, 0x400007).portr("IN3");
-	map(0x400008, 0x400009).portr("IN4"); // service mode in here
-
-	map(0x40000c, 0x40000d).r(FUNC(splashms_state::unknown_0x40000c_r));
-
-	map(0x40000e, 0x40000e).w(m_soundlatch, FUNC(generic_latch_8_device::write));
 
 	map(0xff0000, 0xffffff).ram();
 }
@@ -282,19 +247,6 @@ void splashms_state::sub_map(address_map &map)
 }
 
 
-void splashms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0xdfff).rom();
-
-	map(0xe000, 0xe000).w(FUNC(splashms_state::splash_adpcm_control_w));
-	map(0xe400, 0xe400).w(FUNC(splashms_state::splash_adpcm_data_w));
-
-	map(0xe800, 0xe801).rw("ymsnd", FUNC(ym3812_device::read), FUNC(ym3812_device::write));
-
-	map(0xf000, 0xf7ff).ram();
-	map(0xf800, 0xf800).r(m_soundlatch, FUNC(generic_latch_8_device::read));
-}
-
 void splashms_state::machine_start()
 {
 }
@@ -308,77 +260,56 @@ void splashms_state::machine_reset()
 
 
 static INPUT_PORTS_START( splashm )
-	PORT_START("IN0")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_INCLUDE( gaelco_ms_mod9 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_COIN2 )
+	// on the MOD 9/2 board
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Coin_A ) )
+	PORT_DIPSETTING(    0x00, "0" )
+	PORT_DIPSETTING(    0x04, "1" )
+	PORT_DIPSETTING(    0x08, "2" )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x10, "4" )
+	PORT_DIPSETTING(    0x14, "5" )
+	PORT_DIPSETTING(    0x18, "6" )
+	PORT_DIPSETTING(    0x1c, "7" )
+	PORT_DIPNAME( 0xe0, 0xe0, DEF_STR( Coin_B ) )
+	PORT_DIPSETTING(    0x00, "0" )
+	PORT_DIPSETTING(    0x20, "1" )
+	PORT_DIPSETTING(    0x40, "2" )
+	PORT_DIPSETTING(    0x60, "3" )
+	PORT_DIPSETTING(    0x80, "4" )
+	PORT_DIPSETTING(    0xa0, "5" )
+	PORT_DIPSETTING(    0xc0, "6" )
+	PORT_DIPSETTING(    0xe0, "7" )
 
-	PORT_START("IN3")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(      0x0000, "0" )
-	PORT_DIPSETTING(      0x0400, "1" )
-	PORT_DIPSETTING(      0x0800, "2" )
-	PORT_DIPSETTING(      0x0c00, "3" )
-	PORT_DIPSETTING(      0x1000, "4" )
-	PORT_DIPSETTING(      0x1400, "5" )
-	PORT_DIPSETTING(      0x1800, "6" )
-	PORT_DIPSETTING(      0x1c00, "7" )
-	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(      0x0000, "0" )
-	PORT_DIPSETTING(      0x2000, "1" )
-	PORT_DIPSETTING(      0x4000, "2" )
-	PORT_DIPSETTING(      0x6000, "3" )
-	PORT_DIPSETTING(      0x8000, "4" )
-	PORT_DIPSETTING(      0xa000, "5" )
-	PORT_DIPSETTING(      0xc000, "6" )
-	PORT_DIPSETTING(      0xe000, "7" )
-
-	PORT_START("IN4")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_DIPNAME( 0x0100, 0x0100,  DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_SERVICE( 0x0400, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x3000, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0xc000, 0xc000, DEF_STR( Lives ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPSETTING(      0x4000, "1" )
-	PORT_DIPSETTING(      0x8000, "2" )
-	PORT_DIPSETTING(      0xc000, "3" )
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_SERVICE( 0x04, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	PORT_DIPSETTING(    0x40, "1" )
+	PORT_DIPSETTING(    0x80, "2" )
+	PORT_DIPSETTING(    0xc0, "3" )
 INPUT_PORTS_END
 
 static const gfx_layout tiles16x16x4_layout =
@@ -410,22 +341,6 @@ static GFXDECODE_START( gfx_splashms )
 	GFXDECODE_ENTRY( "bgtile", 0, tiles16x16x4_layout, 0, 16 )
 GFXDECODE_END
 
-void splashms_state::splash_adpcm_data_w(uint8_t data)
-{
-	m_adpcm_data = data;
-}
-
-void splashms_state::splash_adpcm_control_w(uint8_t data)
-{
-	m_msm->reset_w(BIT(data, 7));
-}
-
-void splashms_state::splash_msm5205_int(int state)
-{
-	m_msm->data_w(m_adpcm_data >> 4);
-	m_adpcm_data = (m_adpcm_data << 4) & 0xf0;
-}
-
 void splashms_state::subrambank_map(address_map &map)
 {
 	map(0x00000, 0x1ffff).ram().share("bitmapram");
@@ -442,7 +357,6 @@ void splashms_state::splashm(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL/2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &splashms_state::splashms_map);
-	m_maincpu->set_vblank_int("screen", FUNC(splashms_state::irq4_line_hold));
 
 	Z80(config, m_subcpu, 12_MHz_XTAL/2);
 	m_subcpu->set_addrmap(AS_PROGRAM, &splashms_state::sub_map);
@@ -451,42 +365,30 @@ void splashms_state::splashm(machine_config &config)
 	ADDRESS_MAP_BANK(config, m_subram).set_map(&splashms_state::subrambank_map).set_options(ENDIANNESS_LITTLE, 8, 17, 0x4000);
 	ADDRESS_MAP_BANK(config, m_subrom).set_map(&splashms_state::subrombank_map).set_options(ENDIANNESS_LITTLE, 8, 22, 0x8000);
 
-
-	Z80(config, m_soundcpu, 16_MHz_XTAL/4);
-	m_soundcpu->set_addrmap(AS_PROGRAM, &splashms_state::sound_map);
-	m_soundcpu->set_periodic_int(FUNC(splashms_state::nmi_line_pulse), attotime::from_hz(60*64));
-
 	// video hardware
 	SCREEN(config, m_screen);
 	m_screen->set_raw(28_MHz_XTAL / 4, 464, 0, 384, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(splashms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod9);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 0x800);
+	GFXDECODE(config, m_gfxdecode, m_mod9, gfx_splashms);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_splashms);
+	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL); // not verified, the crystal of the other MOD 9/2 boards
 	m_mod9->set_screen(m_screen);
+	m_mod9->irq_callback().set_inputline(m_maincpu, 4);
+	m_mod9->in_callback<0>().set_ioport("IN0");
+	m_mod9->in_callback<1>().set_ioport("IN1");
+	m_mod9->in_callback<2>().set_ioport("DSW1");
+	m_mod9->in_callback<3>().set_ioport("DSW2");
+	m_mod9->add_route(ALL_OUTPUTS, "mono", 1.0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
 	m_mod51->set_list(128, 0x200, true);
 	m_mod51->list_r().set([this] (offs_t offset) { return sprite_byte(offset); });
 	m_mod51->set_sprite_callback(FUNC(splashms_state::sprite_cb));
-
-	GENERIC_LATCH_8(config, m_soundlatch);
-	m_soundlatch->data_pending_callback().set_inputline(m_soundcpu, INPUT_LINE_IRQ0);
-
-	// sound hardware
-	SPEAKER(config, "mono").front_center();
-
-	YM3812(config, "ymsnd", XTAL(16'000'000)/4).add_route(ALL_OUTPUTS, "mono", 0.80);
-
-	MSM5205(config, m_msm, XTAL(384'000));
-	m_msm->vck_legacy_callback().set(FUNC(splashms_state::splash_msm5205_int));
-	m_msm->set_prescaler_selector(msm5205_device::S48_4B);
-	m_msm->add_route(ALL_OUTPUTS, "mono", 0.80);
 }
 
 // reorganize graphics into something we can decode with a single pass
@@ -524,7 +426,7 @@ ROM_START( splashm )
 	ROM_LOAD( "cpu2_c_sp_c6.ic6", 0x200000, 0x080000, CRC(994e8e16) SHA1(cbe7d9e192d0390b123f1b585a0463634f33b485) )
 	ROM_LOAD( "cpu2_c_sp_c7.ic7", 0x280000, 0x080000, CRC(6ea0be42) SHA1(5cc45ef1f3c8f46e1e7b3ad3313d221a65fb0025) )
 
-	ROM_REGION( 0x10000, "soundcpu", 0 )
+	ROM_REGION( 0x10000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
 	ROM_LOAD( "snd_9-2_sp_916.ic6", 0x00000, 0x10000, CRC(5567fa22) SHA1(3993c733a0222ca292b60f409c78b45280a5fec6) )
 
 	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF )
@@ -552,8 +454,70 @@ ROM_START( splashm )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
 
-	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
+
+	ROM_REGION( 0x117, "mod9:decoder", ROMREGION_ERASEFF ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
+	// not dumped, the 93xx of Euro League's, Big Karnak's and World Rally's boards
+	ROM_FILL( 0x000, 0x02, 0x00 )
+	ROM_FILL( 0x002, 0x01, 0x08 )
+	ROM_FILL( 0x003, 0x01, 0x92 )
+	ROM_FILL( 0x008, 0x01, 0x66 )
+	ROM_FILL( 0x009, 0x01, 0xd6 )
+	ROM_FILL( 0x00a, 0x01, 0xed )
+	ROM_FILL( 0x00c, 0x01, 0x66 )
+	ROM_FILL( 0x00d, 0x01, 0xfa )
+	ROM_FILL( 0x00e, 0x01, 0xed )
+	ROM_FILL( 0x010, 0x01, 0xa6 )
+	ROM_FILL( 0x011, 0x01, 0xfe )
+	ROM_FILL( 0x012, 0x01, 0xed )
+	ROM_FILL( 0x014, 0x01, 0xea )
+	ROM_FILL( 0x015, 0x01, 0xfe )
+	ROM_FILL( 0x016, 0x01, 0xed )
+	ROM_FILL( 0x018, 0x4c, 0x00 )
+	ROM_FILL( 0x068, 0x01, 0xdf )
+	ROM_FILL( 0x069, 0x01, 0xfe )
+	ROM_FILL( 0x06a, 0x01, 0xed )
+	ROM_FILL( 0x06b, 0x01, 0xbf )
+	ROM_FILL( 0x06c, 0x18, 0x00 )
+	ROM_FILL( 0x089, 0x01, 0xfd )
+	ROM_FILL( 0x08a, 0x01, 0xed )
+	ROM_FILL( 0x08c, 0x01, 0xdf )
+	ROM_FILL( 0x08d, 0x01, 0xfe )
+	ROM_FILL( 0x08e, 0x01, 0xed )
+	ROM_FILL( 0x08f, 0x01, 0x7f )
+	ROM_FILL( 0x090, 0x14, 0x00 )
+	ROM_FILL( 0x0a8, 0x01, 0xa6 )
+	ROM_FILL( 0x0a9, 0x01, 0xfe )
+	ROM_FILL( 0x0ac, 0x01, 0x6a )
+	ROM_FILL( 0x0ad, 0x01, 0xfe )
+	ROM_FILL( 0x0b0, 0x01, 0xaa )
+	ROM_FILL( 0x0b1, 0x01, 0xf6 )
+	ROM_FILL( 0x0b4, 0x10, 0x00 )
+	ROM_FILL( 0x0c8, 0x01, 0xdf )
+	ROM_FILL( 0x0c9, 0x01, 0xfe )
+	ROM_FILL( 0x0cb, 0x01, 0xef )
+	ROM_FILL( 0x0cc, 0x01, 0xe6 )
+	ROM_FILL( 0x0cd, 0x01, 0xf6 )
+	ROM_FILL( 0x0d0, 0x01, 0x6a )
+	ROM_FILL( 0x0d1, 0x01, 0xfe )
+	ROM_FILL( 0x0d4, 0x01, 0xaa )
+	ROM_FILL( 0x0d5, 0x01, 0xfa )
+	ROM_FILL( 0x0d8, 0x0c, 0x00 )
+	ROM_FILL( 0x0e8, 0x01, 0xdf )
+	ROM_FILL( 0x0e9, 0x01, 0xfd )
+	ROM_FILL( 0x0ec, 0x01, 0xdf )
+	ROM_FILL( 0x0ed, 0x01, 0xfe )
+	ROM_FILL( 0x0ef, 0x01, 0xfd )
+	ROM_FILL( 0x0f0, 0x01, 0xe6 )
+	ROM_FILL( 0x0f1, 0x01, 0xfa )
+	ROM_FILL( 0x0f4, 0x01, 0x6a )
+	ROM_FILL( 0x0f5, 0x01, 0xfe )
+	ROM_FILL( 0x0f8, 0x01, 0xaa )
+	ROM_FILL( 0x0f9, 0x01, 0xfa )
+	ROM_FILL( 0x0fc, 0x09, 0x00 )
+	ROM_FILL( 0x116, 0x01, 0x03 )
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -569,7 +533,6 @@ ROM_START( splashm )
 	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
 	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
 	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
 ROM_END
 
 ROM_START( splashma )
@@ -585,7 +548,7 @@ ROM_START( splashma )
 	ROM_LOAD( "sp_c6_1a0f_27c4001.bin", 0x200000, 0x080000, CRC(994e8e16) SHA1(cbe7d9e192d0390b123f1b585a0463634f33b485) )
 	ROM_LOAD( "sp_c7_08d7_27c4001.bin", 0x280000, 0x080000, CRC(b5a729a5) SHA1(7e8c887264678d018477e64e2e8f531ef450c742) )
 
-	ROM_REGION( 0x010000, "soundcpu", 0 )
+	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
 	ROM_LOAD( "snd_9-2_sp_916.ic6", 0x000000, 0x010000, CRC(5567fa22) SHA1(3993c733a0222ca292b60f409c78b45280a5fec6) )
 
 	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF )
@@ -613,8 +576,70 @@ ROM_START( splashma )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "51-3_502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
 
-	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
+
+	ROM_REGION( 0x117, "mod9:decoder", ROMREGION_ERASEFF ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
+	// not dumped, the 93xx of Euro League's, Big Karnak's and World Rally's boards
+	ROM_FILL( 0x000, 0x02, 0x00 )
+	ROM_FILL( 0x002, 0x01, 0x08 )
+	ROM_FILL( 0x003, 0x01, 0x92 )
+	ROM_FILL( 0x008, 0x01, 0x66 )
+	ROM_FILL( 0x009, 0x01, 0xd6 )
+	ROM_FILL( 0x00a, 0x01, 0xed )
+	ROM_FILL( 0x00c, 0x01, 0x66 )
+	ROM_FILL( 0x00d, 0x01, 0xfa )
+	ROM_FILL( 0x00e, 0x01, 0xed )
+	ROM_FILL( 0x010, 0x01, 0xa6 )
+	ROM_FILL( 0x011, 0x01, 0xfe )
+	ROM_FILL( 0x012, 0x01, 0xed )
+	ROM_FILL( 0x014, 0x01, 0xea )
+	ROM_FILL( 0x015, 0x01, 0xfe )
+	ROM_FILL( 0x016, 0x01, 0xed )
+	ROM_FILL( 0x018, 0x4c, 0x00 )
+	ROM_FILL( 0x068, 0x01, 0xdf )
+	ROM_FILL( 0x069, 0x01, 0xfe )
+	ROM_FILL( 0x06a, 0x01, 0xed )
+	ROM_FILL( 0x06b, 0x01, 0xbf )
+	ROM_FILL( 0x06c, 0x18, 0x00 )
+	ROM_FILL( 0x089, 0x01, 0xfd )
+	ROM_FILL( 0x08a, 0x01, 0xed )
+	ROM_FILL( 0x08c, 0x01, 0xdf )
+	ROM_FILL( 0x08d, 0x01, 0xfe )
+	ROM_FILL( 0x08e, 0x01, 0xed )
+	ROM_FILL( 0x08f, 0x01, 0x7f )
+	ROM_FILL( 0x090, 0x14, 0x00 )
+	ROM_FILL( 0x0a8, 0x01, 0xa6 )
+	ROM_FILL( 0x0a9, 0x01, 0xfe )
+	ROM_FILL( 0x0ac, 0x01, 0x6a )
+	ROM_FILL( 0x0ad, 0x01, 0xfe )
+	ROM_FILL( 0x0b0, 0x01, 0xaa )
+	ROM_FILL( 0x0b1, 0x01, 0xf6 )
+	ROM_FILL( 0x0b4, 0x10, 0x00 )
+	ROM_FILL( 0x0c8, 0x01, 0xdf )
+	ROM_FILL( 0x0c9, 0x01, 0xfe )
+	ROM_FILL( 0x0cb, 0x01, 0xef )
+	ROM_FILL( 0x0cc, 0x01, 0xe6 )
+	ROM_FILL( 0x0cd, 0x01, 0xf6 )
+	ROM_FILL( 0x0d0, 0x01, 0x6a )
+	ROM_FILL( 0x0d1, 0x01, 0xfe )
+	ROM_FILL( 0x0d4, 0x01, 0xaa )
+	ROM_FILL( 0x0d5, 0x01, 0xfa )
+	ROM_FILL( 0x0d8, 0x0c, 0x00 )
+	ROM_FILL( 0x0e8, 0x01, 0xdf )
+	ROM_FILL( 0x0e9, 0x01, 0xfd )
+	ROM_FILL( 0x0ec, 0x01, 0xdf )
+	ROM_FILL( 0x0ed, 0x01, 0xfe )
+	ROM_FILL( 0x0ef, 0x01, 0xfd )
+	ROM_FILL( 0x0f0, 0x01, 0xe6 )
+	ROM_FILL( 0x0f1, 0x01, 0xfa )
+	ROM_FILL( 0x0f4, 0x01, 0x6a )
+	ROM_FILL( 0x0f5, 0x01, 0xfe )
+	ROM_FILL( 0x0f8, 0x01, 0xaa )
+	ROM_FILL( 0x0f9, 0x01, 0xfa )
+	ROM_FILL( 0x0fc, 0x09, 0x00 )
+	ROM_FILL( 0x116, 0x01, 0x03 )
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -630,7 +655,6 @@ ROM_START( splashma )
 	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
 	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
 	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
-	ROM_LOAD( "snd_9-2_9359_gal16v8as.ic10", 0x000, 0x117, NO_DUMP )
 ROM_END
 
 GAME( 1992, splashm,  splash, splashm, splashm, splashms_state, init_splashms, ROT0, "Gaelco / OMK Software", "Splash (Modular System, ver. 1.0, checksum 16EDD8FB, non North America, censored)",   MACHINE_IMPERFECT_GRAPHICS | MACHINE_IMPERFECT_SOUND )

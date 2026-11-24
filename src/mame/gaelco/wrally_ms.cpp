@@ -41,13 +41,9 @@
 #include "gaelco_ms_mod9.h"
 
 #include "cpu/m68000/m68000.h"
-#include "cpu/z80/z80.h"
 
-#include "sound/msm5205.h"
 #include "sound/okim6295.h"
-#include "sound/ymopl.h"
 
-#include "emupal.h"
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
@@ -60,8 +56,6 @@ public:
 	wrally_ms_state(const machine_config &mconfig, device_type type, const char *tag) :
 		driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
-		, m_soundcpu(*this, "soundcpu")
-		, m_palette(*this, "palette")
 		, m_screen(*this, "screen")
 		, m_gfxdecode(*this, "gfxdecode")
 		, m_mod51(*this, "mod51")
@@ -86,8 +80,6 @@ protected:
 
 private:
 	required_device<cpu_device> m_maincpu;
-	required_device<cpu_device> m_soundcpu;
-	required_device<palette_device> m_palette;
 	required_device<screen_device> m_screen;
 	required_device<gfxdecode_device> m_gfxdecode;
 	required_device<gaelco_ms_mod51_device> m_mod51;
@@ -122,11 +114,9 @@ private:
 
 	void descramble_16x16tiles(u8 *src, int len) ATTR_COLD;
 
-	u16 unk_r() { return machine().rand(); }
 	u16 unk2_r() { return 0x0000; }
 
 	void wrally_ms_map(address_map &map) ATTR_COLD;
-	void sound_map(address_map &map);
 	void oki_map(address_map &map) ATTR_COLD;
 };
 
@@ -232,7 +222,7 @@ void wrally_ms_state::wrally_ms_map(address_map &map)
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
 
-	map(0x200000, 0x2007ff).ram().w(m_palette, FUNC(palette_device::write16)).share("palette");
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
 
 	map(0x300000, 0x301fff).ram().w(FUNC(wrally_ms_state::vram_w)).share("vram");
 	map(0x340000, 0x341fff).ram().w(FUNC(wrally_ms_state::bg_w)).share("bg_vram");
@@ -241,24 +231,12 @@ void wrally_ms_state::wrally_ms_map(address_map &map)
 
 	map(0x3c0000, 0x3c000f).ram().share("scrollregs"); // video regs
 
-	map(0x400000, 0x400001).portr("IN0");
-	map(0x400002, 0x400003).portr("IN1");
-	map(0x400004, 0x400005).r(FUNC(wrally_ms_state::unk_r));
-	map(0x400006, 0x400007).portr("DSW1");
-	map(0x400008, 0x400009).portr("DSW2");
-	map(0x40000c, 0x40000d).r(FUNC(wrally_ms_state::unk_r)).nopw(); // writes 00 sometimes
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
 
 //  map(0x600000, 0x600001).r(FUNC(wrally_ms_state::unk2_r));
 	map(0x600081, 0x600081).mirror(0x100).rw("oki", FUNC(okim6295_device::read), FUNC(okim6295_device::write));
 	map(0x600101, 0x600101).w(FUNC(wrally_ms_state::okim6295_bankswitch_w));
 	map(0xff0000, 0xffffff).ram();
-}
-
-void wrally_ms_state::sound_map(address_map &map)
-{
-	map(0x0000, 0x7fff).rom();
-	map(0xe800, 0xe801).rw("ymsnd", FUNC(ym3812_device::read), FUNC(ym3812_device::write));
-	map(0xf000, 0xffff).ram();
 }
 
 void wrally_ms_state::oki_map(address_map &map)
@@ -269,80 +247,58 @@ void wrally_ms_state::oki_map(address_map &map)
 
 
 static INPUT_PORTS_START( wrally_ms )
-	// some modular games read inputs in the high byte, others low, maybe it mirrors?
-	PORT_START("IN0")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_INCLUDE( gaelco_ms_mod9 )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_COIN2 )
-
+	// on the MOD 9/2 board
 	PORT_START("DSW1")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:1")
-	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:2")
-	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4,5")
-	PORT_DIPSETTING(      0x0800, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(      0x1800, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(      0x0400, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x1400, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0c00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( 3C_2C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 4C_3C ) )
-	PORT_DIPSETTING(      0x1c00, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,7,8")
-	PORT_DIPSETTING(      0xe000, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_4C ) )
-	PORT_DIPSETTING(      0x8000, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(      0x6000, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0xa000, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0xc000, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4,5")
+	PORT_DIPSETTING(    0x08, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x14, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0xe0, 0xe0, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,7,8")
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_4C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_6C ) )
 
 	PORT_START("DSW2")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_SERVICE_DIPLOC(  0x0100, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:3")
-	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:4")
-	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:5")
-	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x2000, 0x0000, "Control Type" ) PORT_DIPLOCATION("SW2:6") // currently locks up after a few seconds of gameplay with wheel
-	PORT_DIPSETTING(      0x2000, "Wheel" )
-	PORT_DIPSETTING(      0x0000, "Joystick" )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:7")
-	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )  PORT_DIPLOCATION("SW2:8")
-	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_SERVICE_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW2:1" )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:5")
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x00, "Control Type" ) PORT_DIPLOCATION("SW2:6") // currently locks up after a few seconds of gameplay with wheel
+	PORT_DIPSETTING(    0x20, "Wheel" )
+	PORT_DIPSETTING(    0x00, "Joystick" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )  PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
 static const gfx_layout tiles8x8x4_layout =
@@ -415,19 +371,25 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 {
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &wrally_ms_state::wrally_ms_map);
-	m_maincpu->set_vblank_int("screen", FUNC(wrally_ms_state::irq4_line_hold));
 
 	SCREEN(config, m_screen);
 	m_screen->set_raw(28_MHz_XTAL / 4, 465, 0, 384, 264, 0, 240);
 	m_screen->set_screen_update(FUNC(wrally_ms_state::screen_update));
-	m_screen->set_palette(m_palette);
+	m_screen->set_palette(m_mod9);
 
-	PALETTE(config, m_palette).set_format(palette_device::xBRG_444, 0x400);
+	GFXDECODE(config, m_gfxdecode, m_mod9, gfx_wrally_ms);
 
-	GFXDECODE(config, m_gfxdecode, "palette", gfx_wrally_ms);
+	SPEAKER(config, "mono").front_center();
 
+	// its sound program is Splash's, and the game sends it no commands: the sounds come from the AUD-OKI board
 	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
 	m_mod9->set_screen(m_screen);
+	m_mod9->irq_callback().set_inputline(m_maincpu, 4);
+	m_mod9->in_callback<0>().set_ioport("IN0");
+	m_mod9->in_callback<1>().set_ioport("IN1");
+	m_mod9->in_callback<2>().set_ioport("DSW1");
+	m_mod9->in_callback<3>().set_ioport("DSW2");
+	m_mod9->add_route(ALL_OUTPUTS, "mono", 1.0);
 
 	GAELCO_MS_MOD51(config, m_mod51);
 	m_mod51->set_timing(m_mod9);
@@ -436,23 +398,9 @@ void wrally_ms_state::wrally_ms(machine_config &config)
 	m_mod51->set_sprite_callback(FUNC(wrally_ms_state::sprite_cb));
 	m_mod51->set_priority_callback(FUNC(wrally_ms_state::sprite_priority));
 
-	// Sound hardware
-
-	SPEAKER(config, "mono").front_center();
-
 	OKIM6295(config, m_oki, 1_MHz_XTAL, okim6295_device::PIN7_HIGH); // PIN 7 seems like it's not connected to anything at all
 	m_oki->set_addrmap(0, &wrally_ms_state::oki_map);
 	m_oki->add_route(ALL_OUTPUTS, "mono", 0.7);
-
-	// the sound hardware below seems to go unused, the program is the same as Splash (Modular System)
-	// all sounds for this are from the OKIM6295, driven by the 68000
-
-	Z80(config, m_soundcpu, 16_MHz_XTAL / 4); // NEC D780C-2
-	m_soundcpu->set_addrmap(AS_PROGRAM, &wrally_ms_state::sound_map);
-
-	YM3812(config, "ymsnd", 16_MHz_XTAL / 4); // Unknown divisor
-
-	MSM5205(config, "msm", 384_kHz_XTAL).add_route(ALL_OUTPUTS, "mono", 0.15);
 }
 
 ROM_START( wrallym )
@@ -539,7 +487,7 @@ ROM_START( wrallym )
 	ROM_LOAD32_BYTE( "mod_5-1_mov_hc_23-11_27c512.ic19", 0x040001, 0x010000, CRC(32733ee6) SHA1(abcc60b4cb6a672f5e68c16fa634da839d4dc38a) )
 	ROM_LOAD32_BYTE( "mod_5-1_mov_hd_23-11_27c512.ic25", 0x040000, 0x010000, CRC(fc7ddb14) SHA1(80b00269498d704775fd85518fc451f00acadc0a) )
 
-	ROM_REGION( 0x010000, "soundcpu", 0 )
+	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
 	ROM_LOAD( "mod_9-2_sp_906_27c512.u6", 0x000000, 0x010000, CRC(5567fa22) SHA1(3993c733a0222ca292b60f409c78b45280a5fec6) ) // same as Splash (Modular System)
 
 	ROM_REGION( 0x100000, "oki", 0 )
@@ -549,8 +497,11 @@ ROM_START( wrallym )
 	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
 	ROM_LOAD( "mod_51-1_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
 
-	ROM_REGION( 0x157, "mod9", 0 ) // on MOD 9/2 board, video timing
+	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_92fl_gal20v8as.ic18", 0x000, 0x157, CRC(3a1465c2) SHA1(c98227c29301fdff7ab8144222ff0c257412dd78) )
+
+	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
+	ROM_LOAD( "mod_9-2_9350_gal16v8as.u10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_51-1_p0503_pal16r6a.ic46",   0x0000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
@@ -563,7 +514,6 @@ ROM_START( wrallym )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",       0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
 	ROM_LOAD( "mod_5-1_51fx_gal16v8.ic9",       0x0000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
 	ROM_LOAD( "mod_6-esp-2_16fl_gal16v8as.u20", 0x0000, 0x117, CRC(fe9294d1) SHA1(e64539a5e661acc21fe040a1a478a63ea9bf7ab8) )
-	ROM_LOAD( "mod_9-2_9350_gal16v8as.u10",     0x0000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 	ROM_LOAD( "mod_9-2_91fl_gal16v8as.u42",     0x0000, 0x117, CRC(ac8a5e11) SHA1(cbe68b38e0bce978722753a3feeafad9dcf05d25) )
 	ROM_LOAD( "aud_oki_gal16v8as.bin",          0x0000, 0x117, NO_DUMP )
 ROM_END
