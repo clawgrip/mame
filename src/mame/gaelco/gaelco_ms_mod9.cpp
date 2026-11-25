@@ -60,104 +60,12 @@
 #include "emu.h"
 #include "gaelco_ms_mod9.h"
 
+#include "gaelco_ms_gal.h"
+
 #include "cpu/z80/z80.h"
-
-#include "ioprocs.h"
-#include "jedparse.h"
-
-#include <array>
 
 
 namespace {
-
-// GAL16V8 in complex mode: 64 product terms of 32 fuses, an intact fuse connects its column. The macrocells of pins 19
-// down to 12 have eight terms each, the first one enabling the output; the product term disable fuses start at 2128
-// and the XOR fuses at 2048
-struct gal_column { u8 pin, complement, level; };
-constexpr gal_column GAL16V8_COLUMNS[] = {
-		{  1,  3,  2 }, {  2,  1,  0 }, {  3,  5,  4 }, {  4,  9,  8 }, {  5, 13, 12 }, {  6, 17, 16 }, {  7, 21, 20 },
-		{  8, 25, 24 }, {  9, 29, 28 }, { 11, 31, 30 }, { 13, 27, 26 }, { 14, 23, 22 }, { 15, 19, 18 }, { 16, 15, 14 },
-		{ 17, 11, 10 }, { 18,  7,  6 } };
-
-class gal16v8
-{
-public:
-	gal16v8(u8 const *data, u32 length, char const *tag);
-
-	// the pin levels for the levels of the input pins, with pins 12-16 and 19 driven by the GAL
-	u32 pins(u32 inputs) const;
-
-private:
-	bool term(u32 row, u32 levels) const
-	{
-		return m_enabled[row] && ((levels & m_high[row]) == m_high[row]) && !(levels & m_low[row]);
-	}
-
-	std::array<u32, 64> m_high; // the pins each product term needs high
-	std::array<u32, 64> m_low; // and low
-	std::array<bool, 64> m_enabled;
-	std::array<bool, 64> m_blown; // all fuses blown
-	u8 m_active_high; // macrocell n drives pin 19 - n
-};
-
-gal16v8::gal16v8(u8 const *data, u32 length, char const *tag) :
-	m_high{ },
-	m_low{ },
-	m_enabled{ },
-	m_blown{ },
-	m_active_high(0)
-{
-	jed_data jed;
-	auto file = util::ram_read(data, length);
-	if (!file || (jedbin_parse(*file, &jed) != JEDERR_NONE) || (jed.numfuses != 2194) || !jed_get_fuse(&jed, 2192) ||
-			!jed_get_fuse(&jed, 2193))
-		throw emu_fatalerror("%s: bad GAL16V8 fuse map, or not in complex mode\n", tag);
-
-	for (u32 row = 0; row < 64; row++)
-	{
-		m_enabled[row] = jed_get_fuse(&jed, 2128 + row);
-		for (auto const &column : GAL16V8_COLUMNS)
-		{
-			if (!jed_get_fuse(&jed, row * 32 + column.level))
-				m_high[row] |= 1U << column.pin;
-			if (!jed_get_fuse(&jed, row * 32 + column.complement))
-				m_low[row] |= 1U << column.pin;
-		}
-		m_blown[row] = !m_high[row] && !m_low[row];
-	}
-	for (u32 cell = 0; cell < 8; cell++)
-	{
-		if (jed_get_fuse(&jed, 2048 + cell))
-			m_active_high |= 1U << cell;
-	}
-}
-
-u32 gal16v8::pins(u32 inputs) const
-{
-	// the array sees the pins, so the outputs can feed each other; a product term with all its fuses blown is left
-	// out of the sums, as jedutil does, and enables its output
-	u32 levels = inputs;
-	for (u32 pass = 0; pass < 8; pass++)
-	{
-		u32 const previous = levels;
-		for (u8 const pin : { 12, 13, 14, 15, 16, 19 })
-		{
-			u32 const cell = 19 - pin;
-			bool high = true;
-			if (term(cell * 8, levels))
-			{
-				bool sum = false;
-				for (u32 row = cell * 8 + 1; row < (cell + 1) * 8; row++)
-					sum = sum || (!m_blown[row] && term(row, levels));
-				high = sum == BIT(m_active_high, cell);
-			}
-			levels = (levels & ~(1U << pin)) | (u32(high) << pin);
-		}
-		if (levels == previous)
-			break;
-	}
-	return levels;
-}
 
 // what the decoder selects in the 0xe000-0xffff pages
 enum : u8 { SEL_RAM, SEL_YM1, SEL_YM2, SEL_SOUNDLATCH, SEL_UNKNOWN, SEL_CONTROL, SEL_DATA, SEL_NONE };
@@ -212,7 +120,6 @@ gaelco_ms_mod9_device_base::gaelco_ms_mod9_device_base(const machine_config &mco
 	m_irq_cb(*this),
 	m_in_cb(*this, 0xff),
 	m_palette_ram{ },
-	m_control(0),
 	m_adpcm_data(0),
 	m_adpcm_high(false)
 {
@@ -220,7 +127,7 @@ gaelco_ms_mod9_device_base::gaelco_ms_mod9_device_base(const machine_config &mco
 
 void gaelco_ms_mod9_device_base::device_add_mconfig(machine_config &config)
 {
-	Z80(config, m_cpu, 16_MHz_XTAL / 4);
+	Z80(config, m_cpu, 16_MHz_XTAL / 4); // divider not verified
 	m_cpu->set_addrmap(AS_PROGRAM, &gaelco_ms_mod9_device_base::program_map);
 
 	GENERIC_LATCH_8(config, m_soundlatch);
@@ -246,7 +153,7 @@ void gaelco_ms_mod9_device_base::device_start()
 void gaelco_ms_mod9_device_base::device_reset()
 {
 	control_w(0);
-	m_irq_cb(CLEAR_LINE);
+	m_irq_cb(0);
 }
 
 void gaelco_ms_mod9_device_base::device_post_load()
@@ -264,7 +171,9 @@ void gaelco_ms_mod9_device_base::program_map(address_map &map)
 
 void gaelco_ms_mod9_device_base::build_decoder()
 {
-	gal16v8 const gal(m_decoder.target(), m_decoder.bytes(), tag());
+	// the GAL drives pins 12-16 and 19
+	gaelco_ms_gal const gal(gaelco_ms_gal::type::GAL16V8_COMPLEX, m_decoder.target(), m_decoder.bytes(),
+			(make_bitmask<u32>(5) << 12) | (1U << 19), tag());
 	if (m_rom.bytes() < 0x10000)
 		fatalerror("%s: no room for IC6 in the EPROM region\n", tag());
 
@@ -275,7 +184,7 @@ void gaelco_ms_mod9_device_base::build_decoder()
 		for (offs_t start = 0x0000; start < 0x10000; start += 0x400)
 		{
 			offs_t const end = start + 0x3ff;
-			u8 select[2];
+			u8 select[2] = { SEL_NONE, SEL_NONE };
 			for (int write = 0; write < 2; write++)
 			{
 				u32 const inputs = (u32(BIT(start, 12, 4)) << 1) | (u32(!write) << 5) | (1U << 7) | (u32(BIT(bank, 0)) << 8) |
@@ -310,13 +219,22 @@ void gaelco_ms_mod9_device_base::build_decoder()
 
 				case SEL_YM1:
 				case SEL_YM2:
-					if ((select[write] == SEL_YM2) && !m_opn[1])
+				{
+					u32 const which = select[write] - SEL_YM1;
+					if (which && !m_opn[1])
 						break;
 					if (write)
-						view.install_write_handler(start, end, write8sm_delegate(*this, [this, which = select[write] - SEL_YM1] (offs_t offset, u8 data) { ym_w(which, offset, data); }, "ym_w"));
+					{
+						view.install_write_handler(start, end, write8sm_delegate(*this,
+								[this, which] (offs_t offset, u8 data) { ym_w(which, offset, data); }, "ym_w"));
+					}
 					else
-						view.install_read_handler(start, end, read8sm_delegate(*this, [this, which = select[write] - SEL_YM1] (offs_t offset) { return ym_r(which, offset); }, "ym_r"));
+					{
+						view.install_read_handler(start, end, read8sm_delegate(*this,
+								[this, which] (offs_t offset) -> u8 { return ym_r(which, offset); }, "ym_r"));
+					}
 					break;
+				}
 
 				case SEL_SOUNDLATCH:
 					if (!write)
@@ -349,7 +267,7 @@ u8 gaelco_ms_mod9_device_base::io_r(offs_t offset)
 	case 4: return m_in_cb[3]();
 	case 6:
 		if (!machine().side_effects_disabled())
-			m_irq_cb(CLEAR_LINE);
+			m_irq_cb(0);
 		break;
 	}
 	return 0xff;
@@ -359,7 +277,7 @@ void gaelco_ms_mod9_device_base::io_w(offs_t offset, u8 data)
 {
 	switch (BIT(offset, 1, 3))
 	{
-	case 6: m_irq_cb(CLEAR_LINE); break;
+	case 6: m_irq_cb(0); break;
 	case 7: m_soundlatch->write(data); break;
 	}
 }
@@ -443,7 +361,7 @@ void gaelco_ms_mod9_device_base::adpcm_vck(int state)
 void gaelco_ms_mod9_device_base::screen_vblank(screen_device &screen, bool vblank_state)
 {
 	if (vblank_state)
-		m_irq_cb(ASSERT_LINE);
+		m_irq_cb(1);
 }
 
 
@@ -458,7 +376,7 @@ void gaelco_ms_mod9_device::device_add_mconfig(machine_config &config)
 {
 	gaelco_ms_mod9_device_base::device_add_mconfig(config);
 
-	YM3812(config, m_opl, 16_MHz_XTAL / 4);
+	YM3812(config, m_opl, 16_MHz_XTAL / 4); // divider not verified
 	m_opl->add_route(ALL_OUTPUTS, *this, 0.80);
 	m_msm->add_route(ALL_OUTPUTS, *this, 0.80);
 }
@@ -475,9 +393,9 @@ void gaelco_ms_mod9_ym2203_device::device_add_mconfig(machine_config &config)
 {
 	gaelco_ms_mod9_device_base::device_add_mconfig(config);
 
-	YM2203(config, m_opn[0], 16_MHz_XTAL / 4);
+	YM2203(config, m_opn[0], 16_MHz_XTAL / 4); // divider not verified
 	m_opn[0]->add_route(ALL_OUTPUTS, *this, 0.40);
-	YM2203(config, m_opn[1], 16_MHz_XTAL / 4);
+	YM2203(config, m_opn[1], 16_MHz_XTAL / 4); // divider not verified
 	m_opn[1]->add_route(ALL_OUTPUTS, *this, 0.40);
 	m_msm->add_route(ALL_OUTPUTS, *this, 0.20);
 }

@@ -76,6 +76,8 @@ private:
 
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_program_map(address_map &map) ATTR_COLD;
@@ -121,6 +123,20 @@ uint32_t bloodbro_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 }
 
 
+u16 bloodbro_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void bloodbro_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
+
 void bloodbro_ms_state::main_program_map(address_map &map)
 {
 	map(0x000000, 0x07ffff).rom();
@@ -140,9 +156,7 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x101000, 0x1017ff).ram().share(m_spriteram);
 	map(0x101800, 0x101fff).ram();
 	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
-	map(0x102000, 0x102fff).lrw16(
-			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(4, CLEAR_LINE); return 0xffff; }),
-			NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
+	map(0x102000, 0x102fff).rw(FUNC(bloodbro_ms_state::irq_ack_r), FUNC(bloodbro_ms_state::irq_ack_w));
 	map(0x18d000, 0x18d7ff).w(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[0][offset]); }));
 }
@@ -366,4 +380,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 199?, bloodbrom,  bloodbro,  bloodbrom,  bloodbrom,  bloodbro_ms_state, empty_init,     ROT0, "bootleg (Gaelco / Ervisa)", "Blood Bros. (Modular System)", MACHINE_IMPERFECT_SOUND | MACHINE_IMPERFECT_GRAPHICS | MACHINE_NOT_WORKING )
+GAME( 199?, bloodbrom,  bloodbro,  bloodbrom,  bloodbrom,  bloodbro_ms_state, empty_init,     ROT0, "bootleg (Gaelco / Ervisa)", "Blood Bros. (Modular System)", MACHINE_NOT_WORKING )

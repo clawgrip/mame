@@ -25,7 +25,7 @@ public:
 	// the CPU board interrupt, from the start of the vertical blank until the program acknowledges it
 	auto irq_callback() { return m_irq_cb.bind(); }
 	// 0-1: connector inputs of players 1 and 2, 2-3: DIP switches SW1 and SW2
-	template <unsigned N> auto in_callback() { return m_in_cb[N].bind(); }
+	template <u32 N> auto in_callback() { return m_in_cb[N].bind(); }
 
 	// the registers the CPU boards see, selected by A1-A3; 16-bit boards see each byte on both halves of the data bus
 	u8 io_r(offs_t offset);

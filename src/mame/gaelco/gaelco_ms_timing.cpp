@@ -24,9 +24,8 @@
       and sprite boards count lines from its end, as they do from the end
       of the vertical sync pulse in the MOD 21/1 cages (the sprites fit the
       games within 2 lines with it, not with pin 19)
-    The array sees the flip-flops of the registered outputs, which the pins
-    show inverted. A product term with all its fuses blown is left out, as
-    jedutil does: World Rally's pin 22 has one.
+    World Rally's pin 22 has a product term with all its fuses blown, which
+    jedutil leaves out.
 
     TODO:
     - pin 21, H6 inverted here: it makes Big Karnak's lines 448 pixels long,
@@ -39,142 +38,12 @@
 #include "emu.h"
 #include "gaelco_ms_timing.h"
 
-#include "ioprocs.h"
-#include "jedparse.h"
+#include "gaelco_ms_gal.h"
 
-#include <array>
 #include <vector>
 
 
 namespace {
-
-// GAL20V8 in registered mode: 64 product terms of 40 fuses, an intact fuse connects its column. The macrocells of pins
-// 22 down to 15 have eight terms each; the product term disable fuses start at 2640, the XOR fuses at 2560 and the AC1
-// fuses at 2632
-struct gal_input { u8 pin, complement, level; };
-constexpr gal_input GAL_INPUTS[] = {
-		{  2,  1,  0 }, {  3,  5,  4 }, {  4,  9,  8 }, {  5, 13, 12 }, {  6, 17, 16 },
-		{  7, 21, 20 }, {  8, 25, 24 }, {  9, 29, 28 }, { 10, 33, 32 }, { 11, 37, 36 },
-		{ 14, 39, 38 }, { 15, 35, 34 }, { 16, 31, 30 }, { 17, 27, 26 }, { 18, 23, 22 },
-		{ 19, 19, 18 }, { 20, 15, 14 }, { 21, 11, 10 }, { 22,  7,  6 }, { 23,  3,  2 } };
-
-class gal20v8
-{
-public:
-	gal20v8(u8 const *data, u32 length, char const *tag);
-
-	// the pin levels for the levels of the input pins
-	u32 pins(u32 inputs) const;
-	void clock(u32 inputs);
-
-private:
-	bool term(u32 row, u32 levels) const
-	{
-		return m_enabled[row] && ((levels & m_high[row]) == m_high[row]) && !(levels & m_low[row]);
-	}
-	bool sum(u32 cell, u32 first, u32 levels) const;
-	u32 array_levels(u32 inputs) const;
-
-	std::array<u32, 64> m_high; // the pins each product term needs high
-	std::array<u32, 64> m_low; // and low
-	std::array<bool, 64> m_enabled;
-	std::array<bool, 64> m_blown; // all fuses blown
-	u8 m_registered; // macrocell n, pin 22 - n, has a flip-flop
-	u8 m_active_high;
-	u8 m_q;
-};
-
-gal20v8::gal20v8(u8 const *data, u32 length, char const *tag) :
-	m_high{ },
-	m_low{ },
-	m_enabled{ },
-	m_blown{ },
-	m_registered(0),
-	m_active_high(0),
-	m_q(0)
-{
-	jed_data jed;
-	auto file = util::ram_read(data, length);
-	if (!file || (jedbin_parse(*file, &jed) != JEDERR_NONE) || (jed.numfuses != 2706) || jed_get_fuse(&jed, 2704))
-		throw emu_fatalerror("%s: bad GAL20V8 fuse map, or not in registered mode\n", tag);
-
-	for (u32 row = 0; row < 64; row++)
-	{
-		m_enabled[row] = jed_get_fuse(&jed, 2640 + row);
-		for (auto const &input : GAL_INPUTS)
-		{
-			if (!jed_get_fuse(&jed, row * 40 + input.level))
-				m_high[row] |= 1U << input.pin;
-			if (!jed_get_fuse(&jed, row * 40 + input.complement))
-				m_low[row] |= 1U << input.pin;
-		}
-		m_blown[row] = !m_high[row] && !m_low[row];
-	}
-	for (u32 cell = 0; cell < 8; cell++)
-	{
-		if (!jed_get_fuse(&jed, 2632 + cell))
-			m_registered |= 1U << cell;
-		if (jed_get_fuse(&jed, 2560 + cell))
-			m_active_high |= 1U << cell;
-	}
-}
-
-bool gal20v8::sum(u32 cell, u32 first, u32 levels) const
-{
-	for (u32 row = cell * 8 + first; row < (cell + 1) * 8; row++)
-	{
-		if (!m_blown[row] && term(row, levels))
-			return true;
-	}
-	return false;
-}
-
-u32 gal20v8::array_levels(u32 inputs) const
-{
-	// the array sees the flip-flops and the pins of the combinatorial outputs, which can feed each other
-	u32 levels = inputs;
-	for (u32 cell = 0; cell < 8; cell++)
-	{
-		if (BIT(m_registered, cell))
-			levels = (levels & ~(1U << (22 - cell))) | (u32(BIT(m_q, cell)) << (22 - cell));
-	}
-	for (u32 pass = 0; pass < 8; pass++)
-	{
-		u32 const previous = levels;
-		for (u32 cell = 0; cell < 8; cell++)
-		{
-			// the first term enables the output
-			if (!BIT(m_registered, cell) && term(cell * 8, levels))
-				levels = (levels & ~(1U << (22 - cell))) | (u32(sum(cell, 1, levels) == BIT(m_active_high, cell)) << (22 - cell));
-		}
-		if (levels == previous)
-			break;
-	}
-	return levels;
-}
-
-u32 gal20v8::pins(u32 inputs) const
-{
-	u32 levels = array_levels(inputs);
-	for (u32 cell = 0; cell < 8; cell++)
-	{
-		if (BIT(m_registered, cell))
-			levels ^= 1U << (22 - cell);
-	}
-	return levels;
-}
-
-void gal20v8::clock(u32 inputs)
-{
-	u32 const levels = array_levels(inputs);
-	u8 q = 0;
-	for (u32 cell = 0; cell < 8; cell++)
-	{
-		if (BIT(m_registered, cell) && (sum(cell, 0, levels) != BIT(m_active_high, cell)))
-			q |= 1U << cell;
-	}
-	m_q = q;
-}
 
 // the longest run of set entries, which can wrap around the end: its first entry and the first one after it
 bool longest_run(std::vector<bool> const &bits, u16 &start, u16 &end)
@@ -238,7 +107,7 @@ void device_gaelco_ms_timing_interface::set_timing(screen_device &screen, u32 pi
 void device_gaelco_ms_timing_interface::set_timing_from_gal(screen_device &screen, u32 pixel_clock, u8 const *fuses,
 		u32 length)
 {
-	gal20v8 gal(fuses, length, device().tag());
+	gaelco_ms_gal gal(gaelco_ms_gal::type::GAL20V8_REGISTERED, fuses, length, make_bitmask<u32>(8) << 15, device().tag());
 
 	// the counter bits on the GAL inputs, see the TODO for pins 21 and 23
 	auto const inputs = [] (u16 h, u16 v) -> u32

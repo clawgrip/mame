@@ -328,8 +328,6 @@ private:
 	required_shared_ptr<uint16_t> m_videoram3;
 	required_shared_ptr<uint16_t> m_scrollregs;
 
-	virtual void machine_start() override ATTR_COLD;
-
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -462,16 +460,11 @@ void bigkarnk_ms_state::bigkarnkm_map(address_map &map)
 
 	map(0x102000, 0x103fff).ram();
 
-	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::palette_r), FUNC(gaelco_ms_mod9_device_base::palette_w));
 
-	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io16_r), FUNC(gaelco_ms_mod9_device_base::io16_w));
 
 	map(0xff0000, 0xffffff).ram();
-}
-
-
-void bigkarnk_ms_state::machine_start()
-{
 }
 
 
@@ -710,4 +703,4 @@ ROM_END
 } // anonymous namespace
 
 
-GAME( 1991, bigkarnkm,  bigkarnk,  bigkarnkm,  bigkarnkm,  bigkarnk_ms_state, init_bigkarnkm, ROT0, "Gaelco", "Big Karnak (Modular System)", MACHINE_NOT_WORKING | MACHINE_IMPERFECT_SOUND )
+GAME( 1991, bigkarnkm,  bigkarnk,  bigkarnkm,  bigkarnkm,  bigkarnk_ms_state, init_bigkarnkm, ROT0, "Gaelco", "Big Karnak (Modular System)", MACHINE_NOT_WORKING )

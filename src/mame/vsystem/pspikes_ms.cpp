@@ -80,6 +80,8 @@ private:
 	void gfxbank_scrolly_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_map(address_map &map) ATTR_COLD;
@@ -138,15 +140,27 @@ void pspikes_ms_state::machine_start()
 }
 
 
+u16 pspikes_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(1, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void pspikes_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(1, CLEAR_LINE);
+}
+
+
 void pspikes_ms_state::main_map(address_map &map)
 {
 	map(0x000000, 0x03ffff).rom();
 	map(0x100000, 0x10ffff).ram();
 	map(0x200000, 0x203fff).ram(); // leftover from original sprite system?
 	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
-	map(0xc40000, 0xc40fff).lrw16(
-			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(1, CLEAR_LINE); return 0xffff; }),
-			NAME([this] (u16 data) { m_maincpu->set_input_line(1, CLEAR_LINE); }));
+	map(0xc40000, 0xc40fff).rw(FUNC(pspikes_ms_state::irq_ack_r), FUNC(pspikes_ms_state::irq_ack_w));
 	map(0xff8000, 0xff8fff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xffc000, 0xffc7ff).ram().share(m_spriteram);
 	map(0xffd000, 0xffdfff).ram().share(m_scrollram);

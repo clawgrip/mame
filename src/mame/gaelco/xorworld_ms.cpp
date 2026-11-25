@@ -124,7 +124,7 @@ u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	// scrollregs 2/3 unknown, 2 is written once with 0x8ffe
 	// scrollregs 4/5 for layer at 80000 (frontmost?)
 	// scrollregs 6/7 for layer at a0000 (backmost)
-	int global_x_offset = 112;
+	int const global_x_offset = 112;
 
 	m_tilemap_8x8_fg->set_scrollx(0, global_x_offset-(m_scrollregs[4]));
 	m_tilemap_8x8_fg->set_scrolly(0, -(m_scrollregs[5]));
@@ -198,9 +198,9 @@ void xorworld_ms_state::xorworld_ms_map(address_map &map)
 	map(0x0c0000, 0x0c000f).ram().share("scrollregs");
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
-	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::palette_r), FUNC(gaelco_ms_mod9_device_base::palette_w));
 
-	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io16_r), FUNC(gaelco_ms_mod9_device_base::io16_w));
 
 	map(0xff0000, 0xffffff).ram();
 }

@@ -190,7 +190,7 @@ void euroleag_ms_state::main_map(address_map &map)
 	map(0xf000, 0xf7ff).bankr(m_mainbank);
 	map(0xf800, 0xfbff).ram().share("main_sub");
 	map(0xfc00, 0xfc00).w(FUNC(euroleag_ms_state::main_bank_w));
-	map(0xfd00, 0xfd0f).rw(m_mod9, FUNC(gaelco_ms_mod9_ym2203_device::io_r), FUNC(gaelco_ms_mod9_ym2203_device::io_w));
+	map(0xfd00, 0xfd0f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io_r), FUNC(gaelco_ms_mod9_device_base::io_w));
 }
 
 void euroleag_ms_state::sub_map(address_map &map)
@@ -199,7 +199,7 @@ void euroleag_ms_state::sub_map(address_map &map)
 	map(0xc000, 0xcfff).ram();
 	map(0xd000, 0xd7ff).ram().share(m_spriteram);
 	map(0xd800, 0xdfff).ram();
-	map(0xe000, 0xe7ff).rw(m_mod9, FUNC(gaelco_ms_mod9_ym2203_device::palette8_r), FUNC(gaelco_ms_mod9_ym2203_device::palette8_w));
+	map(0xe000, 0xe7ff).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::palette8_r), FUNC(gaelco_ms_mod9_device_base::palette8_w));
 	map(0xe800, 0xefff).rom();
 	map(0xf000, 0xf7ff).bankr(m_subbank);
 	map(0xf800, 0xfbff).ram().share("main_sub");

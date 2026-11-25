@@ -114,8 +114,6 @@ private:
 
 	void descramble_16x16tiles(u8 *src, int len) ATTR_COLD;
 
-	u16 unk2_r() { return 0x0000; }
-
 	void wrally_ms_map(address_map &map) ATTR_COLD;
 	void oki_map(address_map &map) ATTR_COLD;
 };
@@ -222,7 +220,7 @@ void wrally_ms_state::wrally_ms_map(address_map &map)
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
 
-	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::palette_r), FUNC(gaelco_ms_mod9_device_base::palette_w));
 
 	map(0x300000, 0x301fff).ram().w(FUNC(wrally_ms_state::vram_w)).share("vram");
 	map(0x340000, 0x341fff).ram().w(FUNC(wrally_ms_state::bg_w)).share("bg_vram");
@@ -231,9 +229,8 @@ void wrally_ms_state::wrally_ms_map(address_map &map)
 
 	map(0x3c0000, 0x3c000f).ram().share("scrollregs"); // video regs
 
-	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io16_r), FUNC(gaelco_ms_mod9_device_base::io16_w));
 
-//  map(0x600000, 0x600001).r(FUNC(wrally_ms_state::unk2_r));
 	map(0x600081, 0x600081).mirror(0x100).rw("oki", FUNC(okim6295_device::read), FUNC(okim6295_device::write));
 	map(0x600101, 0x600101).w(FUNC(wrally_ms_state::okim6295_bankswitch_w));
 	map(0xff0000, 0xffffff).ram();

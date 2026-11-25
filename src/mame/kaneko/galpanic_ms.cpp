@@ -83,12 +83,28 @@ private:
 
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 
 	uint32_t screen_update_backgrounds(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void newquiz_map(address_map &map) ATTR_COLD;
 };
+
+
+u16 galspanic_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(6, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void galspanic_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(6, CLEAR_LINE);
+}
 
 
 // lots of bad / leftover reads/writes from the original code in here
@@ -119,9 +135,7 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 	map(0x800000, 0x80000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 
 	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
-	map(0x840000, 0x840fff).lrw16(
-			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(6, CLEAR_LINE); return 0xffff; }),
-			NAME([this] (u16 data) { m_maincpu->set_input_line(6, CLEAR_LINE); }));
+	map(0x840000, 0x840fff).rw(FUNC(galspanic_ms_state::irq_ack_r), FUNC(galspanic_ms_state::irq_ack_w));
 
 	map(0x900000, 0x900001).ram();
 

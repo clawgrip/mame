@@ -308,6 +308,8 @@ private:
 	TILE_GET_INFO_MEMBER(get_tile_info);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 	void bk1vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	void bk2vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
 	void vram_w(offs_t offset, u16 data, u16 mem_mask = ~0);
@@ -417,6 +419,19 @@ void toki_ms_state::vram_w(offs_t offset, u16 data, u16 mem_mask)
 	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
+u16 toki_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(1, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void toki_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(1, CLEAR_LINE);
+}
+
 void toki_ms_state::tokim_map(address_map &map)
 {
 	map(0x000000, 0x05ffff).rom();
@@ -428,9 +443,7 @@ void toki_ms_state::tokim_map(address_map &map)
 	map(0x070400, 0x0707ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x071000, 0x0713ff).ram().share("spriteram");
 	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
-	map(0x072000, 0x072fff).lrw16(
-			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(1, CLEAR_LINE); return 0xffff; }),
-			NAME([this] (u16 data) { m_maincpu->set_input_line(1, CLEAR_LINE); }));
+	map(0x072000, 0x072fff).rw(FUNC(toki_ms_state::irq_ack_r), FUNC(toki_ms_state::irq_ack_w));
 	map(0x073000, 0x07300f).ram().share("scrollram");
 	map(0x0a0000, 0x0a005f).nopw(); // scrollram left-over?
 	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));

@@ -14,7 +14,6 @@
 #include "screen.h"
 #include "speaker.h"
 #include "tilemap.h"
-#include "machine/bankdev.h"
 
 
 class splashms_state : public driver_device
@@ -30,12 +29,12 @@ public:
 		m_mod9(*this, "mod9"),
 		m_videoram(*this, "videoram"),
 		m_videoram2(*this, "videoram2"),
-		m_bitmapram(*this, "bitmapram"),
+		m_bitmapram(*this, "bitmapram", 0x20000, ENDIANNESS_LITTLE),
 		m_scrollregs(*this, "scrollregs"),
 		m_spriteram(*this, "spriteram"),
 		m_bgdata(*this, "subcpu"),
-		m_subram(*this, "subrambank"),
-		m_subrom(*this, "subrombank")
+		m_subram(*this, "subram"),
+		m_subrom(*this, "subrom")
 	{ }
 
 	void splashm(machine_config &config) ATTR_COLD;
@@ -52,12 +51,12 @@ private:
 	required_device<gaelco_ms_mod9_device> m_mod9;
 	required_shared_ptr<uint16_t> m_videoram;
 	required_shared_ptr<uint16_t> m_videoram2;
-	required_shared_ptr<uint8_t> m_bitmapram;
+	memory_share_creator<uint8_t> m_bitmapram;
 	required_shared_ptr<uint16_t> m_scrollregs;
 	required_shared_ptr<uint16_t> m_spriteram;
 	required_region_ptr<uint8_t> m_bgdata;
-	required_device<address_map_bank_device> m_subram;
-	required_device<address_map_bank_device> m_subrom;
+	required_memory_bank m_subram;
+	required_memory_bank m_subrom;
 
 	virtual void machine_start() override ATTR_COLD;
 	virtual void machine_reset() override ATTR_COLD;
@@ -88,9 +87,6 @@ private:
 	void sub_rambankselect_w(uint8_t data);
 	void sub_rombankselect_w(uint8_t data);
 
-	void subrambank_map(address_map &map) ATTR_COLD;
-	void subrombank_map(address_map &map) ATTR_COLD;
-
 	void descramble_16x16tiles(uint8_t* src, int len);
 };
 
@@ -98,13 +94,13 @@ private:
 void splashms_state::sub_rambankselect_w(uint8_t data)
 {
 //  logerror("sub_rambankselect_w %02x\n", data);
-	m_subram->set_bank(data&0x7);
+	m_subram->set_entry(data & 0x7);
 }
 
 void splashms_state::sub_rombankselect_w(uint8_t data)
 {
 //  logerror("sub_rombankselect_w %02x\n", data);
-	m_subrom->set_bank(data & 0x7f);
+	m_subrom->set_entry(data & 0x7f);
 }
 
 
@@ -222,9 +218,9 @@ void splashms_state::splashms_map(address_map &map)
 
 	map(0x100000, 0x1007ff).ram().share("spriteram");
 
-	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device::palette_r), FUNC(gaelco_ms_mod9_device::palette_w));
+	map(0x200000, 0x200fff).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::palette_r), FUNC(gaelco_ms_mod9_device_base::palette_w));
 
-	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device::io16_r), FUNC(gaelco_ms_mod9_device::io16_w));
+	map(0x400000, 0x40000f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io16_r), FUNC(gaelco_ms_mod9_device_base::io16_w));
 	map(0x400004, 0x400005).w(FUNC(splashms_state::to_subcpu_0x400004_w));
 
 	map(0xff0000, 0xffffff).ram();
@@ -242,20 +238,24 @@ void splashms_state::sub_portmap(address_map &map)
 void splashms_state::sub_map(address_map &map)
 {
 	map(0x0000, 0x0fff).rom();
-	map(0x4000, 0x7fff).m(m_subram, FUNC(address_map_bank_device::amap8));
-	map(0x8000, 0xffff).m(m_subrom, FUNC(address_map_bank_device::amap8));
+	map(0x4000, 0x7fff).bankrw(m_subram);
+	map(0x8000, 0xffff).bankr(m_subrom);
 }
 
 
 void splashms_state::machine_start()
 {
+	m_subram->configure_entries(0, 8, &m_bitmapram[0], 0x4000);
+	m_subrom->configure_entries(0, 0x80, &m_bgdata[0], 0x8000);
+
+	save_item(NAME(m_subcmd));
 }
 
 void splashms_state::machine_reset()
 {
 	m_subcmd = 0;
-	m_subram->set_bank(0);
-	m_subrom->set_bank(0);
+	m_subram->set_entry(0);
+	m_subrom->set_entry(0);
 }
 
 
@@ -341,17 +341,6 @@ static GFXDECODE_START( gfx_splashms )
 	GFXDECODE_ENTRY( "bgtile", 0, tiles16x16x4_layout, 0, 16 )
 GFXDECODE_END
 
-void splashms_state::subrambank_map(address_map &map)
-{
-	map(0x00000, 0x1ffff).ram().share("bitmapram");
-}
-
-void splashms_state::subrombank_map(address_map &map)
-{
-	map(0x000000, 0x3fffff).rom().region("subcpu", 0x000000);
-}
-
-
 void splashms_state::splashm(machine_config &config)
 {
 	// basic machine hardware
@@ -361,9 +350,6 @@ void splashms_state::splashm(machine_config &config)
 	Z80(config, m_subcpu, 12_MHz_XTAL/2);
 	m_subcpu->set_addrmap(AS_PROGRAM, &splashms_state::sub_map);
 	m_subcpu->set_addrmap(AS_IO, &splashms_state::sub_portmap);
-
-	ADDRESS_MAP_BANK(config, m_subram).set_map(&splashms_state::subrambank_map).set_options(ENDIANNESS_LITTLE, 8, 17, 0x4000);
-	ADDRESS_MAP_BANK(config, m_subrom).set_map(&splashms_state::subrombank_map).set_options(ENDIANNESS_LITTLE, 8, 22, 0x8000);
 
 	// video hardware
 	SCREEN(config, m_screen);

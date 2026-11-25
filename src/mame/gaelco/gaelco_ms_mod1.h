@@ -25,7 +25,7 @@ public:
 	void set_latch_int_ack(bool enable) { m_latch_int_ack = enable; }
 
 	// 0-1: YM2203 #1 ports A and B (connector inputs), 2-3: YM2203 #2 ports A and B (DIP switches SW2 and SW1)
-	template <unsigned N> auto in_callback() { return m_in_cb[N].bind(); }
+	template <u32 N> auto in_callback() { return m_in_cb[N].bind(); }
 
 	void reset_w(int state) { m_cpu->set_input_line(INPUT_LINE_RESET, state ? ASSERT_LINE : CLEAR_LINE); }
 
