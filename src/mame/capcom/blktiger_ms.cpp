@@ -25,7 +25,7 @@
     plus 8. The latch also selects what appears at 0xc000-0xcfff:
     0x00       background MOD 4 board: tile map at 0xc000-0xc3ff, scroll registers at 0xc400-0xc403
     0x04       sprite board: sprite list at 0xc000-0xc1ff
-    0x06       palette, 0xc000 is read once per frame
+    0x06       palette, a read at 0xc000-0xc7ff acknowledges the interrupt
     0x07       MOD 1 board and palette
     0x10-0x13  background map RAM
     0x17       text MOD 4 board scroll registers at 0xc800-0xc803
@@ -35,7 +35,6 @@
     position counted from the bottom and attribute bit 4 inverted.
 
     TODO:
-    - the read at 0xc000 with latch 0x06
     - flip screen
 */
 
@@ -146,6 +145,7 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 	bool const bg_board = !BIT(latch, 4) && ((latch & 0x0f) == 0x00);
 	bool const sprite_board = !BIT(latch, 4) && ((latch & 0x0f) == 0x04);
 	bool const mod1 = !BIT(latch, 4) && ((latch & 0x0f) == 0x07);
+	bool const irq_ack = !BIT(latch, 4) && ((latch & 0x0f) == 0x06);
 	u8 *const map_bank = &m_mapram[(latch & 0x03) << 12];
 
 	if (BIT(code, 7))
@@ -207,13 +207,20 @@ void blktiger_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 
 	switch (code)
 	{
-	case 0x71: // background MOD 4 board or MOD 1 board
+	case 0x71: // background MOD 4 board, MOD 1 board or interrupt acknowledge (the last read of the interrupt routine)
 		if (write)
 			break;
 		if (bg_board)
 			view.install_read_handler(start, start + 0x3ff, read8sm_delegate(*m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram8_r)));
 		else if (mod1)
 			view.install_read_handler(start, start + 0x00f, read8sm_delegate(*m_mod1, FUNC(gaelco_ms_mod1_device_base::host_r)));
+		else if (irq_ack)
+			view.install_read_handler(start, end, read8smo_delegate(*this, NAME([this] () -> u8
+			{
+				if (!machine().side_effects_disabled())
+					m_maincpu->set_input_line(0, CLEAR_LINE);
+				return 0xff;
+			})));
 		break;
 
 	case 0x61: // palette, or the upper half of a background map RAM bank
@@ -390,7 +397,7 @@ void blktiger_ms_state::blktigerm(machine_config &config)
 	m_mod3->set_lines({ decoder::WRITE, decoder::addr(11), decoder::addr(12), decoder::addr(13), decoder::addr(14), decoder::addr(15), decoder::latch_bit(0), decoder::latch_bit(2), decoder::latch_bit(4) });
 	m_mod3->set_latch_mask(0x1f);
 	m_mod3->set_install_callback(FUNC(blktiger_ms_state::mod3_install));
-	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_hold));
+	m_maincpu->set_vblank_int("screen", FUNC(blktiger_ms_state::irq0_line_assert));
 
 	// video hardware
 	SCREEN(config, m_screen);

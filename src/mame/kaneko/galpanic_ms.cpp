@@ -118,7 +118,10 @@ void galspanic_ms_state::newquiz_map(address_map &map)
 
 	map(0x800000, 0x80000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 
-	map(0x840000, 0x840001).ram();
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x840000, 0x840fff).lrw16(
+			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(6, CLEAR_LINE); return 0xffff; }),
+			NAME([this] (u16 data) { m_maincpu->set_input_line(6, CLEAR_LINE); }));
 
 	map(0x900000, 0x900001).ram();
 
@@ -270,7 +273,7 @@ void galspanic_ms_state::newquiz(machine_config &config)
 	/* basic machine hardware */
 	M68000(config, m_maincpu, 12_MHz_XTAL);
 	m_maincpu->set_addrmap(AS_PROGRAM, &galspanic_ms_state::newquiz_map);
-	m_maincpu->set_vblank_int("screen", FUNC(galspanic_ms_state::irq6_line_hold)); // changed from original
+	m_maincpu->set_vblank_int("screen", FUNC(galspanic_ms_state::irq6_line_assert)); // changed from original
 
 	// video hardware
 	SCREEN(config, m_screen);

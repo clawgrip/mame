@@ -143,7 +143,10 @@ void pspikes_ms_state::main_map(address_map &map)
 	map(0x000000, 0x03ffff).rom();
 	map(0x100000, 0x10ffff).ram();
 	map(0x200000, 0x203fff).ram(); // leftover from original sprite system?
-	map(0xc40000, 0xc40001).noprw(); // leftover?
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0xc40000, 0xc40fff).lrw16(
+			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(1, CLEAR_LINE); return 0xffff; }),
+			NAME([this] (u16 data) { m_maincpu->set_input_line(1, CLEAR_LINE); }));
 	map(0xff8000, 0xff8fff).rw(m_mod4, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xffc000, 0xffc7ff).ram().share(m_spriteram);
 	map(0xffd000, 0xffdfff).ram().share(m_scrollram);
@@ -223,7 +226,7 @@ void pspikes_ms_state::pspikesm(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &pspikes_ms_state::main_map);
-	m_maincpu->set_vblank_int("screen", FUNC(pspikes_ms_state::irq1_line_hold));
+	m_maincpu->set_vblank_int("screen", FUNC(pspikes_ms_state::irq1_line_assert));
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));

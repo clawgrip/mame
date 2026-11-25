@@ -139,7 +139,10 @@ void bloodbro_ms_state::main_program_map(address_map &map)
 	map(0x100800, 0x100fff).ram();
 	map(0x101000, 0x1017ff).ram().share(m_spriteram);
 	map(0x101800, 0x101fff).ram();
-	map(0x102000, 0x102001).nopw(); // ??? written often
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x102000, 0x102fff).lrw16(
+			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(4, CLEAR_LINE); return 0xffff; }),
+			NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
 	map(0x18d000, 0x18d7ff).w(m_mod4[0], FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x18d800, 0x18d803).lw16(NAME([this] (offs_t offset, u16 data, u16 mem_mask) { COMBINE_DATA(&m_scroll[0][offset]); }));
 }
@@ -234,7 +237,7 @@ void bloodbro_ms_state::bloodbrom(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 22.1184_MHz_XTAL / 2); // divisor unknown
 	m_maincpu->set_addrmap(AS_PROGRAM, &bloodbro_ms_state::main_program_map);
-	m_maincpu->set_vblank_int("screen", FUNC(bloodbro_ms_state::irq4_line_hold));
+	m_maincpu->set_vblank_int("screen", FUNC(bloodbro_ms_state::irq4_line_assert));
 
 	// video hardware
 	screen_device &screen(SCREEN(config, "screen"));

@@ -427,7 +427,10 @@ void toki_ms_state::tokim_map(address_map &map)
 	map(0x070000, 0x0703ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x070400, 0x0707ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x071000, 0x0713ff).ram().share("spriteram");
-	map(0x072000, 0x072001).nopr(); // irq ack?
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x072000, 0x072fff).lrw16(
+			NAME([this] () -> u16 { if (!machine().side_effects_disabled()) m_maincpu->set_input_line(1, CLEAR_LINE); return 0xffff; }),
+			NAME([this] (u16 data) { m_maincpu->set_input_line(1, CLEAR_LINE); }));
 	map(0x073000, 0x07300f).ram().share("scrollram");
 	map(0x0a0000, 0x0a005f).nopw(); // scrollram left-over?
 	map(0x0c0000, 0x0c000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
@@ -525,7 +528,7 @@ void toki_ms_state::tokim(machine_config &config)
 	// basic machine hardware
 	M68000(config, m_maincpu, 20_MHz_XTAL / 2);
 	m_maincpu->set_addrmap(AS_PROGRAM, &toki_ms_state::tokim_map);
-	m_maincpu->set_vblank_int("screen", FUNC(toki_ms_state::irq1_line_hold));
+	m_maincpu->set_vblank_int("screen", FUNC(toki_ms_state::irq1_line_assert));
 
 	// video hardware
 	SCREEN(config, m_screen);

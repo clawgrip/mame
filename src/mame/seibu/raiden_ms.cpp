@@ -292,7 +292,7 @@ void raiden_ms_state::raidenm_sub_map(address_map &map)
 
 	map(0x08000, 0x08001).nopw();
 	map(0x0a000, 0x0a001).nopw();
-	map(0x0e800, 0x0e801).nopw();
+	map(0x0e800, 0x0e801).lw16(NAME([this] (u16 data) { m_subcpu->set_input_line(0, CLEAR_LINE); })); // interrupt acknowledge, the last write of the interrupt routine
 
 	map(0xc0000, 0xfffff).rom();
 }
@@ -425,10 +425,12 @@ IRQ_CALLBACK_MEMBER(raiden_ms_state::vector_r)
 
 void raiden_ms_state::vblank_irq(int state)
 {
+	// the first CPU's interrupt routine enables interrupts at once, so taking the interrupt clears it; the second one
+	// acknowledges its interrupt with a write
 	if (state)
 	{
 		m_maincpu->set_input_line(0, HOLD_LINE);
-		m_subcpu->set_input_line(0, HOLD_LINE);
+		m_subcpu->set_input_line(0, ASSERT_LINE);
 	}
 }
 
