@@ -430,9 +430,6 @@ ROM_START( slapfighm )
 	ROM_LOAD( "21-1_p0201_82s129.ic5",      0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21-1_p0203_82s129.ic12",     0x100, 0x100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/1 board
-	ROM_LOAD( "51-1_p0502.ic10",            0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-
 	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x000, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )
 

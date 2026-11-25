@@ -491,14 +491,8 @@ ROM_START( wrallym )
 	ROM_LOAD( "aud-oki_sorally_1_27c040.bin", 0x000000, 0x080000, CRC(449aae4a) SHA1(3915e7b85fde0521c89c206c0022db6477f2797e) )
 	ROM_LOAD( "aud-oki_sorally_2_27c040.bin", 0x080000, 0x080000, CRC(09967f05) SHA1(56306414bcc73e0880d3f069666f3c696d687009) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "mod_51-1_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
-
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_92fl_gal20v8as.ic18", 0x000, 0x157, CRC(3a1465c2) SHA1(c98227c29301fdff7ab8144222ff0c257412dd78) )
-
-	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
-	ROM_LOAD( "mod_9-2_9350_gal16v8as.u10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_51-1_p0503_pal16r6a.ic46",   0x0000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )

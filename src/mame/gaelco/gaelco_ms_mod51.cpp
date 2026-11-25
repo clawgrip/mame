@@ -64,9 +64,15 @@
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD51, gaelco_ms_mod51_device, "gaelco_ms_mod51", "Gaelco Modular System MOD 51 sprite board")
 
 
+ROM_START( gaelco_ms_mod51 )
+	ROM_REGION( 0x100, "prom", 0 )
+	ROM_LOAD( "mod_51_p0502_82s129.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
+ROM_END
+
+
 gaelco_ms_mod51_device::gaelco_ms_mod51_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD51, tag, owner, clock),
-	m_prom(*this, DEVICE_SELF),
+	m_prom(*this, "prom"),
 	m_timing(*this, finder_base::DUMMY_TAG),
 	m_list_r(*this, 0),
 	m_sprite_cb(*this),
@@ -82,6 +88,11 @@ gaelco_ms_mod51_device::gaelco_ms_mod51_device(const machine_config &mconfig, co
 	m_origin_x(0),
 	m_origin_y(0)
 {
+}
+
+const tiny_rom_entry *gaelco_ms_mod51_device::device_rom_region() const
+{
+	return ROM_NAME( gaelco_ms_mod51 );
 }
 
 void gaelco_ms_mod51_device::device_start()

@@ -383,9 +383,6 @@ ROM_START( galpanicm )
 	ROM_LOAD32_BYTE( "4_gp_403.ic15",        0x000001, 0x010000, CRC(35d2bce4) SHA1(050e7adad47ea10a59761e59d8d4aee11960b0db) ) // MC27C512AQ
 	ROM_LOAD32_BYTE( "4_gp_404.ic14",        0x000000, 0x010000, CRC(ea8eda3a) SHA1(dc2535d77788935322d1fb20097c1918b659d2b9) ) // MC27C512AQ
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51/3 board
-	ROM_LOAD( "51_502_63s141n.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as Euro League modular bootleg
-
 	ROM_REGION( 0x157, "moda", 0 ) // on COMP MOD-A board, video timing
 	ROM_LOAD( "a_a-247_gal20v8-20hb1.ic8",  0x000, 0x157, CRC(ace1b4e0) SHA1(511fa1fa8f44ad463fba4ece2beb9c35a336b7db) )
 

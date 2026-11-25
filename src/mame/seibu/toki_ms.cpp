@@ -648,8 +648,6 @@ ROM_START( tokim )
 	ROM_LOAD( "21_201_82s129.ic4",    0x0000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_202_82s129.ic12",   0x0100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "51_502_82s129an.ic10", 0x0000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular bootleg
 ROM_END
 
 // reorganize graphics into something we can decode with a single pass

@@ -101,6 +101,12 @@ DEFINE_DEVICE_TYPE(GAELCO_MS_MOD9, gaelco_ms_mod9_device, "gaelco_ms_mod9", "Gae
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD9_YM2203, gaelco_ms_mod9_ym2203_device, "gaelco_ms_mod9_ym2203", "Gaelco Modular System MOD 9/2 board (YM2203 version)")
 
 
+ROM_START( gaelco_ms_mod9 )
+	ROM_REGION( 0x117, "decoder", 0 ) // the same on every dumped board, labelled 93 and the game code
+	ROM_LOAD( "system2_9338_gal16v8.ic10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
+ROM_END
+
+
 gaelco_ms_mod9_device_base::gaelco_ms_mod9_device_base(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, type, tag, owner, clock),
 	device_mixer_interface(mconfig, *this),
@@ -123,6 +129,11 @@ gaelco_ms_mod9_device_base::gaelco_ms_mod9_device_base(const machine_config &mco
 	m_adpcm_data(0),
 	m_adpcm_high(false)
 {
+}
+
+const tiny_rom_entry *gaelco_ms_mod9_device_base::device_rom_region() const
+{
+	return ROM_NAME( gaelco_ms_mod9 );
 }
 
 void gaelco_ms_mod9_device_base::device_add_mconfig(machine_config &config)

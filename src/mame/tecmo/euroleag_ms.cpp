@@ -382,14 +382,8 @@ ROM_START( euroleagm )
 	ROM_LOAD32_BYTE( "r4_fu5a03.bin",  0x40001, 0x10000, CRC(228429d8) SHA1(3b2dbea53807929c24d593c469a83172f7747f66) )
 	ROM_LOAD32_BYTE( "r4_fu5a04.bin",  0x40000, 0x10000, CRC(f36390a9) SHA1(e5ea36e91b3ced068281524ee79d0432f489715c) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on the MOD 51/1 board
-	ROM_LOAD( "r4_p0502_82s129.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on the MOD 9/2 board
 	ROM_LOAD( "system2_9238_gal20v8.ic18", 0x000, 0x157, CRC(dd571a59) SHA1(ef2c7b33922dd79513a4fbe6f04a2f2c2c795ada) )
-
-	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on the MOD 9/2 board, sound CPU decoder
-	ROM_LOAD( "system2_9338_gal16v8.ic10", 0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "r2_p0403_pal16r8a.ic29",    0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) )

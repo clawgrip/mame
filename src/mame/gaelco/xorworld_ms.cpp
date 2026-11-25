@@ -354,9 +354,6 @@ ROM_START( xorworldm )
 	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
-
 	ROM_REGION( 0x157, "mod9:timing", ROMREGION_ERASEFF ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
 	// not dumped, the 9248 of Big Karnak's board
@@ -403,9 +400,6 @@ ROM_START( xorworldm )
 	ROM_FILL( 0x121, 0x24, 0x00 )
 	ROM_FILL( 0x14d, 0x01, 0x03 )
 	ROM_FILL( 0x156, 0x01, 0x02 )
-
-	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
-	ROM_LOAD( "mod_9-2_gal16v8.ic10", 0x000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced, the logic of the other boards' 93xx
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )
@@ -454,9 +448,6 @@ ROM_START( xorworldma )
 	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program
 	ROM_LOAD( "mod_9-2_27c512.ic6", 0x00000, 0x10000, CRC(c722165b) SHA1(b1cd3ac80521036059579e71b6cb9bd4b97da4c2) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "mod_51-3_502_82s129a.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // same as every other modular system
-
 	ROM_REGION( 0x157, "mod9:timing", ROMREGION_ERASEFF ) // on MOD 9/2 board
 	ROM_LOAD( "mod_9-2_gal20v8.ic18", 0x000, 0x157, NO_DUMP )
 	// not dumped, the 9248 of Big Karnak's board
@@ -503,9 +494,6 @@ ROM_START( xorworldma )
 	ROM_FILL( 0x121, 0x24, 0x00 )
 	ROM_FILL( 0x14d, 0x01, 0x03 )
 	ROM_FILL( 0x156, 0x01, 0x02 )
-
-	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
-	ROM_LOAD( "mod_9-2_gal16v8.ic10", 0x000, 0x117, BAD_DUMP CRC(23070765) SHA1(3c87f7ab299fcd62da366fc9c1985ab21ee14960) ) // Bruteforced, the logic of the other boards' 93xx
 
 	ROM_REGION( 0x157, "plds", ROMREGION_ERASE00 )
 	ROM_LOAD( "mod_5-1_52fx_gal16v8.ic8",  0x0000, 0x117, CRC(f3d686c9) SHA1(6bc1bd40f49663e776c0d40b2f146338a2057097) )

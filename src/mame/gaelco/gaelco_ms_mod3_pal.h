@@ -22,6 +22,7 @@ public:
 
 protected:
 	// device_t implementation
+	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
 	virtual void device_start() override ATTR_COLD;
 
 private:

@@ -55,14 +55,25 @@ constexpr u32 INPUT_PINS = 0x0ffc; // pins 2-11
 DEFINE_DEVICE_TYPE(GAELCO_MS_MOD3_PAL, gaelco_ms_mod3_pal_device, "gaelco_ms_mod3_pal", "Gaelco Modular System MOD 3 6809 sub board PAL")
 
 
+ROM_START( gaelco_ms_mod3_pal )
+	ROM_REGION( 0xcc, "pal", 0 )
+	ROM_LOAD( "mod_3-4_sub_p36_pal20x4.bin", 0x000, 0x0cc, CRC(896e285d) SHA1(5a49890c396fb9f3625d421ff4a8823d3b76ccb9) )
+ROM_END
+
+
 gaelco_ms_mod3_pal_device::gaelco_ms_mod3_pal_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
 	device_t(mconfig, GAELCO_MS_MOD3_PAL, tag, owner, clock),
-	m_fuses(*this, DEVICE_SELF),
+	m_fuses(*this, "pal"),
 	m_outputs_cb(*this),
 	m_high{ },
 	m_low{ },
 	m_regs(0)
 {
+}
+
+const tiny_rom_entry *gaelco_ms_mod3_pal_device::device_rom_region() const
+{
+	return ROM_NAME( gaelco_ms_mod3_pal );
 }
 
 void gaelco_ms_mod3_pal_device::device_start()

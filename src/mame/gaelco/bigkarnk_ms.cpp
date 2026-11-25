@@ -676,14 +676,8 @@ ROM_START( bigkarnkm )
 	ROM_LOAD32_BYTE( "8_ka_829.ic29", 0x080001, 0x020000, CRC(8c5df0ec) SHA1(15a5b847d6d035f27300435a03bd254dd9b3f99c) )
 	ROM_LOAD32_BYTE( "8_ka_836.ic36", 0x080000, 0x020000, CRC(43de75db) SHA1(419e7702d17c52365addb8bfda582e916762ead5) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "51_p0502_n82s129n.ic10", 0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) ) // common PROM found on all? Modular System sets?
-
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9248_gal20v8-25lp.ic18", 0x000, 0x157, CRC(13123ce6) SHA1(85b012d706021963899ad3bc6d29fbe50d8433ab) )
-
-	ROM_REGION( 0x117, "mod9:decoder", 0 ) // on MOD 9/2 board, sound CPU decoder
-	ROM_LOAD( "snd_9348_gal16v8-25hb1.ic10",  0x000, 0x117, CRC(54b4160f) SHA1(0156a2eda97a9d8e0adb3a3795f6ed547c6e06fc) )
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "51_p0503_pal16r6acn.ic48",     0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) ) // matches one of the Euro League Modular System PALs

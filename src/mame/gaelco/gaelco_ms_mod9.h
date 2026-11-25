@@ -15,6 +15,10 @@
 #include "screen.h"
 
 
+DECLARE_DEVICE_TYPE(GAELCO_MS_MOD9, gaelco_ms_mod9_device)
+DECLARE_DEVICE_TYPE(GAELCO_MS_MOD9_YM2203, gaelco_ms_mod9_ym2203_device)
+
+
 class gaelco_ms_mod9_device_base : public device_t, public device_mixer_interface, public device_palette_interface,
 		public device_gaelco_ms_timing_interface
 {
@@ -43,6 +47,7 @@ protected:
 	gaelco_ms_mod9_device_base(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, u32 clock);
 
 	// device_t implementation
+	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
 	virtual void device_start() override ATTR_COLD;
 	virtual void device_reset() override ATTR_COLD;
@@ -100,6 +105,8 @@ class gaelco_ms_mod9_ym2203_device : public gaelco_ms_mod9_device_base
 public:
 	gaelco_ms_mod9_ym2203_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);
 
+	static auto parent_rom_device_type() { return &GAELCO_MS_MOD9; }
+
 protected:
 	// device_t implementation
 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
@@ -107,8 +114,5 @@ protected:
 
 
 INPUT_PORTS_EXTERN( gaelco_ms_mod9 );
-
-DECLARE_DEVICE_TYPE(GAELCO_MS_MOD9, gaelco_ms_mod9_device)
-DECLARE_DEVICE_TYPE(GAELCO_MS_MOD9_YM2203, gaelco_ms_mod9_ym2203_device)
 
 #endif // MAME_GAELCO_GAELCO_MS_MOD9_H

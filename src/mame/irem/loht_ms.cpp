@@ -636,9 +636,6 @@ ROM_START( lohtm ) // really similar to lohtb, even if it runs on 'Modular Hardw
 	ROM_LOAD( "21_204_82s129an.ic4",      0x000, 0x100, CRC(74470450) SHA1(40b0e0991090733f8190ad7efcb500bd109c2a7e) )
 	ROM_LOAD( "21_209_82s129an.ic12",     0x100, 0x100, CRC(7922a7ab) SHA1(e7ec2b1fc61bd7d2cf921bfc50d975f91b938e8a) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "51_502_82s129n.ic10",      0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-
 	ROM_REGION( 0x104, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "51_p0503_pal16r6.ic46",       0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
 	// these were read protected

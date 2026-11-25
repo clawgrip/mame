@@ -543,14 +543,8 @@ ROM_START( gryzorm )
 	ROM_LOAD( "mod_21-1_p0206_82s129.ic4",       0x000, 0x100, CRC(a47680d5) SHA1(6475cad53b91f6ef1043e7330b79f58695fd7ec9) )
 	ROM_LOAD( "mod_21-1_p0202_82s129.ic12",      0x100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
 
-	ROM_REGION( 0x100, "mod51", 0 ) // on MOD 51 board
-	ROM_LOAD( "mod_51_p0502_mmi63s141.ic10",     0x000, 0x100, CRC(15085e44) SHA1(646e7100fcb112594023cf02be036bd3d42cc13c) )
-
 	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "mod_3-4_sub_p0318_mmi63s481.bin", 0x000, 0x200, CRC(67a4bbc7) SHA1(441be3a810225813bf2667ddf9b2fdc7de35196e) )
-
-	ROM_REGION( 0xcc, "mod3_pal", 0 ) // on the CPU sub board, bank latch
-	ROM_LOAD( "mod_3-4_sub_p36_pal20x4.bin",  0x000, 0x0cc, CRC(896e285d) SHA1(5a49890c396fb9f3625d421ff4a8823d3b76ccb9) )
 
 	ROM_REGION( 0x200, "plds", ROMREGION_ERASEFF )
 	ROM_LOAD( "mod_4-3_p0403_pal16r8.ic29",   0x000, 0x104, CRC(506156cc) SHA1(5560671fc2c9872ed28620491af5dc486909fc6e) ) // Same on all MOD 4/3 PCBs
