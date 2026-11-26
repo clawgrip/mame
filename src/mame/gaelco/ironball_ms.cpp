@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Tomás García-Merás Capote (ClawGrip)
+// copyright-holders:Tomás García-Merás Capote
 /*
     Iron Balls (prototype on Modular System)
 
@@ -36,7 +36,6 @@
     - the program RAM size: the copy needs 0x40400-0x5f827
     - DIP switches 1, 2 and 8 of SW1 (debugging options of the beta?)
     - sprite attribute bit 4, set with colour bit 3 and on a few other sprites (priority?)
-    - the DIP switch numbering, the opposite of Big Karnak's
 */
 
 #include "emu.h"

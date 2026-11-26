@@ -3,6 +3,27 @@
 
 /*
     Splash (Modular System)
+
+    Gaelco's Modular System version of Splash. The cage has these boards:
+
+    MOD 6/1    - CPU board: TS68000CP12, 20 MHz XTAL, EPROMs SP 608A (IC8) and SP 617A (IC17), two
+                 MS62256L-10 RAMs, four empty EPROM sockets, GALs 6FL (IC7) and 605 (IC13).
+    COMP MOD-C - Background board: Z0840006PSC, 12 MHz XTAL, EPROMs SP (27C040) and C3 to C7 (M27C4001),
+                 a M5M51008BP-70L RAM for the 512 x 256 bitmap and GAL C50 (IC10). Its Z80 draws the bitmap
+                 from the commands the 68000 leaves at 0x400004.
+    MOD 7/4    - Tilemap board: two 84256A-10L RAMs, GALs 7150, 7250, 7350, 7450, 7550 and 7650.
+    MOD 8/2    - ROM board of the MOD 7/4 board: EPROMs SP 815, 822, 830 and 837 for the 8x8 front layer and
+                 SP 811, 818, 826 and 833 for the 16x16 middle one; the sockets of the background layer are
+                 empty.
+    MOD 51/3   - Sprite board: PROM 502 (IC10) and GAL 503 (IC46). Its EPROM sockets are empty: a MOD 5/1
+                 ("MODULAR SYSTEM 2") board on top holds EPROMs SP 503 to SP 525 and GALs 5150 and 5250.
+    MOD 9/2    - "SYSTEM 2" sound, I/O and video timing board: Z80B, YM3812, Y3014B, M5205 with a 384 kHz
+                 resonator, 28 MHz and 16 MHz XTALs, the sound EPROM at IC6 (IC11 is empty), GALs 9150, 9250
+                 and 9350, two banks of 8 DIP switches.
+
+    The operator card gives the DIP switches with switch n on bit n - 1 of each bank, as the program reads
+    them, except that it swaps 2 and 3 lives. The game takes two buttons for each player, PULS 1 and 3 for
+    player 1 and PULS 4 and 6 for player 2 on the connector.
 */
 
 
@@ -212,7 +233,7 @@ void splashms_state::splashms_map(address_map &map)
 	map(0x08e000, 0x08ffff).rw(FUNC(splashms_state::vram2_r), FUNC(splashms_state::vram2_w)); // mirror needed for paint dripping in attract
 	map(0x090000, 0x091fff).ram().rw(FUNC(splashms_state::vram2_r), FUNC(splashms_state::vram2_w)).share("videoram2");
 
-	map(0x0a0000, 0x0a1fff).ram(); // writes unused data from vram2 area here, but isn't a mirror (eg. has large paint can from attract during gameplay) unused?
+	map(0x0a0000, 0x0a1fff).ram(); // the background layer of the MOD 7/4 board, whose EPROM sockets are empty
 
 	map(0x0c0000, 0x0c000f).ram().share("scrollregs"); // scroll vals
 
@@ -264,52 +285,44 @@ static INPUT_PORTS_START( splashm )
 
 	// on the MOD 9/2 board
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(    0x00, "0" )
-	PORT_DIPSETTING(    0x04, "1" )
-	PORT_DIPSETTING(    0x08, "2" )
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x10, "4" )
-	PORT_DIPSETTING(    0x14, "5" )
-	PORT_DIPSETTING(    0x18, "6" )
-	PORT_DIPSETTING(    0x1c, "7" )
-	PORT_DIPNAME( 0xe0, 0xe0, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(    0x00, "0" )
-	PORT_DIPSETTING(    0x20, "1" )
-	PORT_DIPSETTING(    0x40, "2" )
-	PORT_DIPSETTING(    0x60, "3" )
-	PORT_DIPSETTING(    0x80, "4" )
-	PORT_DIPSETTING(    0xa0, "5" )
-	PORT_DIPSETTING(    0xc0, "6" )
-	PORT_DIPSETTING(    0xe0, "7" )
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW1:1" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:2" )
+	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4,5")
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x14, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0xe0, 0xe0, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,7,8")
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_6C ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_SERVICE( 0x04, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:2" )
+	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW2:4" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:7,8")
 	PORT_DIPSETTING(    0x40, "1" )
 	PORT_DIPSETTING(    0x80, "2" )
 	PORT_DIPSETTING(    0xc0, "3" )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 INPUT_PORTS_END
 
 static const gfx_layout tiles16x16x4_layout =
@@ -344,10 +357,10 @@ GFXDECODE_END
 void splashms_state::splashm(machine_config &config)
 {
 	// basic machine hardware
-	M68000(config, m_maincpu, 20_MHz_XTAL/2);
+	M68000(config, m_maincpu, 20_MHz_XTAL / 2); // divider not verified
 	m_maincpu->set_addrmap(AS_PROGRAM, &splashms_state::splashms_map);
 
-	Z80(config, m_subcpu, 12_MHz_XTAL/2);
+	Z80(config, m_subcpu, 12_MHz_XTAL / 2); // divider not verified
 	m_subcpu->set_addrmap(AS_PROGRAM, &splashms_state::sub_map);
 	m_subcpu->set_addrmap(AS_IO, &splashms_state::sub_portmap);
 
@@ -361,7 +374,7 @@ void splashms_state::splashm(machine_config &config)
 
 	SPEAKER(config, "mono").front_center();
 
-	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL); // not verified, the crystal of the other MOD 9/2 boards
+	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
 	m_mod9->set_screen(m_screen);
 	m_mod9->irq_callback().set_inputline(m_maincpu, 4);
 	m_mod9->in_callback<0>().set_ioport("IN0");
@@ -400,11 +413,11 @@ void splashms_state::init_splashms()
 
 
 ROM_START( splashm )
-	ROM_REGION( 0x40000, "maincpu", 0 )
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on the MOD 6/1 board
 	ROM_LOAD16_BYTE( "cpu1_6-1_sp_608a.ic8",  0x00001, 0x20000, CRC(befdbaf0) SHA1(94efdeec1e1311317ffd0fe3d5fdbb02e151b985) )
 	ROM_LOAD16_BYTE( "cpu1_6-1_sp_617a.ic17", 0x00000, 0x20000, CRC(080edb2b) SHA1(6104345bc72cd20051d66c04b97c9a365a88ec3f) )
 
-	ROM_REGION( 0x400000, "subcpu", ROMREGION_ERASE00 ) // extra Z80 for backgrounds!
+	ROM_REGION( 0x400000, "subcpu", ROMREGION_ERASE00 ) // on the COMP MOD-C board
 	ROM_LOAD( "cpu2_c_sp_c2.ic2", 0x000000, 0x080000, CRC(3a0be09f) SHA1(83abc10ff2c810c8451f583700f140f569e5b6ee) )
 	ROM_LOAD( "cpu2_c_sp_c3.ic3", 0x080000, 0x080000, CRC(c3dc5e9d) SHA1(ce5fb65935cfe225132242e058cd63fa33f9da63) )
 	ROM_LOAD( "cpu2_c_sp_c4.ic4", 0x100000, 0x080000, CRC(4d7b643d) SHA1(40bdcf7eedddc3244cb41530d10009b23b7ac473) )
@@ -415,13 +428,13 @@ ROM_START( splashm )
 	ROM_REGION( 0x10000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
 	ROM_LOAD( "snd_9-2_sp_916.ic6", 0x00000, 0x10000, CRC(5567fa22) SHA1(3993c733a0222ca292b60f409c78b45280a5fec6) )
 
-	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF )
+	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF ) // on the MOD 8/2 board
 	ROM_LOAD32_BYTE( "8_sp_837.ic37", 0x00000, 0x10000, CRC(3b544131) SHA1(e7fd97cb24b84739f2481efb1d232f86df4a3d8d) ) // 1xxxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_830.ic30", 0x00001, 0x10000, CRC(09bb675b) SHA1(49c41ccfce1b0077c430c6bb38bc858aeaf87fb8) ) // has some garbage in the blank space of the paired ROMs
 	ROM_LOAD32_BYTE( "8_sp_822.ic22", 0x00002, 0x10000, CRC(621fcf26) SHA1(a7ff6b12fbbea1bba7c4a397a82ac2fb5c09558a) ) // 1xxxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_815.ic15", 0x00003, 0x10000, CRC(5641b621) SHA1(e71df1ab5c9b2254495d99657477b52e8843d128) ) // 1xxxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x080000, "sprites", ROMREGION_ERASEFF | ROMREGION_INVERT )
+	ROM_REGION( 0x080000, "sprites", ROMREGION_ERASEFF | ROMREGION_INVERT ) // on the MOD 5/1 board
 	ROM_LOAD32_BYTE( "5-1_sp_524.ic24", 0x00000, 0x10000, CRC(841c24c1) SHA1(70cb26033999f8184c51849e00bfcb2270f646e8) )
 	ROM_LOAD32_BYTE( "5-1_sp_518.ic18", 0x00001, 0x10000, CRC(499cb813) SHA1(4d22e58530ff8a85b7ffc8ae1ab5986215986b49) )
 	ROM_LOAD32_BYTE( "5-1_sp_512.ic12", 0x00002, 0x10000, CRC(8cb0b132) SHA1(894f84b6a8171ed8c22298ebf1303da020f747ee) )
@@ -431,7 +444,7 @@ ROM_START( splashm )
 	ROM_LOAD32_BYTE( "5-1_sp_513.ic13", 0x40002, 0x10000, CRC(2f7eeb33) SHA1(27b5eb0ce299931f9fb1831bb218a27b2b6c66d7) )
 	ROM_LOAD32_BYTE( "5-1_sp_504.ic4",  0x40003, 0x10000, CRC(b6806390) SHA1(d95247bcd90bd7b7be355c267f023c19a9d60f66) ) // 11xxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x080000, "bgtile", ROMREGION_ERASEFF )
+	ROM_REGION( 0x080000, "bgtile", ROMREGION_ERASEFF ) // on the MOD 8/2 board
 	ROM_LOAD32_BYTE( "8_sp_833.ic33", 0x00000, 0x20000, CRC(8ac7cd1f) SHA1(aad88db9a82f417774f1d5eef830cc97c0d4b0de) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_826.ic26", 0x00001, 0x20000, CRC(b7ec71d8) SHA1(3d4b62559c0ba688b94e605594f3e8e9f2cbefa2) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_818.ic18", 0x00002, 0x20000, CRC(ae62a832) SHA1(f825a186e25a1c292aa6f880055341ec14373c0b) ) // 111xxxxxxxxxxxxxx = 0xFF
@@ -440,7 +453,7 @@ ROM_START( splashm )
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
 
-	// the decoder GAL of the MOD 9/2 board (IC10) isn't dumped, assumed to be the same as on the other boards
+	// the decoder GAL of the MOD 9/2 board (IC10, 9350) isn't dumped, assumed to be the same as on the other boards
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -453,17 +466,17 @@ ROM_START( splashm )
 	ROM_LOAD( "7-4_7650_gal20v8as.ic44",     0x000, 0x157, CRC(91030d03) SHA1(c30662f1b70ef0e92629824ac240d878cac64b5e) )
 	ROM_LOAD( "51-3_503_gal16v8.ic46",       0x000, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
 	ROM_LOAD( "cpu1_6-1_605_gal16v8as.ic13", 0x000, 0x117, CRC(45b8e164) SHA1(2e227ac5171ebf14e1d1f7214626ef4df0d5ae99) )
-	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
-	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
-	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
+	ROM_LOAD( "cpu1_6-1_6fl_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
+	ROM_LOAD( "cpu2_c_c50_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
+	ROM_LOAD( "snd_9-2_9150_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
 ROM_END
 
 ROM_START( splashma )
-	ROM_REGION( 0x40000, "maincpu", 0 )
+	ROM_REGION( 0x40000, "maincpu", 0 ) // on the MOD 6/1 board
 	ROM_LOAD16_BYTE( "sp_608_27c010.bin", 0x00001, 0x20000, CRC(5367f36f) SHA1(fa42b4571bb14ce2f2adc681f1141fcffc9de757) )
 	ROM_LOAD16_BYTE( "sp_617_27c010.bin", 0x00000, 0x20000, CRC(754c2d1a) SHA1(7f9417ad3009e7d2c4e9df618b24fd87a4233cbd) )
 
-	ROM_REGION( 0x400000, "subcpu", ROMREGION_ERASE00 ) // extra Z80 for backgrounds!
+	ROM_REGION( 0x400000, "subcpu", ROMREGION_ERASE00 ) // on the COMP MOD-C board
 	ROM_LOAD( "sp_c2_20f4_27c4001.bin", 0x000000, 0x080000, CRC(3a0be09f) SHA1(83abc10ff2c810c8451f583700f140f569e5b6ee) )
 	ROM_LOAD( "sp_c3_8edb_27c4001.bin", 0x080000, 0x080000, CRC(c3dc5e9d) SHA1(ce5fb65935cfe225132242e058cd63fa33f9da63) )
 	ROM_LOAD( "sp_c4_9b95_27c4001.bin", 0x100000, 0x080000, CRC(4d7b643d) SHA1(40bdcf7eedddc3244cb41530d10009b23b7ac473) )
@@ -474,13 +487,13 @@ ROM_START( splashma )
 	ROM_REGION( 0x010000, "mod9", 0 ) // on MOD 9/2 board, sound program and samples
 	ROM_LOAD( "snd_9-2_sp_916.ic6", 0x000000, 0x010000, CRC(5567fa22) SHA1(3993c733a0222ca292b60f409c78b45280a5fec6) )
 
-	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF )
+	ROM_REGION( 0x40000, "fgtile", ROMREGION_ERASEFF ) // on the MOD 8/2 board
 	ROM_LOAD32_BYTE( "8_sp_837.ic37", 0x00000, 0x10000, CRC(3b544131) SHA1(e7fd97cb24b84739f2481efb1d232f86df4a3d8d) ) // 1xxxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_830.ic30", 0x00001, 0x10000, CRC(09bb675b) SHA1(49c41ccfce1b0077c430c6bb38bc858aeaf87fb8) ) // has some garbage in the blank space of the paired ROMs
 	ROM_LOAD32_BYTE( "8_sp_822.ic22", 0x00002, 0x10000, CRC(621fcf26) SHA1(a7ff6b12fbbea1bba7c4a397a82ac2fb5c09558a) ) // 1xxxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_815.ic15", 0x00003, 0x10000, CRC(5641b621) SHA1(e71df1ab5c9b2254495d99657477b52e8843d128) ) // 1xxxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x80000, "sprites", ROMREGION_ERASEFF | ROMREGION_INVERT )
+	ROM_REGION( 0x80000, "sprites", ROMREGION_ERASEFF | ROMREGION_INVERT ) // on the MOD 5/1 board
 	ROM_LOAD32_BYTE( "5-1_sp_524.ic24", 0x00000, 0x10000, CRC(841c24c1) SHA1(70cb26033999f8184c51849e00bfcb2270f646e8) )
 	ROM_LOAD32_BYTE( "5-1_sp_518.ic18", 0x00001, 0x10000, CRC(499cb813) SHA1(4d22e58530ff8a85b7ffc8ae1ab5986215986b49) )
 	ROM_LOAD32_BYTE( "5-1_sp_512.ic12", 0x00002, 0x10000, CRC(8cb0b132) SHA1(894f84b6a8171ed8c22298ebf1303da020f747ee) )
@@ -490,7 +503,7 @@ ROM_START( splashma )
 	ROM_LOAD32_BYTE( "5-1_sp_513.ic13", 0x40002, 0x10000, CRC(2f7eeb33) SHA1(27b5eb0ce299931f9fb1831bb218a27b2b6c66d7) )
 	ROM_LOAD32_BYTE( "5-1_sp_504.ic4",  0x40003, 0x10000, CRC(b6806390) SHA1(d95247bcd90bd7b7be355c267f023c19a9d60f66) ) // 11xxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x80000, "bgtile", ROMREGION_ERASEFF )
+	ROM_REGION( 0x80000, "bgtile", ROMREGION_ERASEFF ) // on the MOD 8/2 board
 	ROM_LOAD32_BYTE( "8_sp_833.ic33", 0x00000, 0x20000, CRC(8ac7cd1f) SHA1(aad88db9a82f417774f1d5eef830cc97c0d4b0de) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_826.ic26", 0x00001, 0x20000, CRC(b7ec71d8) SHA1(3d4b62559c0ba688b94e605594f3e8e9f2cbefa2) ) // 111xxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD32_BYTE( "8_sp_818.ic18", 0x00002, 0x20000, CRC(ae62a832) SHA1(f825a186e25a1c292aa6f880055341ec14373c0b) ) // 111xxxxxxxxxxxxxx = 0xFF
@@ -499,7 +512,7 @@ ROM_START( splashma )
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on MOD 9/2 board
 	ROM_LOAD( "snd_9-2_9250_gal20v8as.ic18", 0x000, 0x157, CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) )
 
-	// the decoder GAL of the MOD 9/2 board (IC10) isn't dumped, assumed to be the same as on the other boards
+	// the decoder GAL of the MOD 9/2 board (IC10, 9350) isn't dumped, assumed to be the same as on the other boards
 
 	ROM_REGION( 0x157, "plds", 0 )
 	ROM_LOAD( "5-1_5150_gal16v8as.ic9",      0x000, 0x117, CRC(0070e8b9) SHA1(8a3ef9445599dc88c001a919e01f47844eec81eb) )
@@ -512,9 +525,9 @@ ROM_START( splashma )
 	ROM_LOAD( "7-4_7650_gal20v8as.ic44",     0x000, 0x157, CRC(91030d03) SHA1(c30662f1b70ef0e92629824ac240d878cac64b5e) )
 	ROM_LOAD( "51-3_503_gal16v8.ic46",       0x000, 0x117, CRC(11470ea1) SHA1(cfcafbcc7e55be717348f895df61e144fdd0cc9b) )
 	ROM_LOAD( "cpu1_6-1_605_gal16v8as.ic13", 0x000, 0x117, CRC(45b8e164) SHA1(2e227ac5171ebf14e1d1f7214626ef4df0d5ae99) )
-	ROM_LOAD( "cpu1_6-1_650_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
-	ROM_LOAD( "cpu2_c_cso_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
-	ROM_LOAD( "snd_9-2_9159_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
+	ROM_LOAD( "cpu1_6-1_6fl_gal16v8as.ic7",  0x000, 0x117, CRC(b80b8485) SHA1(ea7f6312877cef31c93a8e02270565bd511f4aaa) )
+	ROM_LOAD( "cpu2_c_c50_gal16v8as.ic10",   0x000, 0x117, CRC(0ebc7cd7) SHA1(95f0cba1f588920634b5f09b85197474201d9aed) )
+	ROM_LOAD( "snd_9-2_9150_gal16v8as.ic42", 0x000, 0x117, NO_DUMP )
 ROM_END
 
 GAME( 1992, splashm,  splash, splashm, splashm, splashms_state, init_splashms, ROT0, "Gaelco / OMK Software", "Splash (Modular System, ver. 1.0, checksum 16EDD8FB, non North America, censored)",   MACHINE_IMPERFECT_GRAPHICS | MACHINE_IMPERFECT_SOUND )
