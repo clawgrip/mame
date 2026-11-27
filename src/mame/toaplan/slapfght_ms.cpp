@@ -19,11 +19,17 @@
     The decoder PROM on the CPU sub board (P0312) maps the CPU address space in 256 byte areas from
     A8-A15 and bit 0 of the bank latch at 0xe900. With the bit set, the 16 KB EPROM replaces the
     second half of the other one at 0x8000-0xbfff and the text layer area at 0xf000-0xffff becomes
-    EPROM, an unknown board (0xf400-0xf5ff), RAM and, by its decoding, the palette (0xf800-0xffff).
+    EPROM, the MOD 51 sprite list (0xf400-0xf5ff), RAM, the palette (0xf800-0xfaff and 0xfc00-0xffff)
+    and the interrupt acknowledge (0xfb00-0xfbff).
+
+    The program keeps the sprite list and the scroll registers of the original game in the RAM at
+    0xe000-0xe8ff. Its interrupt routine converts the list into the MOD 51 format every other frame,
+    and its NMI routine copies the converted list to the MOD 51 board and the X scroll to 0xe820,
+    which the playfield board takes with the Y scroll at 0xe822. The text layer board takes its
+    scroll from 0xe820-0xe823 with the bank bit set.
 
     TODO:
-    - stuck at RAM CHECK OK due to wrong main CPU IRQ handling, if prodded via debugger it passes ROM CHECK too, but then stops at SOUND OK again due to IRQs;
-    - colors (no color PROMs?);
+    - the NMI source is unknown, once per frame with the vblank interrupt fits the program;
     - sound IRQs once testable;
     - derive from slapfght_state (slapfght.cpp) once all the common points and differences are verified.
 */
@@ -64,7 +70,8 @@ public:
 		m_gfxdecode(*this, "gfxdecode"),
 		m_rom(*this, "maincpu"),
 		m_ram(*this, "ram", 0x2000, ENDIANNESS_LITTLE),
-		m_spriteram(*this, "spriteram", 0x800, ENDIANNESS_LITTLE)
+		m_ram2(*this, "ram2", 0x900, ENDIANNESS_LITTLE),
+		m_spriteram(*this, "spriteram", 0x200, ENDIANNESS_LITTLE)
 	{ }
 
 	void slapfighm(machine_config &config);
@@ -87,18 +94,19 @@ private:
 
 	required_region_ptr<u8> m_rom;
 	memory_share_creator<u8> m_ram;
+	memory_share_creator<u8> m_ram2;
 	memory_share_creator<u8> m_spriteram;
 
-	bool m_main_irq_enabled = false;
-	bool m_sound_nmi_enabled = false;
+	u8 m_fix_scroll[4] = { };
 
 	void vblank_irq(int state);
-	void irq_enable_w(int state);
+	u8 irq_ack_r();
+	void irq_ack_w(u8 data);
 	void sound_reset_w(int state);
 
 	void mod3_install(memory_view::memory_view_entry &view, offs_t start, offs_t end, bool write, u8 code, u8 latch) ATTR_COLD;
 	void fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
-	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	void main_io_map(address_map &map) ATTR_COLD;
@@ -112,47 +120,23 @@ void slapfght_ms_state::fix_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags)
 	color = data >> 10;
 }
 
-void slapfght_ms_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect) // TODO: verify
+void slapfght_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
 {
-	const uint8_t *src = &m_spriteram[0];
-
-	for (int offs = 0; offs < m_spriteram.bytes(); offs += 4)
-	{
-		/*
-		    0: xxxxxxxx - code low
-		    1: xxxxxxxx - x low
-		    2: xx...... - code high
-		       ..x..... - no function?
-		       ...xxxx. - color
-		       .......x - x high
-		    3: xxxxxxxx - y
-		*/
-
-		int code = src[offs + 0] | ((src[offs + 2] & 0xc0) << 2);
-		int sy = src[offs + 3] + 2;
-		int sx = (src[offs + 1] | (src[offs + 2] << 8 & 0x100)) - 17;
-		int color = src[offs + 2] >> 1 & 0xf;
-		int fx = 0, fy = 0;
-
-		if (flip_screen())
-		{
-			sy = (238 - sy) & 0xff;
-			sx = 284 - sx;
-			fx = fy = 1;
-		}
-
-		if (sy > 256-8)
-			sy -= 256;
-
-		m_gfxdecode->gfx(0)->transmask(bitmap, cliprect, code, color, fx, fy, sx, sy, m_mod51->transmask());
-	}
+	// the attribute byte of the original list: code bits 8-9 in bits 6-7 and the palette in bits 1-4; X bit 8
+	// in bit 0 isn't wired, the program drops the sprites outside a 256 pixel window instead
+	code |= BIT(attr, 6, 2) << 8;
+	palette = BIT(attr, 1, 4);
 }
 
 uint32_t slapfght_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	// TODO: scroll registers
+	m_mod4_pf->set_scrollx(m_ram2[0x820] | (m_ram2[0x821] << 8));
+	m_mod4_pf->set_scrolly(m_ram2[0x822]);
+	m_mod4_fix->set_scrollx(m_fix_scroll[0] | (m_fix_scroll[1] << 8));
+	m_mod4_fix->set_scrolly(m_fix_scroll[2]);
+
 	m_mod4_pf->draw(screen, bitmap, cliprect);
-	draw_sprites(bitmap, cliprect);
+	m_mod51->draw(bitmap, cliprect, *m_gfxdecode->gfx(0));
 	m_mod4_fix->draw(screen, bitmap, cliprect);
 
 	return 0;
@@ -161,30 +145,34 @@ uint32_t slapfght_ms_state::screen_update(screen_device &screen, bitmap_ind16 &b
 
 void slapfght_ms_state::vblank_irq(int state)
 {
-	if (state && m_main_irq_enabled)
+	if (state)
+	{
 		m_maincpu->set_input_line(0, ASSERT_LINE);
+		m_maincpu->pulse_input_line(INPUT_LINE_NMI, attotime::zero);
+	}
 }
 
-void slapfght_ms_state::irq_enable_w(int state)
+u8 slapfght_ms_state::irq_ack_r()
 {
-	m_main_irq_enabled = state ? true : false;
-
-	if (!m_main_irq_enabled)
+	if (!machine().side_effects_disabled())
 		m_maincpu->set_input_line(0, CLEAR_LINE);
+
+	return 0xff;
+}
+
+void slapfght_ms_state::irq_ack_w(u8 data)
+{
+	m_maincpu->set_input_line(0, CLEAR_LINE);
 }
 
 void slapfght_ms_state::sound_reset_w(int state)
 {
 	m_mod1->reset_w(!state);
-
-	if (state == 0)
-		m_sound_nmi_enabled = false;
 }
 
 void slapfght_ms_state::machine_start()
 {
-	save_item(NAME(m_main_irq_enabled));
-	save_item(NAME(m_sound_nmi_enabled));
+	save_item(NAME(m_fix_scroll));
 }
 
 
@@ -252,15 +240,30 @@ void slapfght_ms_state::mod3_install(memory_view::memory_view_entry &view, offs_
 		}
 		break;
 
-	case 0x79: // sprite board RAM, the area above it is unknown
-		if (!BIT(start, 11))
-		{
-			offs_t const last = std::min<offs_t>(end, start | 0x7ff);
-			if (write)
-				view.install_writeonly(start, last, &m_spriteram[start & 0x7ff]);
-			else
-				view.install_rom(start, last, &m_spriteram[start & 0x7ff]);
-		}
+	case 0x79: // RAM, sprite list and scroll registers in the original game
+		if (write)
+			view.install_writeonly(start, end, &m_ram2[start - 0xe000]);
+		else
+			view.install_rom(start, end, &m_ram2[start - 0xe000]);
+		break;
+
+	case 0x71: // text layer scroll registers
+		if (write)
+			view.install_write_handler(start, end, write8sm_delegate(*this, NAME([this] (offs_t offset, u8 data) { m_fix_scroll[offset & 3] = data; })));
+		break;
+
+	case 0x65: // MOD 51 sprite list
+		if (write)
+			view.install_writeonly(start, end, &m_spriteram[start & 0x1ff]);
+		else
+			view.install_rom(start, end, &m_spriteram[start & 0x1ff]);
+		break;
+
+	case 0x43: // interrupt acknowledge, the interrupt routine reads 0xfb00
+		if (write)
+			view.install_write_handler(start, end, write8smo_delegate(*this, FUNC(slapfght_ms_state::irq_ack_w)));
+		else
+			view.install_read_handler(start, end, read8smo_delegate(*this, FUNC(slapfght_ms_state::irq_ack_r)));
 		break;
 
 	case 0x61: // palette, A10 selects the blue byte
@@ -333,7 +336,7 @@ static const gfx_layout spritelayout =
 };
 
 static GFXDECODE_START( gfx_slapfighm)
-	GFXDECODE_ENTRY( "sprites", 0, spritelayout, 0,  16 )
+	GFXDECODE_ENTRY( "sprites", 0, spritelayout, 0x200, 16 )
 GFXDECODE_END
 
 
@@ -353,7 +356,6 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	ls259_device &mainlatch(LS259(config, "mainlatch"));
 	mainlatch.q_out_cb<0>().set(FUNC(slapfght_ms_state::sound_reset_w));
 	//mainlatch.q_out_cb<1>().set(FUNC(slapfght_ms_state::flipscreen_w));
-	mainlatch.q_out_cb<3>().set(FUNC(slapfght_ms_state::irq_enable_w));
 
 	// video hardware
 	SCREEN(config, m_screen);
@@ -368,14 +370,21 @@ void slapfght_ms_state::slapfighm(machine_config &config)
 	m_mod21->set_screen(m_screen);
 
 	GAELCO_MS_MOD51(config, m_mod51);
+	m_mod51->set_timing(m_mod21);
+	m_mod51->set_list(128, 0, false); // no colour bytes
+	m_mod51->list_r().set([this] (offs_t offset) { return m_spriteram[offset]; });
+	m_mod51->set_sprite_callback(FUNC(slapfght_ms_state::sprite_cb));
 
 	GAELCO_MS_MOD4(config, m_mod4_pf);
 	m_mod4_pf->set_palette(m_mod21);
+	m_mod4_pf->set_timing(m_mod21);
+	m_mod4_pf->set_color_base(0x100); // the program writes the same colours at 0x100 and 0x200
 	m_mod4_pf->set_tile_size(8);
 	m_mod4_pf->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
 
 	GAELCO_MS_MOD4(config, m_mod4_fix);
 	m_mod4_fix->set_palette(m_mod21);
+	m_mod4_fix->set_timing(m_mod21);
 	m_mod4_fix->set_tile_size(8);
 	m_mod4_fix->set_planes(2);
 	m_mod4_fix->set_layout(TILEMAP_SCAN_ROWS, 64, 32);
@@ -409,26 +418,26 @@ ROM_START( slapfighm )
 
 	// only the upper half of the EPROMs is used
 	ROM_REGION( 0x8000, "mod4_fix", ROMREGION_INVERT ) // on one MOD 4/2 board, contains the same data as the original among the weirdness
-	ROM_LOAD16_BYTE( "4-2_fi_401.ic17", 0x0000, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
+	ROM_LOAD16_BYTE( "4-2_fi_402.ic16", 0x0000, 0x4000, CRC(6e9ce9ea) SHA1(9b80360050022fb7b938a874d5c9adb344907bab) ) // BADADDR  x-xxxxxxxxxxxxx, 4-2_fi_402.ic16  [3/4] a77_04.6f IDENTICAL
 	ROM_CONTINUE(                       0x0000, 0x4000 )
-	ROM_LOAD16_BYTE( "4-2_fi_402.ic16", 0x0001, 0x4000, CRC(6e9ce9ea) SHA1(9b80360050022fb7b938a874d5c9adb344907bab) ) // BADADDR  x-xxxxxxxxxxxxx, 4-2_fi_402.ic16  [3/4] a77_04.6f IDENTICAL
+	ROM_LOAD16_BYTE( "4-2_fi_401.ic17", 0x0001, 0x4000, CRC(fbdc3ded) SHA1(5c1db5fe0ce32d996f40acf51b9ea09f7709a032) ) // BADADDR  --xxxxxxxxxxxxx, 4-2_fi_401.ic17  [3/4] a77_03.6g IDENTICAL
 	ROM_CONTINUE(                       0x0001, 0x4000 )
 
 	ROM_REGION( 0x20000, "mod4_pf", ROMREGION_INVERT ) // on a second MOD 4/2 board, identical to the original
-	ROM_LOAD32_BYTE( "4-2-b_fi_4a01.ic17", 0x00000, 0x8000, CRC(974e2ea9) SHA1(3840550fc3a833828dad8f3e300d2ea583d69ce7) )
-	ROM_LOAD32_BYTE( "4-2-b_fi_4a02.ic16", 0x00001, 0x8000, CRC(5faeeea3) SHA1(696fba24bcf1f3a7e914a4403854da5eededaf7f) )
-	ROM_LOAD32_BYTE( "4-2-b_fi_4a03.ic15", 0x00002, 0x8000, CRC(e92d9d60) SHA1(2554617e0e6615ca8c85a49299a4a0e762478339) )
-	ROM_LOAD32_BYTE( "4-2-b_fi_4a04.ic14", 0x00003, 0x8000, CRC(b6358305) SHA1(c7bb4236a75ec6b88f011bc30f8fb9a718e2ca3e) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a04.ic14", 0x00000, 0x8000, CRC(b6358305) SHA1(c7bb4236a75ec6b88f011bc30f8fb9a718e2ca3e) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a03.ic15", 0x00001, 0x8000, CRC(e92d9d60) SHA1(2554617e0e6615ca8c85a49299a4a0e762478339) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a02.ic16", 0x00002, 0x8000, CRC(5faeeea3) SHA1(696fba24bcf1f3a7e914a4403854da5eededaf7f) )
+	ROM_LOAD32_BYTE( "4-2-b_fi_4a01.ic17", 0x00003, 0x8000, CRC(974e2ea9) SHA1(3840550fc3a833828dad8f3e300d2ea583d69ce7) )
 
 	ROM_REGION( 0x20000, "sprites", ROMREGION_INVERT ) // on MOD 51/1 board, different format from the original
-	ROM_LOAD32_BYTE( "51-1_fi_501.ic43", 0x0003, 0x8000, CRC(fa901876) SHA1(e27a8f9014419343bf08a7536b4b37bded611ec0) )
-	ROM_LOAD32_BYTE( "51-1_fi_502.ic42", 0x0002, 0x8000, CRC(9bf4f6a4) SHA1(a4b1287258d1635108b349805f15ae25224e2ab6) )
-	ROM_LOAD32_BYTE( "51-1_fi_503.ic41", 0x0001, 0x8000, CRC(b03543cf) SHA1(2b8f0e8c60dbccc40e82f4af799d151efc259d52) )
 	ROM_LOAD32_BYTE( "51-1_fi_504.ic40", 0x0000, 0x8000, CRC(b80afe0a) SHA1(02efc3cb0c968d24ae0da4d16515c244f59d1d93) )
+	ROM_LOAD32_BYTE( "51-1_fi_503.ic41", 0x0001, 0x8000, CRC(b03543cf) SHA1(2b8f0e8c60dbccc40e82f4af799d151efc259d52) )
+	ROM_LOAD32_BYTE( "51-1_fi_502.ic42", 0x0002, 0x8000, CRC(9bf4f6a4) SHA1(a4b1287258d1635108b349805f15ae25224e2ab6) )
+	ROM_LOAD32_BYTE( "51-1_fi_501.ic43", 0x0003, 0x8000, CRC(fa901876) SHA1(e27a8f9014419343bf08a7536b4b37bded611ec0) )
 
 	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
-	ROM_LOAD( "21-1_p0201_82s129.ic5",      0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
-	ROM_LOAD( "21-1_p0203_82s129.ic12",     0x100, 0x100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
+	ROM_LOAD( "21-1_p0201_82s129.ic5",  0x000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
+	ROM_LOAD( "21-1_p0203_82s129.ic12", 0x100, 0x100, CRC(d56e29b4) SHA1(d94157a9cd75d1f6d305f3d48291d0ae4c41e006) )
 
 	ROM_REGION( 0x200, "mod3", 0 ) // on the CPU sub board, address decoder
 	ROM_LOAD( "3-sub_cpu_p0312_82s147.bin", 0x000, 0x200, CRC(28d906a7) SHA1(da11a515aa798c0fb687d8617461b0372364b332) )
