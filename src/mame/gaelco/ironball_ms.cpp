@@ -22,9 +22,6 @@
     development system would. Its ROM checksum screen sums only 0x5516 bytes of that copy: its loop
     count is 0x15516, but dbra takes 16 bits.
 
-    The instructions screen clears palette 0 and then prints its texts with it, so only their icons
-    show.
-
     The memory map is the one of the other games with a MOD 7/4 board: the front layer at 0x80000, the
     middle one at 0x90000, the background at 0xa0000 and their scroll registers at 0xc0000. The sprite
     list has 256 entries in two halves, at 0x000 and 0x400, with each colour byte 0x200 after its entry:
@@ -136,8 +133,9 @@ void ironball_ms_state::video_start()
 	m_tilemap[LAYER_BACK] = &machine().tilemap().create(*m_gfxdecode,
 			tilemap_get_info_delegate(*this, FUNC(ironball_ms_state::get_tile_info<LAYER_BACK>)), TILEMAP_SCAN_ROWS, 16, 16, 64, 32);
 
+	// as on the other MOD 7/4 boards; the front layer covers the playfield with pen 0 between levels
 	m_tilemap[LAYER_FRONT]->set_transparent_pen(15);
-	m_tilemap[LAYER_MIDDLE]->set_transparent_pen(15);
+	m_tilemap[LAYER_MIDDLE]->set_transparent_pen(0);
 }
 
 u32 ironball_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
