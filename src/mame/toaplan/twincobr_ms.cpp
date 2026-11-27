@@ -98,7 +98,8 @@ private:
 	void fg_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	void tx_tile_cb(u16 data, u32 &code, u32 &color, u8 &flags);
 	template <unsigned Which> void scroll_w(offs_t offset, u16 data, u16 mem_mask = ~0);
-	u8 irq_ack_r();
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 	u8 sprite_byte(offs_t offset) const { return m_spriteram[offset >> 1] >> (BIT(offset, 0) ? 0 : 8); }
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
@@ -135,12 +136,17 @@ void twincobr_ms_state::scroll_w(offs_t offset, u16 data, u16 mem_mask)
 		m_mod4[0]->mark_all_dirty();
 }
 
-u8 twincobr_ms_state::irq_ack_r()
+u16 twincobr_ms_state::irq_ack_r()
 {
 	if (!machine().side_effects_disabled())
 		m_maincpu->set_input_line(4, CLEAR_LINE);
 
-	return 0xff;
+	return 0xffff;
+}
+
+void twincobr_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
 }
 
 void twincobr_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8)
@@ -192,7 +198,8 @@ void twincobr_ms_state::main_map(address_map &map)
 	map(0x05dffc, 0x05dfff).w(FUNC(twincobr_ms_state::scroll_w<1>));
 	map(0x060000, 0x0603ff).ram().share(m_spriteram);
 	map(0x078000, 0x07800f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
-	map(0x07c000, 0x07c000).r(FUNC(twincobr_ms_state::irq_ack_r));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x07c000, 0x07ffff).rw(FUNC(twincobr_ms_state::irq_ack_r), FUNC(twincobr_ms_state::irq_ack_w));
 }
 
 

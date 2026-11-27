@@ -92,6 +92,8 @@ private:
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 
 	void main_map(address_map &map) ATTR_COLD;
 };
@@ -157,6 +159,19 @@ void lastduel_ms_state::vblank_irq(int state)
 		m_maincpu->set_input_line(4, ASSERT_LINE);
 }
 
+u16 lastduel_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void lastduel_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
 
 void lastduel_ms_state::main_map(address_map &map)
 {
@@ -168,8 +183,9 @@ void lastduel_ms_state::main_map(address_map &map)
 	map(0x802800, 0x802803).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[1][offset] = data; }));
 	map(0x803000, 0x80300f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0xfc0000, 0xfc0fff).ram(); // sprite RAM of the original game, copied to the sprite board
-	map(0xfc8000, 0xfc800f).nopw(); // video control of the original game
-	map(0xfc8000, 0xfc8001).lw16(NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); })); // interrupt acknowledge, the first write of the interrupt routine
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it (the
+	// program also writes the video control register of the original game there once)
+	map(0xfc8000, 0xfc8fff).rw(FUNC(lastduel_ms_state::irq_ack_r), FUNC(lastduel_ms_state::irq_ack_w));
 	map(0xfcc000, 0xfccfff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0xfcd000, 0xfcd003).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[2][offset] = data; }));
 	map(0xfd0000, 0xfd7fff).ram(); // tile maps of the original game, copied to the MOD 4 boards

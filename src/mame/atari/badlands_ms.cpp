@@ -87,6 +87,8 @@ private:
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 
 	void main_map(address_map &map) ATTR_COLD;
 };
@@ -138,6 +140,19 @@ void badlands_ms_state::vblank_irq(int state)
 		m_maincpu->set_input_line(4, ASSERT_LINE);
 }
 
+u16 badlands_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void badlands_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
 
 void badlands_ms_state::main_map(address_map &map)
 {
@@ -149,7 +164,8 @@ void badlands_ms_state::main_map(address_map &map)
 	map(0x440000, 0x440003).w(FUNC(badlands_ms_state::scroll_w));
 	map(0xfd0000, 0xfd1fff).umask16(0x00ff).rw(m_eeprom, FUNC(eeprom_parallel_28xx_device::read), FUNC(eeprom_parallel_28xx_device::write));
 	map(0xfe0000, 0xfe0001).nopw(); // watchdog in the original game
-	map(0xfe2000, 0xfe2001).lw16(NAME([this] (u16 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
+	// interrupt acknowledge: any access to the 4 KB area, the smallest the CPU board's decoder (IC7) selects
+	map(0xfe2000, 0xfe2fff).rw(FUNC(badlands_ms_state::irq_ack_r), FUNC(badlands_ms_state::irq_ack_w));
 	map(0xfe4000, 0xfe400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0xfee000, 0xfee001).w(m_eeprom, FUNC(eeprom_parallel_28xx_device::unlock_write16));
 	map(0xffc000, 0xffc3ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
@@ -282,8 +298,8 @@ ROM_START( badlandsm )
 	ROM_LOAD( "mod_21_1_205_82s129.ic12",      0x100, 0x100, CRC(204a7aee) SHA1(322164134aa65c37a9389024f921364a81d13e88) )
 
 	ROM_REGION( 0x1000, "plds", ROMREGION_ERASEFF )
-	ROM_LOAD( "mod-6-1_cpu_644_gal16v8.ic13", 0x000, 0x117, CRC(180a4125) SHA1(bc056d08d3f330cdba4edfdd1544be828e63c2d1) )
-	ROM_LOAD( "mod-6-1_cpu_643_gal16v8.ic7",  0x000, 0x117, CRC(d05b2c26) SHA1(51b718554bfba96a3c9e7b3a000fc80679044cb3) )
+	ROM_LOAD( "mod-6-1_cpu_644_gal16v8.ic13", 0x000, 0x117, NO_DUMP )
+	ROM_LOAD( "mod-6-1_cpu_643_gal16v8.ic7",  0x000, 0x117, NO_DUMP )
 	ROM_LOAD( "mod-4-3_403_gal16v8.ic29",     0x000, 0x117, CRC(c136de93) SHA1(116f6d3b456d20621ab07a005c1421f57569915c) )
 	ROM_LOAD( "mod-51-1_50503_pal16r6.ic46",  0x000, 0x104, CRC(07eb86d2) SHA1(482eb325df5bc60353bac85412cf45429cd03c6d) )
 	ROM_LOAD( "mod-5-1_5143_gal16v8.ic9",     0x000, 0x117, CRC(2d9cf890) SHA1(b8e3bdfe8543a8729e0397166780036b074f4bc5) )

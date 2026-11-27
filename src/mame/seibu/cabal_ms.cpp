@@ -88,6 +88,8 @@ private:
 	void sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bool &flipx, bool &flipy, bool &x8);
 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	void vblank_irq(int state);
+	u16 irq_ack_r();
+	void irq_ack_w(u16 data);
 
 	void main_map(address_map &map) ATTR_COLD;
 };
@@ -138,6 +140,19 @@ void cabal_ms_state::vblank_irq(int state)
 		m_maincpu->set_input_line(4, ASSERT_LINE);
 }
 
+u16 cabal_ms_state::irq_ack_r()
+{
+	if (!machine().side_effects_disabled())
+		m_maincpu->set_input_line(4, CLEAR_LINE);
+
+	return 0xffff;
+}
+
+void cabal_ms_state::irq_ack_w(u16 data)
+{
+	m_maincpu->set_input_line(4, CLEAR_LINE);
+}
+
 
 void cabal_ms_state::main_map(address_map &map)
 {
@@ -153,7 +168,8 @@ void cabal_ms_state::main_map(address_map &map)
 	map(0x080000, 0x0807ff).rw(m_mod4_bg, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x080800, 0x080803).umask16(0xff00).lw8(NAME([this] (offs_t offset, u8 data) { m_scroll[0][offset] = data; }));
 	map(0x0a0000, 0x0a000f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
-	map(0x0c0000, 0x0c0000).lw8(NAME([this] (u8 data) { m_maincpu->set_input_line(4, CLEAR_LINE); }));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x0c0000, 0x0c0fff).rw(FUNC(cabal_ms_state::irq_ack_r), FUNC(cabal_ms_state::irq_ack_w));
 	map(0x0e0000, 0x0e03ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x0e0400, 0x0e07ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 }

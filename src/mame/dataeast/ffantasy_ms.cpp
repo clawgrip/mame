@@ -338,7 +338,8 @@ void automat_ms_state::automatm_map(address_map &map)
 	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x400000, 0x40000f).ram().share(m_regs);
-	map(0x500000, 0x500001).rw(FUNC(automat_ms_state::irq_ack_r), FUNC(automat_ms_state::irq_ack_w));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x500000, 0x500fff).rw(FUNC(automat_ms_state::irq_ack_r), FUNC(automat_ms_state::irq_ack_w));
 	map(0xff8000, 0xffbfff).ram();
 	map(0xffc000, 0xffc3ff).ram().share(m_spritelist);
 }
@@ -443,7 +444,8 @@ void ffantasy_ms_state::drgninjam_map(address_map &map)
 	map(0x24a000, 0x24afff).rw(m_mod4_b, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x24d000, 0x24dfff).rw(m_mod4_a, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x280000, 0x2803ff).ram().share(m_spritelist);
-	map(0x290000, 0x290001).w(FUNC(ffantasy_ms_state::irq_ack_w));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x290000, 0x290fff).rw(FUNC(ffantasy_ms_state::irq_ack_r), FUNC(ffantasy_ms_state::irq_ack_w));
 	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
@@ -457,7 +459,8 @@ void ffantasy_ms_state::ffantasym_map(address_map &map)
 	map(0x244000, 0x244fff).rw(m_mod4_tx, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x24a000, 0x24afff).rw(m_mod4_a, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
 	map(0x24d000, 0x24dfff).rw(m_mod4_b, FUNC(gaelco_ms_mod4_device::vram_r), FUNC(gaelco_ms_mod4_device::vram_w));
-	map(0x290000, 0x290001).w(FUNC(ffantasy_ms_state::irq_ack_w));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x290000, 0x290fff).rw(FUNC(ffantasy_ms_state::irq_ack_r), FUNC(ffantasy_ms_state::irq_ack_w));
 	map(0x30c000, 0x30c00f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x310000, 0x3103ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::green_red_r), FUNC(gaelco_ms_mod21_device::green_red_w));
 	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
@@ -483,7 +486,8 @@ void ffantasy_ms_state::secretagm_map(address_map &map)
 	map(0x310400, 0x3107ff).rw(m_mod21, FUNC(gaelco_ms_mod21_device::blue_r), FUNC(gaelco_ms_mod21_device::blue_w));
 	map(0x314000, 0x31400f).rw(m_mod1, FUNC(gaelco_ms_mod1_device_base::host16_r), FUNC(gaelco_ms_mod1_device_base::host16_w));
 	map(0x380000, 0x3803ff).ram().share(m_spritelist);
-	map(0x500000, 0x500001).r(FUNC(ffantasy_ms_state::irq_ack_r));
+	// interrupt acknowledge: any access to the area the CPU board's decoder (IC7) selects for it
+	map(0x500000, 0x500fff).rw(FUNC(ffantasy_ms_state::irq_ack_r), FUNC(ffantasy_ms_state::irq_ack_w));
 }
 
 
