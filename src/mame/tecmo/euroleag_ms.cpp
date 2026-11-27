@@ -27,6 +27,12 @@
 
     There is no MOD 21/1 board: the MOD 9/2 board generates the video timing and has the palette RAM.
 
+    The GALs of the COMP 3Z-1 board (3138 for the first CPU, 3238 for the second) decode A8-A15 of
+    their CPU into its own EPROMs, RAM and bank latch, and into a 3-bit board code for the accesses
+    that go through the CPU board under it. Both send 0xfd00-0xfdff there with the same code, so the
+    second CPU's write to 0xfd0c acknowledges the MOD 9/2 interrupt as the first CPU's does: the
+    interrupt goes to both CPUs.
+
     Gaelco requested the registry of the "Euro League" trademark on 1990, and it was a Gaelco
     protected trademark (in Spain) until 1999 (they paid a 5-year renew in 1994):
     https://www.patentes-y-marcas.com/marca/euro-league-m1546246
@@ -34,7 +40,6 @@
     TODO:
     - the scroll offsets of the MOD 4 boards, fitted: with the MOD 9/2 timing the position model of the
       MOD 4 device puts the layers 5 pixels left (see the MOD 9/2 TODO for the horizontal sync)
-    - how the CPU board gives the second CPU its interrupt
 */
 
 #include "emu.h"
@@ -95,7 +100,6 @@ private:
 
 	void main_bank_w(u8 data);
 	void sub_bank_w(u8 data);
-	void sub_irq_ack_w(u8 data);
 
 	void main_map(address_map &map) ATTR_COLD;
 	void sub_map(address_map &map) ATTR_COLD;
@@ -174,11 +178,6 @@ void euroleag_ms_state::sub_bank_w(u8 data)
 	m_subbank->set_entry(data >> 3);
 }
 
-void euroleag_ms_state::sub_irq_ack_w(u8 data)
-{
-	m_subcpu->set_input_line(0, CLEAR_LINE);
-}
-
 
 void euroleag_ms_state::main_map(address_map &map)
 {
@@ -204,7 +203,7 @@ void euroleag_ms_state::sub_map(address_map &map)
 	map(0xf000, 0xf7ff).bankr(m_subbank);
 	map(0xf800, 0xfbff).ram().share("main_sub");
 	map(0xfc00, 0xfc00).w(FUNC(euroleag_ms_state::sub_bank_w));
-	map(0xfd0c, 0xfd0c).w(FUNC(euroleag_ms_state::sub_irq_ack_w));
+	map(0xfd00, 0xfd0f).rw(m_mod9, FUNC(gaelco_ms_mod9_device_base::io_r), FUNC(gaelco_ms_mod9_device_base::io_w));
 }
 
 
@@ -294,7 +293,6 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 
 	Z80(config, m_subcpu, 16_MHz_XTAL / 2); // divider guessed
 	m_subcpu->set_addrmap(AS_PROGRAM, &euroleag_ms_state::sub_map);
-	m_subcpu->set_vblank_int("screen", FUNC(euroleag_ms_state::irq0_line_assert));
 
 	screen_device &screen(SCREEN(config, "screen"));
 	screen.set_raw(20_MHz_XTAL / 4, 320, 0, 256, 264, 16, 240);
@@ -328,6 +326,7 @@ void euroleag_ms_state::euroleagm(machine_config &config)
 	GAELCO_MS_MOD9_YM2203(config, m_mod9, 20_MHz_XTAL);
 	m_mod9->set_screen(screen);
 	m_mod9->irq_callback().set_inputline(m_maincpu, 0);
+	m_mod9->irq_callback().append_inputline(m_subcpu, 0);
 	m_mod9->in_callback<0>().set_ioport("IN0");
 	m_mod9->in_callback<1>().set_ioport("IN1");
 	m_mod9->in_callback<2>().set_ioport("DSW1");
