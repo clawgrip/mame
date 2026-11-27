@@ -208,37 +208,37 @@ static INPUT_PORTS_START( twincobrm )
 
 	// the sound program passes these as the switches of the original game, but the 68000 does the coinage
 	PORT_START("SW1") // MOD 1 YM2203 #2 port B
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:8,7")
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,5")
 	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:5")
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:4")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:6" ) // service mode in the original game
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" ) // flip screen in the original game, the program sets it
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:3" ) // service mode in the original game
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:2" ) // flip screen in the original game, the program sets it
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:1" )
 
 	PORT_START("SW2") // MOD 1 YM2203 #2 port A
-	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:2" ) // DIP switch display in the original game
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:7" ) // DIP switch display in the original game
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:6,5")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x0c, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x04, "5" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:4,3")
 	PORT_DIPSETTING(    0x30, "50k 200k 150k+" )
 	PORT_DIPSETTING(    0x10, "70k 270k 200k+" )
 	PORT_DIPSETTING(    0x20, "50k Only" )
 	PORT_DIPSETTING(    0x00, "100k Only" )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:2,1")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )

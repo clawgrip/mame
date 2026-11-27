@@ -24,8 +24,9 @@
 
     TODO:
     - sprite priority
-    - the game comes up in free play with blank EEPROM settings; the DIP switches, which the sound
-      program passes where the original game reads the coin and self test inputs, aren't mapped
+    - what each DIP switch selects: at boot the program writes SW1 with its complement, and bits of SW2,
+      over settings of the original game (the ones its EEPROM holds); with SW1:1, 2 or 3 on the game
+      takes coins instead of free play, and SW2:8, 7 and 4 change the drones of the attract race
     - MOD 21/1 crystal, 28 MHz as on Last Duel, whose horizontal PROM also has 450 pixel lines
 */
 
@@ -179,24 +180,24 @@ static INPUT_PORTS_START( badlandsm )
 	PORT_INCLUDE( gaelco_ms_mod1 )
 
 	PORT_START("SW1") // MOD 1 YM2203 #2 port B
-	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:8")
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW1:8")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW1:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW1:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW1:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW1:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW1:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW1:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW1:1")
 
 	PORT_START("SW2") // MOD 1 YM2203 #2 port A
-	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:1")
-	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:2")
-	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:3")
-	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:4")
-	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:5")
-	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:6")
-	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:7")
-	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:8")
+	PORT_DIPUNKNOWN_DIPLOC(0x01, 0x01, "SW2:8")
+	PORT_DIPUNKNOWN_DIPLOC(0x02, 0x02, "SW2:7")
+	PORT_DIPUNKNOWN_DIPLOC(0x04, 0x04, "SW2:6")
+	PORT_DIPUNKNOWN_DIPLOC(0x08, 0x08, "SW2:5")
+	PORT_DIPUNKNOWN_DIPLOC(0x10, 0x10, "SW2:4")
+	PORT_DIPUNKNOWN_DIPLOC(0x20, 0x20, "SW2:3")
+	PORT_DIPUNKNOWN_DIPLOC(0x40, 0x40, "SW2:2")
+	PORT_DIPUNKNOWN_DIPLOC(0x80, 0x80, "SW2:1")
 INPUT_PORTS_END
 
 

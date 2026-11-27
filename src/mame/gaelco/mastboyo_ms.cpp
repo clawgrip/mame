@@ -218,21 +218,21 @@ static INPUT_PORTS_START( mastboyo_ms )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_NAME("P1 Green / >>")
 
 	PORT_START("DSW") // second YM2203 port B, the sound CPU reverses the bit order
-	PORT_SERVICE( 0x01, IP_ACTIVE_LOW ) // From manual... 'Test Inicial'
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )  // From manual... 'Con Reclamo'
+	PORT_SERVICE_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW1:8" ) // From manual... 'Test Inicial'
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:7") // From manual... 'Con Reclamo'
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW1:6,5")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x08, "3" )
 	PORT_DIPSETTING(    0x04, "4" )
 	PORT_DIPSETTING(    0x0c, "6" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:4,3")
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:2,1")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
