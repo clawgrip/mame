@@ -124,7 +124,7 @@ u32 xorworld_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	// scrollregs 2/3 unknown, 2 is written once with 0x8ffe
 	// scrollregs 4/5 for layer at 80000 (frontmost?)
 	// scrollregs 6/7 for layer at a0000 (backmost)
-	int const global_x_offset = 112;
+	constexpr int global_x_offset = 112;
 
 	m_tilemap_8x8_fg->set_scrollx(0, global_x_offset-(m_scrollregs[4]));
 	m_tilemap_8x8_fg->set_scrolly(0, -(m_scrollregs[5]));

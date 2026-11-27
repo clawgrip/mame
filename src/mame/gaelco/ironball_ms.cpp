@@ -46,6 +46,8 @@
 #include "speaker.h"
 #include "tilemap.h"
 
+#include <vector>
+
 
 namespace {
 
@@ -279,7 +281,7 @@ void ironball_ms_state::ironballm(machine_config &config)
 	SPEAKER(config, "mono").front_center();
 
 	GAELCO_MS_MOD9(config, m_mod9, 28_MHz_XTAL);
-	m_mod9->set_screen("screen");
+	m_mod9->set_screen(screen);
 	m_mod9->irq_callback().set_inputline(m_maincpu, 4);
 	m_mod9->in_callback<0>().set_ioport("IN0");
 	m_mod9->in_callback<1>().set_ioport("IN1");

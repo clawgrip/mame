@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Tomás García-Merás Capote (ClawGrip)
+// copyright-holders:Tomás García-Merás Capote
 #ifndef MAME_GAELCO_GAELCO_MS_MOD9_H
 #define MAME_GAELCO_GAELCO_MS_MOD9_H
 

@@ -49,6 +49,8 @@
 #include "screen.h"
 #include "speaker.h"
 
+#include "multibyte.h"
+
 #include <algorithm>
 
 
@@ -130,9 +132,9 @@ void slapfght_ms_state::sprite_cb(u8 attr, u8 color, u32 &code, u32 &palette, bo
 
 uint32_t slapfght_ms_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m_mod4_pf->set_scrollx(m_ram2[0x820] | (m_ram2[0x821] << 8));
+	m_mod4_pf->set_scrollx(get_u16le(&m_ram2[0x820]));
 	m_mod4_pf->set_scrolly(m_ram2[0x822]);
-	m_mod4_fix->set_scrollx(m_fix_scroll[0] | (m_fix_scroll[1] << 8));
+	m_mod4_fix->set_scrollx(get_u16le(m_fix_scroll));
 	m_mod4_fix->set_scrolly(m_fix_scroll[2]);
 
 	m_mod4_pf->draw(screen, bitmap, cliprect);

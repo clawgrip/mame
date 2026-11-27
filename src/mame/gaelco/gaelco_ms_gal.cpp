@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Tomás García-Merás Capote (ClawGrip)
+// copyright-holders:Tomás García-Merás Capote
 /***************************************************************************
 
     Gaelco Modular System GAL evaluation
@@ -65,7 +65,7 @@ constexpr gal_layout GAL20V8_REGISTERED{ "GAL20V8 in registered mode", 2706, 40,
 } // anonymous namespace
 
 
-gaelco_ms_gal::gaelco_ms_gal(type kind, u8 const *data, u32 length, u32 outputs, char const *tag) :
+gaelco_ms_gal::gaelco_ms_gal(type kind, u8 const *data, u32 length, u32 outputs, std::string_view tag) :
 	m_high{ },
 	m_low{ },
 	m_enabled{ },

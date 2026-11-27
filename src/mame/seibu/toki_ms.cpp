@@ -647,7 +647,6 @@ ROM_START( tokim )
 	ROM_REGION( 0x200, "mod21", 0 ) // on MOD 21/1 board
 	ROM_LOAD( "21_201_82s129.ic4",    0x0000, 0x100, CRC(2697da58) SHA1(e62516b886ff6e204b718e5f0c6ce2712e4b7fc5) )
 	ROM_LOAD( "21_202_82s129.ic12",   0x0100, 0x100, CRC(e434128a) SHA1(ef0f6d8daef8b25211095577a182cdf120a272c1) )
-
 ROM_END
 
 // reorganize graphics into something we can decode with a single pass
