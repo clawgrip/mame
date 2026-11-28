@@ -333,10 +333,8 @@ ROM_START( ironballm )
 	ROM_REGION( 0x157, "mod9:timing", 0 ) // on the MOD 9/2 board
 	ROM_LOAD( "mod_9-2_system_2_9250_gal20v8.ic18", 0x000, 0x157, BAD_DUMP CRC(d123dec1) SHA1(e68b91467924d3f94aa0495feeeeeee273a8b443) ) // not dumped, assumed to be the same as Splash's 9250
 
-	// the decoder GAL of the MOD 9/2 board (IC10, 9350) isn't dumped, assumed to be the same as on the other boards
-
 	ROM_REGION( 0x157, "plds", 0 )
-	ROM_LOAD( "mod_6_esp_06fl_gal16v8.bin",         0x000, 0x117, NO_DUMP )
+	ROM_LOAD( "mod_6_esp_06fl_gal16v8.bin",         0x000, 0x117, BAD_DUMP CRC(dd63a537) SHA1(1a494659860495122aee4169e96764c189c1778c) ) // Bruteforced, but tested and OK
 	ROM_LOAD( "mod_6_esp_16fl_gal16v8.bin",         0x000, 0x117, BAD_DUMP CRC(fe9294d1) SHA1(e64539a5e661acc21fe040a1a478a63ea9bf7ab8) ) // not dumped, assumed to be the same as World Rally's 16FL
 	ROM_LOAD( "mod_7-4_71fa_gal20v8.ic7",           0x000, 0x157, NO_DUMP )
 	ROM_LOAD( "mod_7-4_7250-fl_gal20v8.ic54",       0x000, 0x157, BAD_DUMP CRC(e9ec1e9e) SHA1(90d74aa6e15a3bba93c8264baffc72545be1474f) ) // not dumped, assumed to be the same as Splash's 7250 and World Rally's 72FL
